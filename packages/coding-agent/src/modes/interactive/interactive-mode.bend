@@ -241,13 +241,14 @@ def refreshWithTimer(runtime: Models.ModelRuntime,+controller: Abort.AbortContro
         cancelled : Bool <- Timer.cancel(cancel)
         IO.join(Unit,task)
         timedOut : Bool <- Abort.aborted(Unit,Abort.signal(Unit,controller))
-        Abort.dispose(Unit,controller)
         return (result,timedOut)
-def refreshModelMatch(runtime: Models.ModelRuntime) -> IO(Models.ModelsRefreshResult & Bool):
+def refreshCatalogWithDeadline(runtime: Models.ModelRuntime) -> IO(Models.ModelsRefreshResult & Bool):
   do IO<Models.ModelsRefreshResult & Bool>:
-    controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     timer : Timer & TimerCancel <- Timer.new(15000)
-    refreshWithTimer(runtime,controller,timer)
+    result : Models.ModelsRefreshResult & Bool <- refreshWithTimer(runtime,controller,timer)
+    Abort.dispose(Unit,controller)
+    return result
 def refreshErrorWarning(failure: StatusSink,errors: List<&2,Record.Property<String>>) -> IO(Unit):
   match errors:
     case Nil{}: IO.pure(Unit,Unit{})
@@ -313,7 +314,7 @@ def requestedWithinScope(+failure: StatusSink,+redraw: Ref.Ref<Maybe<&2,Callback
     case Nil{}:
       do IO<Bool>:
         commandStatus(failure,CommandNotice{"Refreshing model catalogs…"})
-        result : Models.ModelsRefreshResult & Bool <- refreshModelMatch(Session.modelRuntime(session))
+        result : Models.ModelsRefreshResult & Bool <- refreshCatalogWithDeadline(Session.modelRuntime(session))
         requestedAfterRefresh(failure,redraw,picker,catalog,session,query,models,result)
 def requestedModel(failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,catalog: Ref.Ref<List<&2,Models.Model()>>,+session: Session.AgentSession,+query: String,models: List<&2,Models.Model()>) -> IO(Bool):
   do IO<Bool>:
@@ -359,12 +360,16 @@ def showScoped(picker: Maybe<&2,ScopePicker.Host>,models: List<&2,Models.Model()
   match picker:
     case None{}: IO.pure(Unit,Unit{})
     case Some{host}: ScopePicker.open(host,ScopePicker.create(models,scope,"Refreshing model catalogs…"))
+def scopedRefreshStatus(pair: Models.ModelsRefreshResult & Bool) -> String:
+  match pair:
+    case (_,True{}): "Model refresh timed out; showing cached models."
+    case (result,False{}): refreshStatus(result)
 def refreshScoped(host: ScopePicker.Host,models: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+runtime: Models.ModelRuntime) -> IO(Unit):
   do IO<Unit>:
-    result : Models.ModelsRefreshResult <- Models.refreshShared(runtime,None{})
+    pair : Models.ModelsRefreshResult & Bool <- refreshCatalogWithDeadline(runtime)
     +available : List<&2,Models.Model()> <- Models.getAvailable(runtime)
     Ref.write(List<&2,Models.Model()>,models,available)
-    ScopePicker.refreshed(host,available,refreshStatus(result))
+    ScopePicker.refreshed(host,available,scopedRefreshStatus(pair))
     requestRender(redraw)
 def startScopeRefresh(host: Maybe<&2,ScopePicker.Host>,models: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,runtime: Models.ModelRuntime) -> IO(Unit):
   match host:

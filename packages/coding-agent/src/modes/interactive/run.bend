@@ -1480,10 +1480,12 @@ type ThemeOwned is Type:
   ThemePaused{selection: ThemeController.Selection}
 type ThemeStopping is Data:
   ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,view: View.Handle,modes: Ref.Ref<Process.RendererModes>,session: Ref.Ref<Session.AgentSession>,suspension: Process.SuspensionHandle,working: Working}
+type StartupCatalogRefresh is Type:
+  StartupCatalogRefresh{controller: Abort.AbortController<Unit>,task: Chan(Unit)}
 type Interaction is Data:
-  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinkingSelector: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scopedSelector: Ref.Ref<Maybe<&2,ScopePicker.Host>>,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: Ref.Ref<Maybe<&2,TrustPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>,working: Working,autocomplete: AutocompleteSlot,suspension: Process.SuspensionHandle,sharing: Ref.Ref<Maybe<&2,BorderedLoader.Activity>>}
+  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinkingSelector: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scopedSelector: Ref.Ref<Maybe<&2,ScopePicker.Host>>,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: Ref.Ref<Maybe<&2,TrustPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>,working: Working,autocomplete: AutocompleteSlot,suspension: Process.SuspensionHandle,sharing: Ref.Ref<Maybe<&2,BorderedLoader.Activity>>,startupCatalog: Ref.Ref<Maybe<&1,StartupCatalogRefresh>>}
 type ThemeStartup is Data:
-  ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Interactive.StatusSink,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,managed: Maybe<&2,Manager.ToolsManager>,interaction: Interaction,highlighter: SyntaxHighlight.Highlighter,first: Bool}
+  ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Interactive.StatusSink,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,managed: Maybe<&2,Manager.ToolsManager>,interaction: Interaction,highlighter: SyntaxHighlight.Highlighter,first: Bool,footer: Ref.Ref<Footer.State>,models: Ref.Ref<List<&2,Models.Model()>>}
 type LoginRequest is Data: LoginRequest{runtime: Models.ModelRuntime,provider: String,kind: Auth.CredentialType,interaction: Auth.AuthInteraction}
 type Binding is Data:
   Binding{current: Ref.Ref<Session.AgentSession>,replacement: Controller.Replacement,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>,sessions: Callback.Callback<Unit,SessionChoices>,resume: Callback.Callback<ResumeRequest,SessionHost.CancellableResume>,managed: Maybe<&2,Manager.ToolsManager>,autoTrustOnReload: Bool,tuiMode: Maybe<&2,Settings.TuiMode>}
@@ -2228,19 +2230,19 @@ def scopeAction(input: ScopeInput,action: ScopePicker.Action) -> IO(Unit):
         scopeSaved(failure,redraw,result)
     case _ _: IO.pure(Unit,Unit{})
 def selectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,Selector.Host>>:
-  match interaction: case Interaction{_,_,_,selector,_,_,_,_,_,_,_,_,_,_,_}: selector
+  match interaction: case Interaction{_,_,_,selector,_,_,_,_,_,_,_,_,_,_,_,_}: selector
 def modelSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,ModelPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,selector,_,_,_,_,_,_,_,_,_,_}: selector
+  match interaction: case Interaction{_,_,_,_,selector,_,_,_,_,_,_,_,_,_,_,_}: selector
 def thinkingSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,ThinkingPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,_,selector,_,_,_,_,_,_,_,_,_}: selector
+  match interaction: case Interaction{_,_,_,_,_,selector,_,_,_,_,_,_,_,_,_,_}: selector
 def scopedSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,ScopePicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,_,_,selector,_,_,_,_,_,_,_,_}: selector
+  match interaction: case Interaction{_,_,_,_,_,_,selector,_,_,_,_,_,_,_,_,_}: selector
 def settingsSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,SettingsPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,_,_,_,settings,_,_,_,_,_,_,_}: settings
+  match interaction: case Interaction{_,_,_,_,_,_,_,settings,_,_,_,_,_,_,_,_}: settings
 def editorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,Live.Handle>>:
-  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: editor
+  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: editor
 def trustSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,TrustPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,trust,_,_,_,_,_,_}: trust
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,trust,_,_,_,_,_,_,_}: trust
 def contextStatus(context: ThemeContext) -> Interactive.StatusSink:
   match context: case ThemeContext{_,_,_,_,_,_,_,_,_,_,_,_,_,status}: status
 def contextTheme(context: ThemeContext) -> Ref.Ref<Theme.Theme>:
@@ -2252,17 +2254,19 @@ def contextAgentDir(context: ThemeContext) -> String:
 def contextInteraction(context: ThemeContext) -> Interaction:
   match context: case ThemeContext{_,_,_,_,_,_,interaction,_,_,_,_,_,_,_}: interaction
 def lastClearOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,F64>>:
-  match interaction: case Interaction{_,lastClear,_,_,_,_,_,_,_,_,_,_,_,_,_}: lastClear
+  match interaction: case Interaction{_,lastClear,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: lastClear
 def recordEditor(interaction: Interaction,handle: Live.Handle) -> IO(Unit):
-  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
+  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
 def bashActivityOf(interaction: Interaction) -> Ref.Ref<BashActivity>:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,activity,_,_,_,_}: activity
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,activity,_,_,_,_,_}: activity
 def workingOf(interaction: Interaction) -> Working:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,working,_,_,_}: working
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,working,_,_,_,_}: working
 def terminalControl(interaction: Interaction) -> Process.SuspensionHandle:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,_,_,suspension,_}: suspension
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,_,_,suspension,_,_}: suspension
 def sharingOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,BorderedLoader.Activity>>:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,_,_,_,sharing}: sharing
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,_,_,_,sharing,_}: sharing
+def startupCatalogOf(interaction: Interaction) -> Ref.Ref<Maybe<&1,StartupCatalogRefresh>>:
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,startupCatalog}: startupCatalog
 def contextModels(context: ThemeContext) -> Ref.Ref<List<&2,Models.Model()>>:
   match context: case ThemeContext{_,_,_,_,_,_,_,models,_,_,_,_,_,_}: models
 def contextSession(context: ThemeContext) -> Ref.Ref<Session.AgentSession>:
@@ -2302,7 +2306,7 @@ def disposeLoginState(state: LoginState) -> IO(Unit):
         return Unit{}
 def keyInput(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,+failure: Interactive.StatusSink,interaction: Interaction,+session: Ref.Ref<Session.AgentSession>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,transcript: Transcript.Handle,models: Ref.Ref<List<&2,Models.Model()>>) -> KeyInput:
   match interaction:
-    case Interaction{_,lastClear,lastEscape,selector,+modelSelector,+thinkingSelector,+scopedSelector,_,_,header,_,_,_,suspension,sharing}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header,transcript,Interactive.CommandSink{failure,redraw,modelSelector,thinkingSelector,scopedSelector,session,models,sharing},suspension}
+    case Interaction{_,lastClear,lastEscape,selector,+modelSelector,+thinkingSelector,+scopedSelector,_,_,header,_,_,_,suspension,sharing,_}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header,transcript,Interactive.CommandSink{failure,redraw,modelSelector,thinkingSelector,scopedSelector,session,models,sharing},suspension}
 def openedTree(input: KeyInput,mode: Selector.Mode) -> IO(Unit):
   match input:
     case KeyInput{_,_,failure,_,_,selector,session,redraw,_,_,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
@@ -2676,10 +2680,24 @@ def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>
         Callback.dispose(Commands.CredentialCommand,Unit,login)
         Controller.start(session,listener,limit,failure,command,control,selection,available)
     case Some{Binding{_,replacement,_,_,_,_,_,_,_,_,_}}: Controller.startBound(current,listener,replacement,limit,failure,command,control,selection,models,Some{login})
+def stopCatalogOwner(owner: Maybe<&1,StartupCatalogRefresh>) -> IO(Unit):
+  match owner:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{StartupCatalogRefresh{+controller,task}}:
+      do IO<Unit>:
+        stopped : Bool <- Abort.abort(Unit,controller,None{})
+        IO.join(Unit,task)
+        Abort.dispose(Unit,controller)
+def stopStartupCatalog(interaction: Interaction) -> IO(Unit):
+  do IO<Unit>:
+    owner : Maybe<&1,StartupCatalogRefresh> <- Ref.swap(Maybe<&1,StartupCatalogRefresh>,startupCatalogOf(interaction),None{})
+    stopCatalogOwner(owner)
 def disposeInteraction(interaction: Interaction) -> IO(Unit):
   match interaction:
-    case Interaction{editor,lastClear,lastEscape,selector,modelSelector,thinkingSelector,scopedSelector,settings,trust,_,bashActivity,working,autocomplete,suspension,sharing}:
+    case Interaction{editor,lastClear,lastEscape,selector,modelSelector,thinkingSelector,scopedSelector,settings,trust,_,bashActivity,working,autocomplete,suspension,sharing,startupCatalog}:
       do IO<Unit>:
+        pending : Maybe<&1,StartupCatalogRefresh> <- Ref.dispose(Maybe<&1,StartupCatalogRefresh>,startupCatalog)
+        stopCatalogOwner(pending)
         disposeAutocompleteSlot(autocomplete)
         oldEditor : Maybe<&2,Live.Handle> <- Ref.dispose(Maybe<&2,Live.Handle>,editor)
         oldClear : Maybe<&2,F64> <- Ref.dispose(Maybe<&2,F64>,lastClear)
@@ -2704,10 +2722,10 @@ def autoTrustOnReloadOf(mode: Maybe<&2,Binding>) -> Bool:
   match mode:
     case None{}: False{}
     case Some{Binding{_,_,_,_,_,_,_,_,_,eligible,_}}: eligible
-def startup(context: ThemeContext,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Interactive.StatusSink,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>) -> ThemeStartup:
+def startup(context: ThemeContext,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Interactive.StatusSink,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,footer: Ref.Ref<Footer.State>) -> ThemeStartup:
   match context:
-    case ThemeContext{theme,transcript,session,setting,builtinDir,customDir,interaction,_,mode,_,_,_,highlighter,_}:
-      ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managedOf(mode),interaction,highlighter,True{}}
+    case ThemeContext{theme,transcript,session,setting,builtinDir,customDir,interaction,models,mode,_,_,_,highlighter,_}:
+      ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managedOf(mode),interaction,highlighter,True{},footer,models}
 def selectionTheme(value: ThemeController.Selection) -> Theme.Theme:
   match value: case ThemeController.Selection{_,_,_,theme,_,_,_}: theme
 def syncSelected(live: ThemeLive,handle: ThemeController.Handle) -> IO(Unit):
@@ -2824,7 +2842,7 @@ def startupProjectTrustWarning(transcript: Transcript.Handle,session: Ref.Ref<Se
 # autocomplete provider with the resolved fd path.
 def startAutocomplete(interaction: Interaction,session: Ref.Ref<Session.AgentSession>,found: Bool) -> IO(Unit):
   match interaction:
-    case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,+autocomplete,_,_}:
+    case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,+autocomplete,_,_,_}:
       do IO<Unit>:
         Ref.write(Bool,autocompleteFiles(autocomplete),found)
         setupAutocomplete(autocomplete,editor,session)
@@ -2834,7 +2852,7 @@ def installSettingsTheme(current: Maybe<&2,SettingsPicker.Host>,handle: ThemeCon
     case Some{host}: SettingsPicker.installController(host,handle)
 def connectSettingsTheme(interaction: Interaction,handle: ThemeController.Handle) -> IO(Unit):
   match interaction:
-    case Interaction{_,_,_,_,_,_,_,settings,_,_,_,_,_,_,_}:
+    case Interaction{_,_,_,_,_,_,_,settings,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         current : Maybe<&2,SettingsPicker.Host> <- Ref.read(Maybe<&2,SettingsPicker.Host>,settings)
         installSettingsTheme(current,handle)
@@ -2867,19 +2885,57 @@ def initializeApplication(failure: Interactive.StatusSink,first: Bool,managed: M
         # upstream init: once startup is rendered, register the remaining
         # highlight.js languages, then invalidate and render again.
         SyntaxHighlight.loadAllHighlightLanguages(highlighter)
+def startupProviderCount(scoped: List<&2,Models.ScopedModel>,available: List<&2,Models.Model()>) -> Nat:
+  match scoped:
+    case Nil{}: countProviders(available,Nil{})
+    case _: countProviders(Session.scopedModels(scoped),Nil{})
+def updatedProviderCount(count: Nat,state: Footer.State) -> Footer.State & Unit:
+  (Footer.setProviderCount(state,count),Unit{})
+def startupCatalogUpdated(+runtime: Models.ModelRuntime,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,models: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+  do IO<Unit>:
+    +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    same : Bool <- IO.pure(Bool,Ref.same(Models.SharedRefresh,Models.sharedRef(runtime),Models.sharedRef(Session.modelRuntime(live))))
+    Bool.pick(Unit -> IO(Unit),same,_ => do IO<Unit>:
+      +available : List<&2,Models.Model()> <- Models.getAvailable(runtime)
+      ignoredModels : Maybe<&1,Unit> <- Ref.tryModify(List<&2,Models.Model()>,Unit,models,old => Interactive.replacedModels(old,available))
+      scoped : List<&2,Models.ScopedModel> <- Session.getScopedModels(live)
+      ignoredFooter : Maybe<&1,Unit> <- Ref.tryModify(Footer.State,Unit,footer,state => updatedProviderCount(startupProviderCount(scoped,available),state))
+      Interactive.requestRenderIfLive(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
+def startupCatalogFinished(pair: Models.ModelsRefreshResult & Bool,+runtime: Models.ModelRuntime,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,models: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+  match pair:
+    case (Models.ModelsRefreshResult{True{},_},_): IO.pure(Unit,Unit{})
+    case (_,True{}): IO.pure(Unit,Unit{})
+    case (_,False{}): startupCatalogUpdated(runtime,session,footer,models,redraw)
+def refreshStartupCatalog(+runtime: Models.ModelRuntime,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,models: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,controller: Abort.AbortController<Unit>) -> IO(Unit):
+  do IO<Unit>:
+    timer : Timer & TimerCancel <- Timer.new(15000)
+    pair : Models.ModelsRefreshResult & Bool <- Interactive.refreshWithTimer(runtime,controller,timer)
+    startupCatalogFinished(pair,runtime,session,footer,models,redraw)
+def startStartupCatalog(first: Bool,interaction: Interaction,+session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,models: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+  match first:
+    case False{}: IO.pure(Unit,Unit{})
+    case True{}:
+      do IO<Unit>:
+        online : Bool <- Models.modelNetworkEnabled()
+        Bool.pick(Unit -> IO(Unit),online,_ => do IO<Unit>:
+          live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+          +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+          task : Chan(Unit) <- IO.fork(Unit,refreshStartupCatalog(Session.modelRuntime(live),session,footer,models,redraw,controller))
+          Ref.write(Maybe<&1,StartupCatalogRefresh>,startupCatalogOf(interaction),Some{StartupCatalogRefresh{controller,task}}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle>,startup: ThemeStartup,+render: Callback.Callback<Unit,Unit>,+copySelection: Callback.Callback<String,Process.CopyResult>) -> IO(Unit):
   match result startup:
-    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,+failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed,+interaction,highlighter,first}:
+    case Done{(controller,+handle)} ThemeStartup{+redraw,queue,initial,+failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed,+interaction,highlighter,+first,+footer,+models}:
       do IO<Unit>:
         Ref.write(Maybe<&2,ThemeController.Handle>,selected,Some{handle})
         connectSettingsTheme(interaction,handle)
         Ref.write(Maybe<&1,ThemeOwned>,owned,Some{ThemeOwned{controller,render,copySelection}})
         syncSelected(ThemeLive{selected,theme,transcript,render},handle)
         initializeApplication(failure,first,managed,transcript,session,interaction,builtinDir,highlighter,render)
+        startStartupCatalog(first,interaction,session,footer,models,redraw)
         Transcript.invalidate(transcript)
         Callback.call(Unit,Unit,render,Unit{})
         startInput(handle,redraw,queue,initial,failure,render)
-    case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_,_,_,_}:
+    case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         Callback.dispose(Unit,Unit,render)
         Callback.dispose(String,Process.CopyResult,copySelection)
@@ -2911,7 +2967,7 @@ def startTheme(previous: Maybe<&1,ThemeOwned>,ready: Process.QueryReady,setting:
         ThemeController.start(ready,setting,env,builtinDir,customDir,mode)
 def themeReady(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
   match startup ready:
-    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,+owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction,highlighter,+first} Process.QueryReady{queries,+terminal,write,requestRender,+preference}:
+    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,+owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction,highlighter,+first,+footer,+models} Process.QueryReady{queries,+terminal,write,requestRender,+preference}:
       do IO<Unit>:
         readyTerminal(workingOf(interaction),session,terminal,first)
         +render : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeLive,~Unit,~Unit,~syncRender,ThemeLive{selected,theme,transcript,requestRender})
@@ -2924,11 +2980,11 @@ def themeReady(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
         initialTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
         previous : Maybe<&1,ThemeOwned> <- Ref.swap(Maybe<&1,ThemeOwned>,owned,None{})
         result : Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle> <- startTheme(previous,Process.QueryReady{queries,terminal,write,render,preference},setting,environmentValue(detected),builtinDir,customDir,Theme.colorMode(initialTheme))
-        readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter,first},render,copySelection)
+        readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter,first,footer,models},render,copySelection)
 def resumedStartup(startup: ThemeStartup) -> ThemeStartup:
   match startup:
-    case ThemeStartup{redraw,queue,_,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter,_}:
-      ThemeStartup{redraw,queue,Nil{},failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter,False{}}
+    case ThemeStartup{redraw,queue,_,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter,_,footer,models}:
+      ThemeStartup{redraw,queue,Nil{},failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter,False{},footer,models}
 def themeResumed(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
   themeReady(resumedStartup(startup),ready)
 type RendererReady is Data: RendererReady{startup: ThemeStartup,modes: Ref.Ref<Process.RendererModes>,resumed: Bool}
@@ -3046,7 +3102,7 @@ def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),
         +selected : Ref.Ref<Maybe<&2,ThemeController.Handle>> <- Ref.new(Maybe<&2,ThemeController.Handle>,None{})
         +owned : Ref.Ref<Maybe<&1,ThemeOwned>> <- Ref.new(Maybe<&1,ThemeOwned>,None{})
         +error : Ref.Ref<Maybe<&2,Theme.LoadError>> <- Ref.new(Maybe<&2,Theme.LoadError>,None{})
-        +startupState : ThemeStartup = startup(context,redraw,queue,initial,contextStatus(context),stopped,selected,owned,error)
+        +startupState : ThemeStartup = startup(context,redraw,queue,initial,contextStatus(context),stopped,selected,owned,error,footerState(foot))
         +ready : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~RendererReady,~Process.QueryReady,~Unit,~rendererReady,RendererReady{startupState,modes,False{}})
         +resumed : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~RendererReady,~Process.QueryReady,~Unit,~rendererReady,RendererReady{startupState,modes,True{}})
         +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeStopping,~Unit,~Unit,~themeStopping,ThemeStopping{redraw,selected,owned,viewHandle,modes,contextSession(context),terminalControl(contextInteraction(context)),workingOf(contextInteraction(context))})
@@ -3114,6 +3170,7 @@ def finish(outcome: View.View & Result<&2,&2,Error,Unit>,transcript: Transcript.
     case (view,result):
       do IO<Result<&2,&2,Error,Unit>>:
         awaitBash(bashActivityOf(interaction),session)
+        stopStartupCatalog(interaction)
         unbind(mode)
         Transcript.dispose(transcript)
         View.dispose(view)
@@ -3466,6 +3523,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +resumeState : ResumeState <- IO.pure(ResumeState,resumeStateOf(mode,resumePicker,extensionDialogHost,status,redraw))
         loginCallback : Callback.Callback<Commands.CredentialCommand,Unit> <- Callback.create(~LoginState,~Commands.CredentialCommand,~Unit,~credentialRun,loginState)
         +shareControlRef : Ref.Ref<Maybe<&2,BorderedLoader.Activity>> <- Ref.new(Maybe<&2,BorderedLoader.Activity>,None{})
+        +startupCatalogRef : Ref.Ref<Maybe<&1,StartupCatalogRefresh>> <- Ref.new(Maybe<&1,StartupCatalogRefresh>,None{})
         +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{status,redraw,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,current,modelsRef,shareControlRef})
         +suspension : Process.SuspensionHandle <- Process.createSuspension()
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
@@ -3480,7 +3538,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         Transcript.setExtensions(transcriptHandle,renderers)
         bindOptional(mode,listener,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home,working)
         controllerPair : Controller.Controller & Controller.Handle <- controllerFor(mode,current,session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver},Some{selectionObserver},modelsRef,loginCallback)
-        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,settingsSelectorRef,trustSelectorRef,View.headerHandle(viewHandle),bashActivity,working,autocomplete,suspension,shareControlRef},modelsRef,mode,loginState,resumeState,bindings,highlighter,status})
+        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,settingsSelectorRef,trustSelectorRef,View.headerHandle(viewHandle),bashActivity,working,autocomplete,suspension,shareControlRef,startupCatalogRef},modelsRef,mode,loginState,resumeState,bindings,highlighter,status})
 def startStyles(styles: MarkdownTheme.Styles,view: View.View,+viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match styles:
     case MarkdownTheme.Styles{+markdown,callbacks,+live,+highlighter}:

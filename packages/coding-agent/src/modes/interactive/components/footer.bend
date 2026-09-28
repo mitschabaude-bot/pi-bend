@@ -18,6 +18,10 @@ def setAutoCompactEnabled(state: State,enabled: Bool) -> State:
   match state:
     case State{cwd,home,branch,name,model,thinking,usage,latest,percent,window,providers,subscription,_,experimental,statuses}:
       State{cwd,home,branch,name,model,thinking,usage,latest,percent,window,providers,subscription,enabled,experimental,statuses}
+def setProviderCount(state: State,count: Nat) -> State:
+  match state:
+    case State{cwd,home,branch,name,model,thinking,usage,latest,percent,window,_,subscription,auto,experimental,statuses}:
+      State{cwd,home,branch,name,model,thinking,usage,latest,percent,window,count,subscription,auto,experimental,statuses}
 def addUsage(left: Usage,right: Usage) -> Usage:
   match left right:
     case Usage{a,b,c,d,e} Usage{f,g,h,i,j}: Usage{a + f,b + g,c + h,d + i,F.add(e,j)}
