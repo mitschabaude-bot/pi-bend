@@ -426,13 +426,13 @@ def commandActions(+cwd: String,+agentDir: String) -> IO(Unit):
 # text requests; a confirm dismissed by its timeout and a select whose signal
 # was already aborted both answer as cancelled.
 # RPC mode never renders a widget component, so the factory must not run.
-def noWidget(unit: Unit,input: Unit) -> IO(Component.Component): IO.die(Component.Component,1,"RPC mode rendered a widget component")
+def noWidget(unit: Unit,input: Unit) -> IO(Component.Owner): IO.die(Component.Owner,1,"RPC mode rendered a widget component")
 def shown(value: Maybe<&2,String>) -> String: Maybe.default(&2,String,value,"none")
 def uiTourWith(+context: Ctx.ExtensionContext) -> IO(Outcome()):
   do IO<Outcome()>:
     Ctx.setTitle(context,"RPC title")
     Ctx.setWidget(context,"w",Some{Ctx.WidgetLines{["one","two"]}},Some{Ctx.BelowEditor{}})
-    +factory : Ctx.WidgetFactory() <- Callback.create(~Unit,~Unit,~Component.Component,~noWidget,Unit{})
+    +factory : Ctx.WidgetFactory() <- Callback.create(~Unit,~Unit,~Component.Owner,~noWidget,Unit{})
     Ctx.setWidget(context,"component",Some{Ctx.WidgetComponent{factory}},None{})
     Ctx.setWidget(context,"w",None{},None{})
     Ctx.setEditorText(context,"draft")
@@ -444,7 +444,7 @@ def uiTourWith(+context: Ctx.ExtensionContext) -> IO(Outcome()):
     stopped : Bool <- Abort.abort(Unit,controller,None{})
     skipped : Maybe<&2,String> <- Ctx.select(context,"Never shown",["x"],Ctx.DialogOptions{Some{Abort.signal(Unit,controller)},None{}})
     Ctx.notify(context,"tour editor=" ++ shown(edited) ++ " text=[" ++ current ++ "] confirmed=" ++ Bool.pick(String,confirmed,"true","false") ++ " skipped=" ++ shown(skipped),Ctx.InfoNotice{})
-    Callback.dispose(Unit,Component.Component,factory)
+    Callback.dispose(Unit,Component.Owner,factory)
     Abort.dispose(Unit,controller)
     return Done{Unit{}}
 def uiTour(unit: Unit,call: ExtT.CommandCall) -> IO(Outcome()):

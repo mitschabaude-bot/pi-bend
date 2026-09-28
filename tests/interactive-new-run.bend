@@ -139,6 +139,14 @@ def uiEditorCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Uni
         answer : Maybe<&2,String> <- Ctx.editor(ctx,"Write a note",Some{"seed"})
         uiAnswer(ctx,answer)
         return Done{Unit{}}
+def uiWidgetCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit>):
+  match call:
+    case Ext.CommandCall{_,commandContext}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +ctx : Ctx.ExtensionContext <- IO.pure(Ctx.ExtensionContext,Ctx.commandContext(commandContext))
+        Ctx.setWidget(ctx,"replay-above",Some{Ctx.WidgetLines{["fixture widget above"]}},None{})
+        Ctx.setWidget(ctx,"replay-below",Some{Ctx.WidgetLines{["fixture widget below"]}},Some{Ctx.BelowEditor{}})
+        return Done{Unit{}}
 def uiExtension(api: Ext.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
   do IO<Result<&2,&2,String,Unit>>:
     +shared : Ext.ExtensionAPI <- IO.pure(Ext.ExtensionAPI,api)
@@ -147,7 +155,9 @@ def uiExtension(api: Ext.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
     input : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiInputCommand,Unit{})
     second : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask-input",Ext.CommandOptions{Some{"Show a native extension input"},None{},input})
     editor : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiEditorCommand,Unit{})
-    ExtensionLoader.registerCommand(shared,"ask-editor",Ext.CommandOptions{Some{"Show a native extension editor"},None{},editor})
+    third : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask-editor",Ext.CommandOptions{Some{"Show a native extension editor"},None{},editor})
+    widget : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiWidgetCommand,Unit{})
+    ExtensionLoader.registerCommand(shared,"show-widget",Ext.CommandOptions{Some{"Show native editor widgets"},None{},widget})
 def bashFactory(setup: BashSetup,request: Host.Request) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
   match setup request:
     case BashSetup{agentDir,runners,operations} Host.Request{+cwd,stored,_}:

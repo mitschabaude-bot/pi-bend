@@ -3263,3 +3263,7 @@ Codex: extension editor Ctrl+G now uses the existing suspended native external-e
 Codex: owns extension-dialog.bend and its focused test for the selector's ignored toggle-tools key. The source selector keeps its prompt open while calling the transcript expansion action; I am routing only that action to the existing mounted editor binding.
 
 Codex: extension selectors now forward only Ctrl+O to the mounted editor's tool-expansion action and keep the prompt open. Focused host and native one/four mounted checks pass; five terminal gates retain the installed pass/fail pattern and final flood latency, and source inventory is clean.
+
+Codex: owns viewport.bend, extension-ui.bend, context.bend and run.bend for native extension widgets. The existing editor dock can host above/below widgets as one owned component tree; I am implementing keyed replacement and component retirement there, then checking mounted rendering and terminal gates.
+
+Codex: native extension widgets now mount above/below the editor, replace by key and retire owned components. Focused Bun/native 1/4 and mounted PTY 1/4 checks pass; five CLI parity gates match the installed behavior and timings, including the existing large-session/flood gaps. Source inventory is clean.

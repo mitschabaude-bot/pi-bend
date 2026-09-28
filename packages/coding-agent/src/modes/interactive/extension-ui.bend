@@ -11,6 +11,7 @@ import ./components/extension-dialog.bend as Dialog
 import ./components/extension-selector.bend as Selector
 import ./components/extension-input.bend as Input
 import ./components/extension-editor.bend as Multi
+import ./components/extension-widgets.bend as Widgets
 import ./components/footer.bend as Footer
 import ./theme/markdown-theme.bend as MarkdownTheme
 import ./theme/theme.bend as Theme
@@ -22,7 +23,7 @@ import ./interactive-mode.bend as Interactive
 type Env is Data:
   Env{dialog: Dialog.Host,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,theme: Ref.Ref<Theme.Theme>,editorTheme: Editor.EditorTheme}
 type BaseEnv is Data:
-  BaseEnv{dialog: Dialog.Host,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,theme: Ref.Ref<Theme.Theme>}
+  BaseEnv{dialog: Dialog.Host,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,theme: Ref.Ref<Theme.Theme>,widgets: Widgets.Host}
 type Owner is Type:
   Owner{ui: Ctx.ExtensionUIContext,border: Callback.Callback<String,String>,accent: Callback.Callback<String,String>,muted: Callback.Callback<String,String>,runner: Maybe<&2,Runner.ExtensionRunner>}
 
@@ -84,7 +85,6 @@ def editRequest(env: Env,request: Ctx.EditorRequest) -> IO(Maybe<&2,String>):
       do IO<Maybe<&2,String>>:
         state : Multi.State <- Multi.create(title,Maybe.default(&2,String,prefill,""),None{},editorTheme,None{})
         Dialog.editor(dialog,state)
-def widget(env: Env,_: Ctx.WidgetUpdate) -> IO(Unit): unsupported(env,"widgets")
 def titled(result: Result<&2,&2,Terminal.Error,Unit>) -> IO(Unit): IO.pure(Unit,Unit{})
 def setTitleWith(active: Maybe<&2,Terminal.Handle>,value: String) -> IO(Unit):
   match active:
@@ -123,7 +123,7 @@ def editorText(env: Env,_: Unit) -> IO(String):
         readEditor(found)
 def create(+base: BaseEnv) -> IO(Owner):
   match base:
-    case BaseEnv{dialog,editor,footer,transcript,redraw,terminal,theme}:
+    case BaseEnv{dialog,editor,footer,transcript,redraw,terminal,theme,widgets}:
       do IO<Owner>:
         +border : Callback.Callback<String,String> <- MarkdownTheme.color(theme,"borderMuted")
         +accent : Callback.Callback<String,String> <- MarkdownTheme.color(theme,"accent")
@@ -136,7 +136,7 @@ def create(+base: BaseEnv) -> IO(Owner):
         +status : Callback.Callback<Ctx.StatusUpdate,Unit> <- Callback.create(~Env,~Ctx.StatusUpdate,~Unit,~status,bound)
         +custom : Callback.Callback<Ctx.CustomFactory(),Unit> <- Callback.create(~Env,~Ctx.CustomFactory(),~Unit,~custom,bound)
         +editor : Callback.Callback<Ctx.EditorRequest,Maybe<&2,String>> <- Callback.create(~Env,~Ctx.EditorRequest,~Maybe<&2,String>,~editRequest,bound)
-        +widget : Callback.Callback<Ctx.WidgetUpdate,Unit> <- Callback.create(~Env,~Ctx.WidgetUpdate,~Unit,~widget,bound)
+        +widget : Callback.Callback<Ctx.WidgetUpdate,Unit> <- Callback.create(~Widgets.Host,~Ctx.WidgetUpdate,~Unit,~Widgets.setWidget,widgets)
         +title : Callback.Callback<String,Unit> <- Callback.create(~Env,~String,~Unit,~title,bound)
         +setText : Callback.Callback<String,Unit> <- Callback.create(~Env,~String,~Unit,~setEditorText,bound)
         +paste : Callback.Callback<String,Unit> <- Callback.create(~Env,~String,~Unit,~pasteToEditor,bound)

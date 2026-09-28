@@ -79,11 +79,15 @@ def scenario(threads: int) -> None:
             until(b"seed-external", start)
             os.write(master, b"\r")
             until(b"Extension chose: seed-external", start)
+            start = len(output)
+            os.write(master, b"/show-widget\r")
+            until(b"fixture widget above", start)
+            until(b"fixture widget below", start)
             os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0 and not stderr, (process.returncode, stderr)
             assert termios.tcgetattr(slave) == original, threads
-            print(f"native{threads}: extension prompts, external editor, cancellation and terminal restoration")
+            print(f"native{threads}: extension prompts, widgets, external editor, cancellation and terminal restoration")
         finally:
             if process.poll() is None:
                 process.kill()

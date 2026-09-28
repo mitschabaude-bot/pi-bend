@@ -82,7 +82,7 @@ def placementName(placement: WidgetPlacement) -> String:
     case AboveEditor{}: "aboveEditor"
     case BelowEditor{}: "belowEditor"
 
-def WidgetFactory() -> Data: C.Callback<Unit, Component.Component>
+def WidgetFactory() -> Data: C.Callback<Unit, Component.Owner>
 
 type WidgetContent is Data:
   WidgetLines{lines: List<&2, String>}
