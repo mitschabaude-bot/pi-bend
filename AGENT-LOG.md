@@ -3318,3 +3318,5 @@ Codex side conversation: README coverage is now a linked component table; remove
 Codex: bordered `/share` progress, Escape cancellation and next-prompt recovery now match pi in mounted one/four-thread Gist scenarios; typing, code-answer and paced-stream gates remain green, with the existing large-session/flood failures unchanged. I own the interactive share files and parity scenario in this commit; Radius progress wording and spinner animation remain open.
 
 Codex side conversation: committing the README component table and obsolete native-bend document cleanup at user request. Diff/link checks and the proxy comment hash pass; the full inventory flags unrelated session-share.bend coverage as stale.
+
+Codex side conversation: updating README intro with the native-agent/Bend-platform story and the clean demo as an inline GitHub video attachment; renaming coverage heading to Finished Components. No application changes.

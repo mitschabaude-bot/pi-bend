@@ -1,10 +1,16 @@
 # pi-bend
 
-A native Bend port of [pi](https://github.com/earendil-works/pi), targeting v0.87.1 (`f07218c4d`). The full modular port is **in progress**. The CLI entry point is `packages/coding-agent/src/main.bend`.
+**A coding agent written in [Bend](https://bend-lang.com).** A native port of [pi](https://github.com/earendil-works/pi), from its interactive terminal and modular agent libraries down to HTTP, TLS, cryptography and Unicode.
 
-The target is pi's functionality, public abstractions and terminal behavior, with its complex dependencies implemented in pure Bend. Small OS effects provide system calls; networking protocols, cryptography, parsing and application behavior live in Bend. Extensions will use Bend; JavaScript/TypeScript extension compatibility is excluded. Immutable values, structural equality and explicit errors replace incidental JavaScript object semantics. See [architecture](docs/architecture.md).
+Building pi-bend also meant building out Bend: adding missing libraries and OS primitives, and scaling the compiler to handle a full application. Networking, parsing, cryptography and rendering run in Bend, with small OS effects for system calls.
 
-## Working today
+Watch pi-bend edit a file, delegate tests to another native pi-bend agent, and run them. Shown at 2× speed.
+
+https://github.com/user-attachments/assets/6c637f1c-0065-4cae-b951-94f1e064306a
+
+The port targets pi v0.87.1 (`f07218c4d`); full parity is still in progress. Extensions are native Bend, with immutable values and explicit updates in place of JavaScript object semantics. See the [architecture](docs/architecture.md) and [scope decisions](docs/scope-decisions.md).
+
+## Finished Components
 
 The port includes the application, reusable Bend libraries and the compiler/runtime support needed to run them. This is an inventory of implemented components, not a claim of complete upstream parity; remaining gaps are tracked through the [source coverage reviews](docs/source-coverage.md) and [test inventory](tests/UPSTREAM.md).
 
