@@ -90,6 +90,8 @@ import ./external-editor.bend as ExternalEditor
 import ./components/trust-selector.bend as TrustPicker
 import ./components/messages.bend as MessageUI
 import ./components/custom-editor.bend as CustomEditor
+import ./components/extension-dialog.bend as ExtensionDialog
+import ./extension-ui.bend as ExtensionUI
 import ./components/session-info.bend as SessionInfo
 import ../../core/cache-warmer.bend as Warmer
 import ../../core/cache-stats.bend as CacheStats
@@ -3028,14 +3030,29 @@ def runHosted(borrowed: Selector.Owner & Selector.Host & Component.Component,liv
         +scopeChosen : Callback.Callback<ScopePicker.Action,Unit> <- Callback.create(~ScopeInput,~ScopePicker.Action,~Unit,~scopeAction,ScopeInput{contextSession(context),contextModels(context),contextStatus(context),redraw})
         host : ScopePicker.Owner <- ScopePicker.createHost(component,contextTheme(context),words,contextBindings(context),Keys.defaults(),scopeChosen)
         runScopeHosted(ScopePicker.borrowHost(host),tree,treeHandle,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen,scopeChosen)
-def withCustomEditor(borrowed: CustomEditor.Owner & Component.Component,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
+def runExtensionDialog(borrowed: ExtensionDialog.Owner & ExtensionDialog.Host & Component.Component,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,+chosen: Callback.Callback<Selector.Choice,Unit>,treeEvents: Callback.Callback<TreePicker.Action,Unit>) -> IO(Result<&2,&2,Error,Unit>):
+  match borrowed:
+    case (dialog,dialogHost,component):
+      do IO<Result<&2,&2,Error,Unit>>:
+        ui : ExtensionUI.Owner <- ExtensionUI.create(ExtensionUI.BaseEnv{dialogHost,editorRefOf(contextInteraction(context)),footerState(foot),contextTranscript(context),redraw,workingTerminal(workingOf(contextInteraction(context))),contextTheme(context)})
+        current : Session.AgentSession <- Ref.read(Session.AgentSession,contextSession(context))
+        runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(current)
+        bound : ExtensionUI.Owner <- ExtensionUI.bind(ui,runner)
+        host : Selector.Owner <- Selector.createHost(component,contextTheme(context),contextBindings(context),Keys.defaults(),words,chosen,Some{treeEvents})
+        result : Result<&2,&2,Error,Unit> <- runHosted(Selector.borrowHost(host),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen)
+        ExtensionUI.dispose(bound)
+        ExtensionDialog.dispose(dialog)
+        return result
+def withCustomEditor(borrowed: CustomEditor.Owner & Component.Component,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,+rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (custom,component):
       do IO<Result<&2,&2,Error,Unit>>:
         +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~SelectInput,~Selector.Choice,~Unit,~chosenSelection,SelectInput{queue,contextStatus(context),redraw})
         +treeEvents : Callback.Callback<TreePicker.Action,Unit> <- Callback.create(~TreeActionInput,~TreePicker.Action,~Unit,~treeAction,TreeActionInput{contextSession(context),contextTranscript(context)})
-        host : Selector.Owner <- Selector.createHost(component,contextTheme(context),contextBindings(context),Keys.defaults(),words,chosen,Some{treeEvents})
-        result : Result<&2,&2,Error,Unit> <- runHosted(Selector.borrowHost(host),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen)
+        +request : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~workingRedraw,redraw)
+        dialog : ExtensionDialog.Owner <- ExtensionDialog.create(component,contextTheme(context),words,contextBindings(context),Keys.defaults(),rows,request)
+        result : Result<&2,&2,Error,Unit> <- runExtensionDialog(ExtensionDialog.borrow(dialog),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen,treeEvents)
+        Callback.dispose(Unit,Unit,request)
         CustomEditor.dispose(custom)
         return result
 def startupHost(host: CustomEditor.Host,initialized: Bool) -> CustomEditor.Host:

@@ -170,6 +170,8 @@ Backpressure coverage now passes on one/four native threads and JS via `tests/tc
 
 The combined native build subsequently completed and passed all 14 original cases plus 32 driver comparisons on one/four threads. A scan of emitted `WL_CASE` spans identifies `responses-initial-input.finalMessage` at 24.56 MiB, `openai-responses-terminal.incomplete` at 17.09 MiB, `openai-responses-terminal.mapStopReason` at 16.87 MiB and `constrained-sampling.functionMatches` at 14.10 MiB. These spans do not account for the entire C file or separately emitted helpers. The short source functions use nested variants/string patterns; investigate that lowering and indentation before attributing the whole size to fixture count or generic specialization.
 
+The interactive extension fixture hit the same downstream cliff on 2026-09-28: single-TU Clang `-O1` reached 50.7 GB RSS after four minutes and was stopped to protect the shared server. Building the identical Bend entry point with `scripts/build-incremental.sh` (64 translation units) linked in about two minutes and its one/four-thread PTY checks passed. The cause of Clang's single-TU growth remains unisolated; fixture builds should use split units until it is.
+
 ## Maintaining this log
 
 Give each new finding a stable ID, affected version/hash, observable symptom and impact, smallest available reproducer, expected/actual behavior, evidence, hypothesis, workaround, next experiment, regression coverage and upstream link when one exists. Mark unavailable evidence explicitly. Separate observation from inference and local patches from upstream releases. Review workarounds when updating Bend. Never close a problem merely because the port progressed past it.

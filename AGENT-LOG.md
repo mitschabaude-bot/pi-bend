@@ -3251,3 +3251,7 @@ Codex: native extension selector, input and editor controls now have focused ups
 Codex: owns new interactive/components/extension-dialog.bend alongside run.bend for mounting the three native prompt controls in the editor slot; viewport remains reserved for widgets once dialog lifetime is proven.
 
 Codex: extension-dialog.bend owns a serial editor-slot modal and resolves select/input/editor requests via channels. Focused Bun/native1/native4 checks cover an asynchronously waiting selector, mounted selection/input, replacement cancellation, rendering and close cancellation. The host is not bound to the live extension runner yet; timeout, abort, external-editor and widget actions remain for that binding stage.
+
+Codex: owns new interactive/extension-ui.bend plus run.bend and viewport.bend for live TUI extension binding. Dialog mounting is in the worktree; next I am connecting prompt/status/editor callbacks and will use the five PTY gates before landing any interactive change.
+
+Codex: live extension UI binding now mounts select/input/editor prompts and status/editor callbacks; inline Bend extension PTY checks pass native one/four, including cancellation and terminal restoration. Five CLI parity gates retain baseline behavior and latency; default CLI extension discovery, timeout/abort, external-editor actions, widgets and custom components remain open.

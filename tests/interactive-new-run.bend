@@ -111,12 +111,60 @@ def bashExtension(operations: Bash.BashOperations,api: Ext.ExtensionAPI) -> IO(R
     handler : Ext.ExtensionHandler(Ext.UserBashEvent,Ext.UserBashEventResult) <- Callback.create(~Bash.BashOperations,~Ext.HandlerCall<Ext.UserBashEvent>,~Result<&2,&2,String,Maybe<&2,Ext.UserBashEventResult>>,~interceptedBash,operations)
     registered : Result<&2,&2,String,ExtensionLoader.Unsubscribe> <- ExtensionLoader.on(api,Ext.OnUserBash{handler})
     return Result.map(&2,&2,String,ExtensionLoader.Unsubscribe,Unit,_ => Unit{},registered)
+def uiAnswer(ctx: Ctx.ExtensionContext,answer: Maybe<&2,String>) -> IO(Unit):
+  match answer:
+    case None{}: Ctx.notify(ctx,"Extension prompt cancelled",Ctx.InfoNotice{})
+    case Some{value}: Ctx.notify(ctx,"Extension chose: " ++ value,Ctx.InfoNotice{})
+def uiCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit>):
+  match call:
+    case Ext.CommandCall{_,commandContext}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +ctx : Ctx.ExtensionContext <- IO.pure(Ctx.ExtensionContext,Ctx.commandContext(commandContext))
+        answer : Maybe<&2,String> <- Ctx.select(ctx,"Pick a value",["alpha","beta"],Ctx.dialogOptions())
+        uiAnswer(ctx,answer)
+        return Done{Unit{}}
+def uiInputCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit>):
+  match call:
+    case Ext.CommandCall{_,commandContext}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +ctx : Ctx.ExtensionContext <- IO.pure(Ctx.ExtensionContext,Ctx.commandContext(commandContext))
+        answer : Maybe<&2,String> <- Ctx.input(ctx,"Name a value",None{},Ctx.dialogOptions())
+        uiAnswer(ctx,answer)
+        return Done{Unit{}}
+def uiEditorCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit>):
+  match call:
+    case Ext.CommandCall{_,commandContext}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +ctx : Ctx.ExtensionContext <- IO.pure(Ctx.ExtensionContext,Ctx.commandContext(commandContext))
+        answer : Maybe<&2,String> <- Ctx.editor(ctx,"Write a note",Some{"seed"})
+        uiAnswer(ctx,answer)
+        return Done{Unit{}}
+def uiExtension(api: Ext.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    +shared : Ext.ExtensionAPI <- IO.pure(Ext.ExtensionAPI,api)
+    handler : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiCommand,Unit{})
+    first : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask",Ext.CommandOptions{Some{"Show a native extension prompt"},None{},handler})
+    input : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiInputCommand,Unit{})
+    second : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask-input",Ext.CommandOptions{Some{"Show a native extension input"},None{},input})
+    editor : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiEditorCommand,Unit{})
+    ExtensionLoader.registerCommand(shared,"ask-editor",Ext.CommandOptions{Some{"Show a native extension editor"},None{},editor})
 def bashFactory(setup: BashSetup,request: Host.Request) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
   match setup request:
     case BashSetup{agentDir,runners,operations} Host.Request{+cwd,stored,_}:
       do IO<Result<&1,&1,String,Host.Created<Services()>>>:
         +runtime : Ext.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
         errors : List<&2,Ext.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime,[Ext.InlineExtension{"user-bash",api => bashExtension(operations,api),False{}}])
+        models : Models.ModelRuntime <- ModelFixture.create(Faux.fauxSources())
+        +runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
+        Ref.modify(List<&2,Runner.ExtensionRunner>,Unit,runners,loaded => (runner <> loaded,Unit{}))
+        fixture : Faux.Fixture <- Faux.fixtureWith(stored,cwd,agentDir,"answer" <> "again" <> Nil{},Nil{},AgentRuntime.Loadout{Record.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}})
+        quietCreated(fixture)
+def uiFactory(setup: BashSetup,request: Host.Request) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
+  match setup request:
+    case BashSetup{agentDir,runners,_} Host.Request{+cwd,stored,_}:
+      do IO<Result<&1,&1,String,Host.Created<Services()>>>:
+        +runtime : Ext.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
+        errors : List<&2,Ext.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime,[Ext.InlineExtension{"ui",uiExtension,False{}}])
         models : Models.ModelRuntime <- ModelFixture.create(Faux.fauxSources())
         +runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
         Ref.modify(List<&2,Runner.ExtensionRunner>,Unit,runners,loaded => (runner <> loaded,Unit{}))
@@ -132,6 +180,7 @@ def factoryFor(cancel: Bool,mode: String,setup: BashSetup,cancelFork: Ref.Ref<Bo
   match cancel mode setup:
     case True{} _ BashSetup{agentDir,runners,_}: Callback.create(~Fixture.EventsEnv,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.eventsFactoryCall,Fixture.EventsEnv{agentDir,True{},cancelFork,runners})
     case False{} "bash" setup: Callback.create(~BashSetup,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~bashFactory,setup)
+    case False{} "ui" setup: Callback.create(~BashSetup,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~uiFactory,setup)
     case False{} "quiet" BashSetup{agentDir,_,_}: Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~quietFactory,agentDir)
     case False{} _ BashSetup{agentDir,_,_}: Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.factory,agentDir)
 def runWith(+cancel: Bool,+mode: String,args: List<String>) -> IO(Unit):
@@ -187,6 +236,7 @@ def run(args: List<String>) -> IO(Unit):
     case "cancel" <> rest: runWith(True{},"",rest)
     case "quiet" <> rest: runWith(False{},"quiet",rest)
     case "bash" <> rest: runWith(False{},"bash",rest)
+    case "ui" <> rest: runWith(False{},"ui",rest)
     case rest: runWith(False{},"",rest)
 def main() -> IO(Unit):
   do IO<Unit>:
