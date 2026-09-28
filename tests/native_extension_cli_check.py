@@ -41,6 +41,28 @@ def check():
     assert disabled["snaps"]["exit"] == "0", disabled["snaps"]
     assert "subagent" in tool_names(json.loads(disabled["requests"])[0])
 
+    settings = {"home/.pi/agent/settings.json": '{"extensions":["subagent"]}'}
+    discovered = run(["-p", "hello"], files=settings)
+    assert discovered["snaps"]["exit"] == "0", discovered["snaps"]
+    assert tool_names(json.loads(discovered["requests"])[0]).count("subagent") == 1
+
+    suppressed = run(["--no-extensions", "-p", "hello"], files=settings)
+    assert suppressed["snaps"]["exit"] == "0", suppressed["snaps"]
+    assert "subagent" not in tool_names(json.loads(suppressed["requests"])[0])
+
+    repeated = run(["--extension", "subagent", "-p", "hello"], files=settings)
+    assert repeated["snaps"]["exit"] == "0", repeated["snaps"]
+    assert tool_names(json.loads(repeated["requests"])[0]).count("subagent") == 1
+
+    project = {"project/.pi/settings.json": '{"extensions":["subagent"]}'}
+    approved = run(["--approve", "-p", "hello"], files=project)
+    assert approved["snaps"]["exit"] == "0", approved["snaps"]
+    assert "subagent" in tool_names(json.loads(approved["requests"])[0])
+
+    untrusted = run(["--no-approve", "-p", "hello"], files=project)
+    assert untrusted["snaps"]["exit"] == "0", untrusted["snaps"]
+    assert "subagent" not in tool_names(json.loads(untrusted["requests"])[0])
+
     unknown = run(["--extension", "not-linked", "-p", "hello"])
     assert unknown["snaps"]["exit"] != "0", unknown["snaps"]
     assert "not linked into this pi-bend build" in unknown["snaps"]["stderr"], unknown["snaps"]
@@ -62,7 +84,7 @@ def check():
     assert "Task: Say CHILD-OK" in json.dumps(requests[1]["body"]["input"]), requests[1]
     assert "CHILD-OK" in json.dumps(requests[2]["body"]["input"]), requests[2]
     assert "PARENT-OK" in delegated["snaps"]["stdout"], delegated["snaps"]
-    print("native extension CLI: explicit registration, discovery switch, unknown name, child model request and return")
+    print("native extension CLI: explicit and configured registration, discovery switch, unknown name, child model request and return")
 
 
 if __name__ == "__main__":
