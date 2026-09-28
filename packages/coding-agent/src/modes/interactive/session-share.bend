@@ -6,6 +6,7 @@ import ../../../../ai/src/models.bend as AiModels
 import ../../../../runtime/src/schema-value.bend as V
 import ../../../../runtime/src/record.bend as R
 import ../../../../runtime/src/abort.bend as Abort
+import ../../../../runtime/src/callback.bend as Callback
 import ../../../../runtime/src/child-process.bend as Child
 import ../../../../runtime/src/utf8.bend as Utf8
 import ../../../../runtime/src/text.bend as Text
@@ -141,32 +142,33 @@ def radiusBytes(session: Session.AgentSession,token: String,signal: Abort.AbortS
         created : Runtime.Outcome(Runtime.Transport) <- Runtime.createTransportWith(Result.default(&1,&1,U32 & String,String,bundle,"/etc/ssl/certs/ca-certificates.crt"),Runtime.globalHttpProxy(settings))
         radiusTransport(created,token,bytes,signal)
 
-def radiusCredential(session: Session.AgentSession,path: String,signal: Abort.AbortSignal<Unit>,credential: Maybe<&2,String>) -> IO(Maybe<&2,ShareResult>):
+def radiusCredential(session: Session.AgentSession,path: String,signal: Abort.AbortSignal<Unit>,progress: Callback.Callback<String,Unit>,credential: Maybe<&2,String>) -> IO(Maybe<&2,ShareResult>):
   match credential:
     case None{}: IO.pure(Maybe<&2,ShareResult>,None{})
     case Some{token}:
       do IO<Maybe<&2,ShareResult>>:
+        Callback.call(String,Unit,progress,"Uploading to Radius...")
         read : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
         result : ShareResult <- radiusBytes(session,token,signal,read)
         return Some{result}
 
-def radiusAuthenticated(session: Session.AgentSession,path: String,signal: Abort.AbortSignal<Unit>,resolution: Resolve.Resolution()) -> IO(Maybe<&2,ShareResult>):
+def radiusAuthenticated(session: Session.AgentSession,path: String,signal: Abort.AbortSignal<Unit>,progress: Callback.Callback<String,Unit>,resolution: Resolve.Resolution()) -> IO(Maybe<&2,ShareResult>):
   match resolution:
     case Fail{error}: IO.pure(Maybe<&2,ShareResult>,Some{Failed{Resolve.errorMessage(error)}})
-    case Done{auth}: radiusCredential(session,path,signal,AuthCommand.getAuthCredential(auth))
+    case Done{auth}: radiusCredential(session,path,signal,progress,AuthCommand.getAuthCredential(auth))
 
-def radiusProvider(+session: Session.AgentSession,path: String,signal: Abort.AbortSignal<Unit>,provider: Maybe<&2,AiModels.Provider>) -> IO(Maybe<&2,ShareResult>):
+def radiusProvider(+session: Session.AgentSession,path: String,signal: Abort.AbortSignal<Unit>,progress: Callback.Callback<String,Unit>,provider: Maybe<&2,AiModels.Provider>) -> IO(Maybe<&2,ShareResult>):
   match provider:
     case None{}: IO.pure(Maybe<&2,ShareResult>,None{})
     case Some{_}:
       do IO<Maybe<&2,ShareResult>>:
         resolution : Resolve.Resolution() <- Models.getAuth(Session.modelRuntime(session),"radius",Resolve.AuthResolutionOverrides{None{},None{},Some{F.fromU32(300000)},None{}})
-        radiusAuthenticated(session,path,signal,resolution)
+        radiusAuthenticated(session,path,signal,progress,resolution)
 
-def tryRadius(+session: Session.AgentSession,path: String,signal: Abort.AbortSignal<Unit>) -> IO(Maybe<&2,ShareResult>):
+def tryRadius(+session: Session.AgentSession,path: String,signal: Abort.AbortSignal<Unit>,progress: Callback.Callback<String,Unit>) -> IO(Maybe<&2,ShareResult>):
   do IO<Maybe<&2,ShareResult>>:
     provider : Maybe<&2,AiModels.Provider> <- Models.getProvider(Session.modelRuntime(session),"radius")
-    radiusProvider(session,path,signal,provider)
+    radiusProvider(session,path,signal,progress,provider)
 
 def output(bytes: List<&2,U32>) -> String:
   Text.trim(Result.default(&2,&2,Utf8.Error,String,Utf8.decodeStrict(bytes),""))
@@ -230,58 +232,59 @@ def checkGithubWith(cwd: String,paths: String & List<String>) -> IO(Result<&2,&2
 def checkGithub(cwd: String,env: List<String>) -> IO(Result<&2,&2,String,String>):
   checkGithubWith(cwd,Child.withSearchPath(env,None{}))
 
-def gistAfterHtml(program: String,htmlFile: String,cwd: String,signal: Abort.AbortSignal<Unit>,exported: Result<&2,&2,String,String>) -> IO(ShareResult):
+def gistAfterHtml(program: String,htmlFile: String,cwd: String,signal: Abort.AbortSignal<Unit>,progress: Callback.Callback<String,Unit>,exported: Result<&2,&2,String,String>) -> IO(ShareResult):
   match exported:
     case Fail{message}: IO.pure(ShareResult,Failed{"Failed to export session: " ++ message})
     case Done{_}:
       do IO<ShareResult>:
+        Callback.call(String,Unit,progress,"Creating gist...")
         env : List<String> <- IO.environment()
         createGist(program,htmlFile,cwd,env,signal)
 
-def gistAfterAuth(+htmlFile: String,cwd: String,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),found: Result<&2,&2,String,String>) -> IO(ShareResult):
+def gistAfterAuth(+htmlFile: String,cwd: String,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),progress: Callback.Callback<String,Unit>,found: Result<&2,&2,String,String>) -> IO(ShareResult):
   match found:
     case Fail{message}: IO.pure(ShareResult,Failed{message})
     case Done{program}:
       do IO<ShareResult>:
         html : Result<&2,&2,String,String> <- writeHtml(htmlFile)
-        gistAfterHtml(program,htmlFile,cwd,signal,html)
+        gistAfterHtml(program,htmlFile,cwd,signal,progress,html)
 
-def gistAfterJsonl(+cwd: String,htmlFile: String,jsonl: Result<&2,&2,String,String>,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>)) -> IO(ShareResult):
+def gistAfterJsonl(+cwd: String,htmlFile: String,jsonl: Result<&2,&2,String,String>,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),progress: Callback.Callback<String,Unit>) -> IO(ShareResult):
   match jsonl:
     case Fail{message}: IO.pure(ShareResult,Failed{"Failed to export session: " ++ message})
     case Done{_}:
       do IO<ShareResult>:
         env : List<String> <- IO.environment()
         found : Result<&2,&2,String,String> <- checkGithub(cwd,env)
-        gistAfterAuth(htmlFile,cwd,signal,writeHtml,found)
+        gistAfterAuth(htmlFile,cwd,signal,writeHtml,progress,found)
 
-def selectedShare(cwd: String,htmlFile: String,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),radius: Maybe<&2,ShareResult>) -> IO(ShareResult):
+def selectedShare(cwd: String,htmlFile: String,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),progress: Callback.Callback<String,Unit>,radius: Maybe<&2,ShareResult>) -> IO(ShareResult):
   match radius:
     case Some{result}: IO.pure(ShareResult,result)
-    case None{}: gistAfterJsonl(cwd,htmlFile,Done{""},signal,writeHtml)
+    case None{}: gistAfterJsonl(cwd,htmlFile,Done{""},signal,writeHtml,progress)
 
-def shareExported(session: Session.AgentSession,cwd: String,+directory: String,+signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),jsonl: Result<&2,&2,String,String>) -> IO(ShareResult):
+def shareExported(session: Session.AgentSession,cwd: String,+directory: String,+signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),+progress: Callback.Callback<String,Unit>,jsonl: Result<&2,&2,String,String>) -> IO(ShareResult):
   match jsonl:
     case Fail{message}: IO.pure(ShareResult,Failed{"Failed to export session: " ++ message})
     case Done{_}:
       do IO<ShareResult>:
-        radius : Maybe<&2,ShareResult> <- tryRadius(session,FS.child(directory,"session.jsonl"),signal)
-        selectedShare(cwd,FS.child(directory,"session.html"),signal,writeHtml,radius)
+        radius : Maybe<&2,ShareResult> <- tryRadius(session,FS.child(directory,"session.jsonl"),signal,progress)
+        selectedShare(cwd,FS.child(directory,"session.html"),signal,writeHtml,progress,radius)
 
-def shareIn(+session: Session.AgentSession,+cwd: String,+directory: String,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>)) -> IO(ShareResult):
+def shareIn(+session: Session.AgentSession,+cwd: String,+directory: String,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),progress: Callback.Callback<String,Unit>) -> IO(ShareResult):
   do IO<ShareResult>:
     jsonl : Result<&2,&2,String,String> <- exportSessionForShare(session,cwd,FS.child(directory,"session.jsonl"))
-    result : ShareResult <- shareExported(session,cwd,directory,signal,writeHtml,jsonl)
+    result : ShareResult <- shareExported(session,cwd,directory,signal,writeHtml,progress,jsonl)
     cleaned : Result<&2,&2,FS.Error,Unit> <- FS.remove(directory,True{},True{})
     return result
 
-def shareCreated(session: Session.AgentSession,cwd: String,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),created: Result<&1,&1,U32 & String,String>) -> IO(ShareResult):
+def shareCreated(session: Session.AgentSession,cwd: String,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),progress: Callback.Callback<String,Unit>,created: Result<&1,&1,U32 & String,String>) -> IO(ShareResult):
   match created:
     case Fail{_}: IO.pure(ShareResult,Failed{"Failed to create a temporary share directory"})
-    case Done{directory}: shareIn(session,cwd,directory,signal,writeHtml)
+    case Done{directory}: shareIn(session,cwd,directory,signal,writeHtml,progress)
 
-def shareSession(session: Session.AgentSession,cwd: String,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>)) -> IO(ShareResult):
+def shareSession(session: Session.AgentSession,cwd: String,signal: Abort.AbortSignal<Unit>,writeHtml: String -> IO(Result<&2,&2,String,String>),progress: Callback.Callback<String,Unit>) -> IO(ShareResult):
   do IO<ShareResult>:
     temporary : Result<&1,&1,U32 & String,String> <- IO.get_env("TMPDIR")
     directory : Result<&1,&1,U32 & String,String> <- Directory.mkdtemp(FS.child(Result.default(&1,&1,U32 & String,String,temporary,"/tmp"),"pi-share-XXXXXX"))
-    shareCreated(session,cwd,signal,writeHtml,directory)
+    shareCreated(session,cwd,signal,writeHtml,progress,directory)

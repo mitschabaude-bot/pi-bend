@@ -2,6 +2,8 @@ import Base
 import ../../../../../runtime/src/abort.bend as Abort
 import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../runtime/src/ref.bend as Ref
+import ../../../../../runtime/src/date.bend as Date
+import ../../../../../runtime/src/f64.bend as F
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../tui/src/tui.bend as Tui
 import ../../../../../tui/src/keybindings.bend as Bindings
@@ -10,7 +12,7 @@ import ./keybinding-hints.bend as Hints
 
 # A focused progress view in place of the editor. The editor and its nested
 # components stay mounted and resume when the operation clears the activity.
-type Activity is Data: Activity{controller: Abort.AbortController<Unit>,message: String}
+type Activity is Data: Activity{controller: Abort.AbortController<Unit>,message: String,startedAt: F64}
 type Context is Data:
   Context{editor: Component.Component,activity: Ref.Ref<Maybe<&2,Activity>>,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager}
 type Owner is Type:
@@ -19,19 +21,24 @@ type Owner is Type:
 def color(theme: Theme.Theme,key: String,+value: String) -> String:
   Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,key,value),value)
 
-def progress(+theme: Theme.Theme,bindings: Bindings.KeybindingsManager,+message: String,+width: Nat) -> List<&2,String>:
+def frame(now: F64,startedAt: F64) -> String:
+  +index = U32.to_nat(F64.to_u32(F64.floor(F.divide(F.subtract(now,startedAt),F.fromU32(80))))) % 10n
+  Maybe.default(&2,String,List.get(&2,String,["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"],index),"⠋")
+
+def progress(+theme: Theme.Theme,bindings: Bindings.KeybindingsManager,+message: String,+spinnerFrame: String,+width: Nat) -> List<&2,String>:
   +border = color(theme,"border",String.repeat("─",Nat.max(1n,width)))
-  +spinner = " " ++ color(theme,"accent","⠋") ++ " " ++ color(theme,"muted",message)
+  +spinner = " " ++ color(theme,"accent",spinnerFrame) ++ " " ++ color(theme,"muted",message)
   +hint = " " ++ color(theme,"dim",Hints.keyText(bindings,"tui.select.cancel")) ++ color(theme,"muted"," cancel")
   [border,"",spinner,"",hint,"",border]
 
 def renderActive(editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,width: Nat,active: Maybe<&2,Activity>) -> IO(List<&2,String>):
   match active:
     case None{}: Component.render(editor,width)
-    case Some{Activity{_,message}}:
+    case Some{Activity{_,message,startedAt}}:
       do IO<List<&2,String>>:
         chosen : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        return progress(chosen,bindings,message,width)
+        now : F64 <- Date.now()
+        return progress(chosen,bindings,message,frame(now,startedAt),width)
 
 def render(context: Context,width: Nat) -> IO(List<&2,String>):
   match context:

@@ -756,7 +756,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
-        "packages/coding-agent/src/modes/interactive/run.bend": "34f077f84137b0254753b1cc34cc22070caf99a0cb930635d7ffb0ce6c88bdf4"
+        "packages/coding-agent/src/modes/interactive/run.bend": "3aba14e5d52228c76f95702efe9b907beaddb303a02da4276149c8030e2cb556"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
@@ -935,7 +935,7 @@
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "e9fb5f5351007203f542165cfb4ec72677eaf5f7272fa91a46963a30948c3300",
-        "packages/coding-agent/src/modes/interactive/run.bend": "34f077f84137b0254753b1cc34cc22070caf99a0cb930635d7ffb0ce6c88bdf4",
+        "packages/coding-agent/src/modes/interactive/run.bend": "3aba14e5d52228c76f95702efe9b907beaddb303a02da4276149c8030e2cb556",
         "packages/coding-agent/src/modes/interactive/commands.bend": "9443632c43ce4906a850718f77a5ffe718954e6146b0e5c6896c821bdfa197ec",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
         "packages/coding-agent/src/main.bend": "f3164821e2990e8d14788451285fe03e9c1614177830572c2e9b5f8ab251c81f",
@@ -1755,10 +1755,10 @@
     },
     "packages/coding-agent/src/modes/interactive/session-share.ts": {
       "state": "partial",
-      "note": "The pi.share export payload, native Radius-first POST and private Gist fallback are implemented. One/four-thread loopback tests check Radius JSONL bytes, headers, success and errors. The mounted Gist share and Escape cancellation screens match pi, and another prompt works after cancellation. Radius still shows Gist progress text, loader frames do not animate, and a full Radius terminal scenario and concurrent-export isolation remain open.",
+      "note": "The pi.share export payload, native Radius-first POST and private Gist fallback are implemented. The share loader starts when upload or Gist creation begins and shows the selected route. One/four-thread loopback tests check Radius JSONL bytes, headers, success and errors; mounted Gist sharing and Escape cancellation match pi, including the next prompt. A full Radius terminal scenario and concurrent-export isolation remain open.",
       "source_sha256": "8204ea1382273641e943ca02877ca466f5642dab73f4bda29508c2337637c0cd",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/session-share.bend": "2cf78a47406ff67dca879e8689e22bf849e143cac79a83c6100ab5373dab5088"
+        "packages/coding-agent/src/modes/interactive/session-share.bend": "0d4dca8689b3c0ba5fd4714cdc8251224613c0320fec6365c82171cdbb18214a"
       }
     },
     "packages/coding-agent/src/config.ts": {
@@ -1771,10 +1771,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/bordered-loader.ts": {
       "state": "partial",
-      "note": "The native component replaces the mounted editor with a bordered progress screen, forwards idle input/focus/mouse/nested children, and restores the editor after completion. Mounted Gist creation and Escape cancellation frames match pi on one/four threads, including a subsequent prompt. Spinner-frame animation, Radius-specific progress text, and independent modal focus remain open.",
+      "note": "The native component replaces the mounted editor with a bordered progress screen, forwards idle input/focus/mouse/nested children, and restores the editor after completion. Its spinner uses the upstream ten frames at 80 ms and is active only during sharing. Mounted Gist creation and Escape cancellation screens match pi on one/four threads, including a subsequent prompt. Full Radius terminal parity and independent modal focus remain open.",
       "source_sha256": "f4a6487b80360bde89d8e96ebec16d84d4cd106dcc57c53757be571c7c4da1f6",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/bordered-loader.bend": "56a3f19e95675838ddd63f7278b9b4c52b8ded4c9820a8e02c2f39db7012b716"
+        "packages/coding-agent/src/modes/interactive/components/bordered-loader.bend": "7ec941cee8c0a73deb2fb9c04fd20d37bd3d00f6f4715e695a5dfcf6fafd0295"
       }
     }
   }

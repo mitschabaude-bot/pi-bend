@@ -3324,3 +3324,4 @@ Codex side conversation: updating README intro with the native-agent/Bend-platfo
 Codex side conversation: replaced the README video player with a 1.7 MB looping GIF immediately after the first intro sentence. Verified GIF animation/loop and GitHub image rendering; remaining README content and application work untouched.
 
 Codex side conversation: reordered the README table from toolchain and OS primitives through libraries to the application layer. Row contents are unchanged.
+Codex: `/share` now shows route-specific progress and animates upstream spinner frames at 80 ms only during active sharing. One/four-thread Gist completion, cancellation, typing, code-answer and paced-stream parity match; Radius loopback and source inventory pass. Large-session startup/history and flood latency remain at the known baseline.

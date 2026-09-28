@@ -701,18 +701,38 @@ def shareNotice(result: SessionShare.ShareResult) -> Interactive.SubmissionFailu
       Interactive.CommandNotice{"Share URL: " ++ Markdown.hyperlink(viewerUrl,viewerUrl) ++ "\nGist: " ++ Markdown.hyperlink(gistUrl,gistUrl)}
     case SessionShare.Failed{message}: Interactive.CommandFailure{message}
     case SessionShare.Cancelled{}: Interactive.CommandNotice{"Share cancelled"}
+type ShareProgressContext is Data:
+  ShareProgressContext{sharing: Ref.Ref<Maybe<&2,BorderedLoader.Activity>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cancel: Abort.AbortController<Unit>}
+def shareProgress(context: ShareProgressContext,message: String) -> IO(Unit):
+  match context:
+    case ShareProgressContext{sharing,redraw,cancel}:
+      do IO<Unit>:
+        now : F64 <- Date.now()
+        Ref.write(Maybe<&2,BorderedLoader.Activity>,sharing,Some{BorderedLoader.Activity{cancel,message,now}})
+        Interactive.requestRender(redraw)
+@unsafe def animateShare(+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+signal: Abort.AbortSignal<Unit>) -> IO(Unit):
+  do IO<Unit>:
+    waited : Result<&2,&2,Abort.AbortReason<Unit>,Unit> <- Timer.sleep(Unit,80,signal)
+    Bool.pick(Unit -> IO(Unit),Result.is_done(&2,&2,Abort.AbortReason<Unit>,Unit,waited),
+      _ => do IO<Unit>:
+        Interactive.requestRender(redraw)
+        animateShare(redraw,signal),
+      _ => IO.pure(Unit,Unit{}))(Unit{})
 def shareObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{sink,session,_,+failure,redraw,cwd,builtinDir,_,_,_,_,_,_,_,_,_,ExportTheme{active,customDir}}:
+    case CommandObservation{sink,session,_,+failure,+redraw,cwd,builtinDir,_,_,_,_,_,_,_,_,_,ExportTheme{active,customDir}}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         theme : Theme.Theme <- Ref.read(Theme.Theme,active)
         +cancel : Abort.AbortController<Unit> <- Abort.new(Unit)
         +sharing : Ref.Ref<Maybe<&2,BorderedLoader.Activity>> = Interactive.shareController(sink)
-        Ref.write(Maybe<&2,BorderedLoader.Activity>,sharing,Some{BorderedLoader.Activity{cancel,"Creating gist..."}})
-        Interactive.requestRender(redraw)
-        result : SessionShare.ShareResult <- SessionShare.shareSession(live,cwd,Abort.signal(Unit,cancel),path => exportHtml(live,builtinDir,customDir,theme,Some{path}))
+        +progress : Callback.Callback<String,Unit> <- Callback.create(~ShareProgressContext,~String,~Unit,~shareProgress,ShareProgressContext{sharing,redraw,cancel})
+        worker : Chan(Unit) <- IO.fork(Unit,animateShare(redraw,Abort.signal(Unit,cancel)))
+        result : SessionShare.ShareResult <- SessionShare.shareSession(live,cwd,Abort.signal(Unit,cancel),path => exportHtml(live,builtinDir,customDir,theme,Some{path}),progress)
         Ref.write(Maybe<&2,BorderedLoader.Activity>,sharing,None{})
+        stopped : Bool <- Abort.abort(Unit,cancel,None{})
+        joined : Unit <- IO.join(Unit,worker)
+        Callback.dispose(String,Unit,progress)
         Abort.dispose(Unit,cancel)
         Interactive.report(failure,shareNotice(result))
 def importStatus(state: ImportState,status: Interactive.SubmissionFailure) -> IO(Unit):
@@ -2305,7 +2325,7 @@ def abortCompaction(+session: Session.AgentSession) -> IO(Unit):
     Session.abortBranchSummary(session)
 def interruptOrShare(+input: KeyInput,+text: String,lastEscape: Ref.Ref<Maybe<&2,F64>>,session: Ref.Ref<Session.AgentSession>,sharing: Maybe<&2,BorderedLoader.Activity>) -> IO(Unit):
   match sharing:
-    case Some{BorderedLoader.Activity{controller,_}}:
+    case Some{BorderedLoader.Activity{controller,_,_}}:
       do IO<Unit>:
         cancelled : Bool <- Abort.abort(Unit,controller,None{})
         return Unit{}
