@@ -54,6 +54,7 @@ def scenario(threads: int) -> None:
             os.write(master, b"/ask\r")
             until(b"Pick a value", start)
             until(b"beta", start)
+            os.write(master, b"\x0f")
             os.write(master, b"\x1b[B\r")
             until(b"Extension chose: beta", start)
             start = len(output)

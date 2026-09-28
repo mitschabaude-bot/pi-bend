@@ -33,18 +33,18 @@ type Host is Data:
 type Owner is Type:
   Owner{modal: Serial.Owner<Modal>,host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 
-def selecting(pair: Selector.State & Selector.Action,reply: Reply()) -> IO(Modal):
+def selecting(pair: Selector.State & Selector.Action,reply: Reply()) -> IO(Modal & InputEffect):
   match pair:
-    case (state,Selector.Continue{}): IO.pure(Modal,Selecting{state,reply})
-    case (state,Selector.ToggleTools{}): IO.pure(Modal,Selecting{state,reply})
+    case (state,Selector.Continue{}): IO.pure(Modal & InputEffect,(Selecting{state,reply},Handled{}))
+    case (state,Selector.ToggleTools{}): IO.pure(Modal & InputEffect,(Selecting{state,reply},Forward{}))
     case (_,Selector.Select{value}):
-      do IO<Modal>:
+      do IO<Modal & InputEffect>:
         sent : Bool <- Chan.send(Answer(),reply,Some{value})
-        return Closed{}
+        return (Closed{},Handled{})
     case (_,Selector.Cancel{}):
-      do IO<Modal>:
+      do IO<Modal & InputEffect>:
         sent : Bool <- Chan.send(Answer(),reply,None{})
-        return Closed{}
+        return (Closed{},Handled{})
 def typing(pair: Input.State & Input.Action,reply: Reply()) -> IO(Modal):
   match pair:
     case (state,Input.Continue{}): IO.pure(Modal,Typing{state,reply})
@@ -113,10 +113,7 @@ def wordSource(+words: Ref.Ref<Words.Source>,text: String) -> IO(Words.Source):
 def receiveModal(modal: Modal,source: Ref.Ref<Words.Source>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String,rows: Nat) -> IO(Modal & InputEffect):
   match modal:
     case Closed{}: IO.pure(Modal & InputEffect,(Closed{},Forward{}))
-    case Selecting{state,reply}:
-      do IO<Modal & InputEffect>:
-        next : Modal <- selecting(Selector.handleInput(state,bindings,keyboard,data),reply)
-        return (next,Handled{})
+    case Selecting{state,reply}: selecting(Selector.handleInput(state,bindings,keyboard,data),reply)
     case Typing{+state,reply}:
       do IO<Modal & InputEffect>:
         words : Words.Source <- wordSource(source,Input.value(state))

@@ -3259,3 +3259,7 @@ Codex: live extension UI binding now mounts select/input/editor prompts and stat
 Codex: owns interactive/components/extension-dialog.bend, run.bend and the inline extension PTY fixture for the editor's currently ignored external-editor action. I am reusing the existing TUI suspension path and preserving the prompt when editing fails.
 
 Codex: extension editor Ctrl+G now uses the existing suspended native external-editor handoff; successful edits update only the originating prompt. Mounted select/input/editor/external-editor PTYs pass native one/four, five parity gates retain unchanged CLI captures and latencies (including the existing large-session/flood gaps), and inventory is clean.
+
+Codex: owns extension-dialog.bend and its focused test for the selector's ignored toggle-tools key. The source selector keeps its prompt open while calling the transcript expansion action; I am routing only that action to the existing mounted editor binding.
+
+Codex: extension selectors now forward only Ctrl+O to the mounted editor's tool-expansion action and keep the prompt open. Focused host and native one/four mounted checks pass; five terminal gates retain the installed pass/fail pattern and final flood latency, and source inventory is clean.

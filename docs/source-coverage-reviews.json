@@ -942,7 +942,7 @@
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "9e2189ff0cdd0cbc81152d17589464b291b11c1b27fcb087d817849948f2dcbf",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "7004cf45301739e438ad8c1b0468beb4f535acb388b5e6bc1593f52ad7c741ef",
         "packages/coding-agent/src/modes/interactive/extension-ui.bend": "06a8b214da86a89ad81884ce399433c8f44d46c5429fca3cc86901604bd54337",
-        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "f253504e22bdc8ddbdda49d14275bfe19d84e1153f41bb839d005003bd12333c"
+        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "18b4a11288d1b899f37cb2d42f5cbe4d7670092bc00ae2368d8a7b4e19724a07"
       }
     },
     "packages/coding-agent/src/modes/interactive/theme/theme-controller.ts": {
@@ -1661,7 +1661,7 @@
     },
     "packages/coding-agent/src/modes/interactive/components/extension-selector.ts": {
       "state": "partial",
-      "note": "Native selector state, keyboard actions and ANSI rows match focused upstream fixtures on one/four threads. The control is mounted through the serialized extension dialog host; live selector, input and editor commands pass a one/four-thread PTY check. Dialog timeout, toggle-tools action behavior remains unported.",
+      "note": "Native selector state, keyboard actions and ANSI rows match focused upstream fixtures on one/four threads. The control is mounted through the serialized extension dialog host; live selector, input and editor commands pass a one/four-thread PTY check. Ctrl+O forwards the tool-expansion action without closing the prompt, checked in the focused host test and mounted PTY. Dialog timeout and abort remain unported.",
       "source_sha256": "d83767b09d73264eb0cb9af54b6f13e0e9c15a429a6dd7b9c8e7498e013b7704",
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/extension-selector.bend",
@@ -1670,7 +1670,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/extension-selector.bend": "fbc376a2bf4e5ccb4e3f0310100c3917ca4d8c0b25e4def3a391b0924c385904",
-        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "f253504e22bdc8ddbdda49d14275bfe19d84e1153f41bb839d005003bd12333c",
+        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "18b4a11288d1b899f37cb2d42f5cbe4d7670092bc00ae2368d8a7b4e19724a07",
         "packages/coding-agent/src/modes/interactive/extension-ui.bend": "06a8b214da86a89ad81884ce399433c8f44d46c5429fca3cc86901604bd54337"
       }
     },
@@ -1685,7 +1685,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/extension-input.bend": "f751ee610df229596f8390824705ceb3a24bf71fc5ca765305701b7231a19110",
-        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "f253504e22bdc8ddbdda49d14275bfe19d84e1153f41bb839d005003bd12333c",
+        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "18b4a11288d1b899f37cb2d42f5cbe4d7670092bc00ae2368d8a7b4e19724a07",
         "packages/coding-agent/src/modes/interactive/extension-ui.bend": "06a8b214da86a89ad81884ce399433c8f44d46c5429fca3cc86901604bd54337"
       }
     },
@@ -1700,7 +1700,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/extension-editor.bend": "b5d3f204d2c33b7f58faa0f059a8d3a3ef65f7c425e4d5ab7001863b97c00664",
-        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "f253504e22bdc8ddbdda49d14275bfe19d84e1153f41bb839d005003bd12333c",
+        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "18b4a11288d1b899f37cb2d42f5cbe4d7670092bc00ae2368d8a7b4e19724a07",
         "packages/coding-agent/src/modes/interactive/extension-ui.bend": "06a8b214da86a89ad81884ce399433c8f44d46c5429fca3cc86901604bd54337"
       }
     }
