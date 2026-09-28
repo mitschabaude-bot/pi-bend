@@ -30,6 +30,7 @@ import ../../../../runtime/src/number-string.bend as NumberString
 import ../../../src/core/extensions/tool-render.bend as ToolRender
 import ../../../src/modes/interactive/theme/theme.bend as Theme
 import ../../../../tui/src/components/text.bend as TuiText
+import ../../../../tui/src/components/markdown.bend as Markdown
 
 # pi v0.87.1 examples/extensions/subagent/index.ts: the `subagent` tool
 # delegates tasks to specialized agents, each in its own `pi --mode json -p
@@ -106,6 +107,13 @@ def messagesOf(result: SingleResult) -> List<&2, Message()>:
 def resultAgent(result: SingleResult) -> String:
   match result:
     case SingleResult{agent, _, _, _, _, _, _, _, _, _, _}: agent
+
+def taskOf(result: SingleResult) -> String:
+  match result: case SingleResult{_,_,task,_,_,_,_,_,_,_,_}: task
+def usageOf(result: SingleResult) -> UsageStats:
+  match result: case SingleResult{_,_,_,_,_,_,usage,_,_,_,_}: usage
+def modelOf(result: SingleResult) -> Maybe<&2,String>:
+  match result: case SingleResult{_,_,_,_,_,_,_,model,_,_,_}: model
 
 def resultStopReason(result: SingleResult) -> Maybe<&2, String>:
   match result:
@@ -1167,7 +1175,7 @@ def renderLines(text: String,width: Nat) -> IO(List<&2,String>):
     return renderedLines(pair)
 def renderCall(_: Unit,context: ToolRender.RenderContext) -> IO(List<&2,String>):
   match context:
-    case ToolRender.RenderContext{_,_,args,_,_,_,_,_,width,theme}: renderLines(callText(args,theme),width)
+    case ToolRender.RenderContext{_,_,args,_,_,_,_,_,width,theme,_}: renderLines(callText(args,theme),width)
 
 def convertedNatural(converted: Result<&2,&2,F.Error,Nat>) -> Result<&2,&2,Decode.Error,Nat>:
   match converted:
@@ -1377,15 +1385,17 @@ def runningCount(results: List<&2,SingleResult>) -> Nat:
   match results:
     case Nil{}: 0n
     case result <> rest: Bool.pick(Nat,isRunning(result),1n,0n) + runningCount(rest)
-def modeText(+mode: SubagentMode,+results: List<&2,SingleResult>,+expanded: Bool,+theme: Theme.Theme) -> String:
+def modeHeader(+mode: SubagentMode,+results: List<&2,SingleResult>,+theme: Theme.Theme) -> String:
   +count = List.length(&2,SingleResult,results)
   +success = successCount(results)
   +running = runningCount(results)
   +label = modeName(mode)
   +status = Bool.pick(String,String.eq(label,"parallel") && Nat.is_gt(running,0n),Nat.show(Nat.sub(count,running)) ++ "/" ++ Nat.show(count) ++ " done, " ++ Nat.show(running) ++ " running",Nat.show(success) ++ "/" ++ Nat.show(count) ++ Bool.pick(String,String.eq(label,"chain")," steps"," tasks"))
   +icon = Bool.pick(String,Nat.is_gt(running,0n),renderColor(theme,"warning","⏳"),Bool.pick(String,String.eq(label,"parallel") && Nat.is_lt(success,count),renderColor(theme,"warning","◐"),resultIcon(Nat.is_lt(success,count),theme)))
+  icon ++ " " ++ renderColor(theme,"toolTitle",Theme.bold(label ++ " ")) ++ renderColor(theme,"accent",status)
+def modeText(+mode: SubagentMode,+results: List<&2,SingleResult>,+expanded: Bool,+theme: Theme.Theme) -> String:
   +usage = usageText(allUsage(results),None{})
-  icon ++ " " ++ renderColor(theme,"toolTitle",Theme.bold(label ++ " ")) ++ renderColor(theme,"accent",status) ++ modeRows(results,mode,expanded,theme) ++ Bool.pick(String,String.is_empty(usage),"","\n\n" ++ renderColor(theme,"dim","Total: " ++ usage)) ++ Bool.pick(String,expanded,"","\n" ++ renderColor(theme,"muted","(Ctrl+O to expand)"))
+  modeHeader(mode,results,theme) ++ modeRows(results,mode,expanded,theme) ++ Bool.pick(String,String.is_empty(usage),"","\n\n" ++ renderColor(theme,"dim","Total: " ++ usage)) ++ Bool.pick(String,expanded,"","\n" ++ renderColor(theme,"muted","(Ctrl+O to expand)"))
 def fallbackResult(content: List<&2,Ai.TextImageContent>) -> String:
   match content:
     case Ai.TextImageText{Ai.TextContent{text,_}} <> _: text
@@ -1397,17 +1407,97 @@ def detailsText(decoded: Result<&2,&2,Decode.Error,SubagentDetails>,+content: Li
     case Done{SubagentDetails{_,_,_,Nil{}}}: fallbackResult(content)
     case Done{SubagentDetails{SingleMode{},_,_,result <> _}}: singleText(result,expanded,theme)
     case Done{SubagentDetails{mode,_,_,results}}: modeText(mode,results,expanded,theme)
-def resultText(details: Maybe<&2,Tools.ToolDetails>,+content: List<&2,Ai.TextImageContent>,+expanded: Bool,+theme: Theme.Theme) -> String:
-  match details:
-    case Some{Tools.RawDetails{value}}: detailsText(decodeDetails(value),content,expanded,theme)
-    case _: fallbackResult(content)
-def renderedResult(result: ToolRender.ToolResult,expanded: Bool,width: Nat,theme: Theme.Theme) -> IO(List<&2,String>):
+# Expanded subagents use the same Markdown renderer as assistant messages.
+# Keep text and Markdown as distinct blocks so code fences and lists are laid
+# out at the tool's available width, rather than coloring pre-wrapped text.
+type ResultBlock is Data:
+  RenderText{text: String}
+  RenderMarkdown{text: String}
+  RenderSpacer{}
+def markdownLines(value: Markdown.Markdown & List<&2,String>) -> List<&2,String>:
+  match value: case (_,lines): lines
+def renderBlock(block: ResultBlock,width: Nat,styles: Markdown.MarkdownTheme) -> IO(List<&2,String>):
+  match block:
+    case RenderText{text}: renderLines(text,width)
+    case RenderMarkdown{text}:
+      do IO<List<&2,String>>:
+        rendered : Markdown.Markdown & List<&2,String> <- Markdown.render(Markdown.new(String.trim(text),0n,0n,styles,None{},None{}),width)
+        return markdownLines(rendered)
+    case RenderSpacer{}: IO.pure(List<&2,String>,[""])
+def renderBlocks(blocks: List<&2,ResultBlock>,+width: Nat,+styles: Markdown.MarkdownTheme) -> IO(List<&2,String>):
+  match blocks:
+    case Nil{}: IO.pure(List<&2,String>,Nil{})
+    case block <> rest:
+      do IO<List<&2,String>>:
+        first : List<&2,String> <- renderBlock(block,width,styles)
+        following : List<&2,String> <- renderBlocks(rest,width,styles)
+        return List.append(&2,String,first,following)
+def renderedTools(items: List<&2,DisplayItem>,+theme: Theme.Theme) -> List<&2,ResultBlock>:
+  match items:
+    case Nil{}: Nil{}
+    case DisplayTool{name,args} <> rest: RenderText{renderColor(theme,"muted","→ ") ++ toolCallText(name,args,theme)} <> renderedTools(rest,theme)
+    case _ <> rest: renderedTools(rest,theme)
+def outputBlocks(+items: List<&2,DisplayItem>,+finalOutput: String,+theme: Theme.Theme) -> List<&2,ResultBlock>:
+  +tools = renderedTools(items,theme)
+  Bool.pick(Unit -> List<&2,ResultBlock>,String.is_empty(finalOutput),
+    _ => Bool.pick(List<&2,ResultBlock>,List.is_empty(&2,DisplayItem,items),[RenderText{renderColor(theme,"muted","(no output)")}],tools),
+    _ => List.append(&2,ResultBlock,tools,[RenderSpacer{},RenderMarkdown{finalOutput}]))(Unit{})
+def expandedError(failed: Bool,errorMessage: Maybe<&2,String>,theme: Theme.Theme) -> List<&2,ResultBlock>:
+  match errorMessage:
+    case Some{message}: Bool.pick(List<&2,ResultBlock>,failed,[RenderText{renderColor(theme,"error","Error: " ++ message)}],Nil{})
+    case None{}: Nil{}
+def singleExpandedBlocks(+result: SingleResult,+theme: Theme.Theme) -> List<&2,ResultBlock>:
   match result:
-    case ToolRender.ToolResult{content,_,details}: renderLines(resultText(details,content,expanded,theme),width)
+    case SingleResult{agent,source,task,_,+messages,_,usage,model,stopReason,+errorMessage,_}:
+      +failed = isFailedResult(result)
+      +header = resultIcon(failed,theme) ++ " " ++ renderColor(theme,"toolTitle",Theme.bold(agent)) ++ renderColor(theme,"muted"," (" ++ sourceName(source) ++ ")") ++ stopBadge(failed,stopReason,theme)
+      +error = expandedError(failed,errorMessage,theme)
+      +usageLine = usageText(usage,model)
+      +footer = Bool.pick(List<&2,ResultBlock>,String.is_empty(usageLine),Nil{},[RenderSpacer{},RenderText{renderColor(theme,"dim",usageLine)}])
+      List.concat(&2,ResultBlock,[
+        [RenderText{header}],
+        error,
+        [RenderSpacer{},RenderText{renderColor(theme,"muted","─── Task ───")},RenderText{renderColor(theme,"dim",task)},RenderSpacer{},RenderText{renderColor(theme,"muted","─── Output ───")}],
+        outputBlocks(displayItems(messages),getFinalOutput(messages),theme),
+        footer,
+      ])
+def expandedModeRows(results: List<&2,SingleResult>,+mode: SubagentMode,+theme: Theme.Theme) -> List<&2,ResultBlock>:
+  match results:
+    case Nil{}: Nil{}
+    case +result <> rest:
+      +heading = renderColor(theme,"muted","─── " ++ modeLabel(mode,result)) ++ renderColor(theme,"accent",resultAgent(result)) ++ " " ++ rowIcon(mode,result,theme)
+      +task = renderColor(theme,"muted","Task: ") ++ renderColor(theme,"dim",taskOf(result))
+      +usage = usageText(usageOf(result),modelOf(result))
+      +footer = Bool.pick(List<&2,ResultBlock>,String.is_empty(usage),Nil{},[RenderText{renderColor(theme,"dim",usage)}])
+      +finalOutput = getFinalOutput(messagesOf(result))
+      +output = Bool.pick(List<&2,ResultBlock>,String.is_empty(finalOutput),Nil{},[RenderSpacer{},RenderMarkdown{finalOutput}])
+      +row = List.concat(&2,ResultBlock,[[RenderSpacer{},RenderText{heading},RenderText{task}],renderedTools(displayItems(messagesOf(result)),theme),output,footer])
+      List.append(&2,ResultBlock,row,expandedModeRows(rest,mode,theme))
+def expandedModeBlocks(+mode: SubagentMode,+results: List<&2,SingleResult>,+theme: Theme.Theme) -> List<&2,ResultBlock>:
+  +usage = usageText(allUsage(results),None{})
+  +footer = Bool.pick(List<&2,ResultBlock>,String.is_empty(usage),Nil{},[RenderSpacer{},RenderText{renderColor(theme,"dim","Total: " ++ usage)}])
+  RenderText{modeHeader(mode,results,theme)} <> List.append(&2,ResultBlock,expandedModeRows(results,mode,theme),footer)
+def renderedDecoded(decoded: Result<&2,&2,Decode.Error,SubagentDetails>,+content: List<&2,Ai.TextImageContent>,expanded: Bool,+width: Nat,+theme: Theme.Theme,+markdown: Markdown.MarkdownTheme) -> IO(List<&2,String>):
+  match decoded:
+    case Done{SubagentDetails{_,_,_,Nil{}}}: renderLines(fallbackResult(content),width)
+    case Done{SubagentDetails{SingleMode{},_,_,+result <> Nil{}}}: renderBlocks(singleExpandedBlocks(result,theme),width,markdown)
+    case Done{SubagentDetails{SingleMode{},_,_,result <> _}}: renderLines(singleText(result,expanded,theme),width)
+    case Done{SubagentDetails{ChainMode{},_,_,+results}}: renderBlocks(expandedModeBlocks(ChainMode{},results,theme),width,markdown)
+    case Done{SubagentDetails{ParallelMode{},_,_,+results}}:
+      Bool.pick(Unit -> IO(List<&2,String>),Nat.is_eq(runningCount(results),0n),_ => renderBlocks(expandedModeBlocks(ParallelMode{},results,theme),width,markdown),_ => renderLines(modeText(ParallelMode{},results,expanded,theme),width))(Unit{})
+    case _: renderLines(fallbackResult(content),width)
+def decodedResult(decoded: Result<&2,&2,Decode.Error,SubagentDetails>,content: List<&2,Ai.TextImageContent>,expanded: Bool,width: Nat,theme: Theme.Theme,styles: Maybe<&2,Markdown.MarkdownTheme>) -> IO(List<&2,String>):
+  match expanded styles:
+    case True{} Some{markdown}: renderedDecoded(decoded,content,expanded,width,theme,markdown)
+    case _ _: renderLines(detailsText(decoded,content,expanded,theme),width)
+def renderedResult(result: ToolRender.ToolResult,expanded: Bool,width: Nat,+theme: Theme.Theme,styles: Maybe<&2,Markdown.MarkdownTheme>) -> IO(List<&2,String>):
+  match result:
+    case ToolRender.ToolResult{content,_,Some{Tools.RawDetails{value}}}: decodedResult(decodeDetails(value),content,expanded,width,theme,styles)
+    case ToolRender.ToolResult{content,_,_}: renderLines(fallbackResult(content),width)
 def renderResult(_: Unit,context: ToolRender.RenderContext) -> IO(List<&2,String>):
   match context:
-    case ToolRender.RenderContext{_,_,_,None{},_,_,_,_,_,_}: IO.pure(List<&2,String>,Nil{})
-    case ToolRender.RenderContext{_,_,_,Some{result},expanded,_,_,_,width,theme}: renderedResult(result,expanded,width,theme)
+    case ToolRender.RenderContext{_,_,_,None{},_,_,_,_,_,_,_}: IO.pure(List<&2,String>,Nil{})
+    case ToolRender.RenderContext{_,_,_,Some{result},expanded,_,_,_,width,theme,styles}: renderedResult(result,expanded,width,theme,styles)
 
 # Registration
 # ------------

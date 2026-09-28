@@ -1,5 +1,6 @@
 import Base
 import ./components/tool-execution.bend as Tool
+import ../../../../tui/src/components/markdown.bend as Markdown
 import ../../core/tools/renderers/read.bend as ReadRenderer
 import ../../core/tools/edit.bend as Edit
 import ../../core/tools/edit-diff.bend as Edits
@@ -3174,13 +3175,13 @@ def toolHome(home: Maybe<&2,String>) -> IO(String):
       do IO<String>:
         result : Result<&2,&2,Filesystem.Error,String> <- Filesystem.homedir()
         toolHomeResult(result)
-def configureTools(transcript: Transcript.Handle,builtinDir: String,key: String,+cwd: String,home: Maybe<&2,String>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+def configureTools(transcript: Transcript.Handle,builtinDir: String,key: String,+cwd: String,home: Maybe<&2,String>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,markdown: Markdown.MarkdownTheme) -> IO(Unit):
   do IO<Unit>:
     directory : String <- toolHome(home)
     +paths : Paths.Environment = Paths.Environment{cwd,directory,URL.Context{IDNA.Context{Mapping.table(),Normalization.tables(),Properties.table()},IDNA.Options{IDNA.LabelOptions{False{},False{},True{},IDNA.Nontransitional{}},True{},False{}}}}
     compute : Callback.Callback<Tool.PreviewRequest,Edits.Preview()> <- Callback.create(~Paths.Environment,~Tool.PreviewRequest,~Edits.Preview(),~computeToolPreview,paths)
-    Transcript.setToolContext(transcript,Tool.ToolContext{cwd,compute,redraw,Some{ReadRenderer.Context{paths,Path.normalize(builtinDir ++ "/../../../../../.."),key}}})
-def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,+viewHandle: View.Handle,styles: MarkdownTheme.Styles,highlighter: SyntaxHighlight.Highlighter,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Source,setting: Maybe<&2,String>,+builtinDir: String,+customDir: String,+models: List<&2,Models.Model()>,+mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+    Transcript.setToolContext(transcript,Tool.ToolContext{cwd,compute,redraw,Some{ReadRenderer.Context{paths,Path.normalize(builtinDir ++ "/../../../../../.."),key}},Some{markdown}})
+def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,+viewHandle: View.Handle,styles: MarkdownTheme.Styles,markdown: Markdown.MarkdownTheme,highlighter: SyntaxHighlight.Highlighter,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Source,setting: Maybe<&2,String>,+builtinDir: String,+customDir: String,+models: List<&2,Models.Model()>,+mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (transcript,+transcriptHandle):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -3200,7 +3201,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         initialFooterState : Footer.State <- initialSessionFooter(session,agentState,existing,cwd,home,Settings.getCompactionEnabled(settings))
         +foot : FooterOwner <- footer(initialFooterState,liveTheme,current)
         +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
-        configureTools(transcriptHandle,builtinDir,Hints.keyText(bindings,"app.tools.expand"),cwd,home,redraw)
+        configureTools(transcriptHandle,builtinDir,Hints.keyText(bindings,"app.tools.expand"),cwd,home,redraw,markdown)
         +subscriptionShown : Ref.Ref<Bool> <- Ref.new(Bool,False{})
         +status : Interactive.StatusSink <- IO.pure(Interactive.StatusSink,Interactive.SessionStatusSink{transcriptHandle,redraw,subscriptionShown})
         +workingActiveRef : Ref.Ref<Maybe<&2,Loader.Handle>> <- Ref.new(Maybe<&2,Loader.Handle>,None{})
@@ -3245,7 +3246,7 @@ def startStyles(styles: MarkdownTheme.Styles,view: View.View,+viewHandle: View.H
     case MarkdownTheme.Styles{+markdown,callbacks,+live,+highlighter}:
       do IO<Result<&2,&2,Error,Unit>>:
         transcript : Transcript.Owner <- Transcript.create(viewHandle,theme,markdown)
-        startTranscript(Transcript.borrow(transcript),view,viewHandle,MarkdownTheme.Styles{markdown,callbacks,live,highlighter},highlighter,live,session,initial,cwd,home,words,setting,builtinDir,customDir,models,mode)
+        startTranscript(Transcript.borrow(transcript),view,viewHandle,MarkdownTheme.Styles{markdown,callbacks,live,highlighter},markdown,highlighter,live,session,initial,cwd,home,words,setting,builtinDir,customDir,models,mode)
 def startView(borrowed: View.View & Component.Component & View.Handle,styles: MarkdownTheme.Styles,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (view,_,viewHandle):

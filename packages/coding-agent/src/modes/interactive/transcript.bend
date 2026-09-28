@@ -792,7 +792,7 @@ def clear(handle: Handle) -> IO(Unit):
 def disposeToolContext(context: Maybe<&2,Tool.ToolContext>) -> IO(Unit):
   match context:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{Tool.ToolContext{_,compute,_,_}}: Callback.dispose(Tool.PreviewRequest,Edits.Preview(),compute)
+    case Some{Tool.ToolContext{_,compute,_,_,_}}: Callback.dispose(Tool.PreviewRequest,Edits.Preview(),compute)
 def disposeState(state: State) -> IO(Unit):
   match state:
     case State{entries,RenderRegistry{_,context,_},_,_,_,_,_,_,_,_}:
@@ -819,7 +819,7 @@ def setToolContext(handle: Handle,context: Tool.ToolContext) -> IO(Unit):
 def contextCwd(context: Maybe<&2,Tool.ToolContext>,cwd: String) -> Maybe<&2,Tool.ToolContext>:
   match context:
     case None{}: None{}
-    case Some{Tool.ToolContext{_,compute,redraw,read}}: Some{Tool.ToolContext{cwd,compute,redraw,read}}
+    case Some{Tool.ToolContext{_,compute,redraw,read,markdown}}: Some{Tool.ToolContext{cwd,compute,redraw,read,markdown}}
 def contextCwdChanged(state: State,cwd: String) -> IO(State & Unit):
   match state:
     case State{entries,RenderRegistry{links,context,extensions},active,id,view,theme,styles,expanded,hidden,pad}:

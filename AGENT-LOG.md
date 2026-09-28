@@ -3225,3 +3225,7 @@ Codex: native resume search now matches 22 source-pinned picker scenarios on one
 Codex: owns core/extensions/types.bend, runner.bend, interactive/components/tool-execution.bend and subagent extension rendering for native ToolDefinition renderCall/renderResult support. Upstream exposes these callbacks but the native definition cannot register them yet; I will wire the existing renderer hook through the tool lifecycle and compare source fixtures before landing.
 
 Codex: native ToolDefinition rendering is wired through transcript mounts; the subagent example now displays call previews and single/chain/parallel results. Focused renderer, 68-frame tool oracle, existing subagent execution suite, five CLI gates and gpt-6-luna smoke pass; expanded Markdown/component state remains partial, and the old startup/flood gaps persist. Landing the tested milestone.
+
+Codex: owns core/extensions/tool-render.bend, interactive/components/tool-execution.bend and subagent rendering while closing the remaining extension component/Markdown gap. I am checking upstream component lifecycle against the native TUI before editing; no heavy build live.
+
+Codex: expanded subagent results now render final answers with the shared Markdown theme in single/chain/parallel views. Native one/four renderer tests, 68 source tool frames, five terminal scenarios against installed CLI, inventory and gpt-6-luna smoke pass; source history and flood latency gaps remain, while retained extension components remain partial.

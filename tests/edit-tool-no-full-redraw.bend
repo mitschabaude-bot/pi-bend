@@ -232,7 +232,7 @@ def raceCase(cwd: String,theme: Theme.Theme) -> IO(Unit):
     +notify : Callback.Callback<Unit,Unit> <- Callback.create(~Notices,~Unit,~Unit,~raceNotified,Notices{notices,ready})
     +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,Some{notify})
     +original : Value.Value = args("same.txt",Edits.Edit{"x","y"} <> Nil{})
-    owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{4n},Tool.new("edit","race",original,theme,Tool.Generic{}),Some{Tool.ToolContext{cwd,compute,redraw,None{}}})
+    owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{4n},Tool.new("edit","race",original,theme,Tool.Generic{}),Some{Tool.ToolContext{cwd,compute,redraw,None{},None{}}})
     raceMounted(Tool.borrow(owner),original,entered,release,ready,calls,notices)
     Callback.dispose(Tool.PreviewRequest,Edits.Preview(),compute)
     retired : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw)
@@ -256,7 +256,7 @@ def run(arguments: List<String>) -> IO(Unit):
         +channel : Chan(Unit) <- Chan.new(Unit,8)
         +notify : Callback.Callback<Unit,Unit> <- Callback.create(~Chan(Unit),~Unit,~Unit,~notified,channel)
         +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,Some{notify})
-        +context : Tool.ToolContext = Tool.ToolContext{cwd,compute,redraw,None{}}
+        +context : Tool.ToolContext = Tool.ToolContext{cwd,compute,redraw,None{},None{}}
         ready : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadFromPath("packages/coding-agent/src/modes/interactive/theme/dark.json",Color.Palette256{})
         +theme : Theme.Theme <- loaded(ready)
         largeCase(context,channel,paths,cwd,theme)

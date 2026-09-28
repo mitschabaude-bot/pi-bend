@@ -33,7 +33,7 @@ import ../../../core/extensions/tool-render.bend as ToolRender
 # owns the callback; each mounted tool joins its reads before being disposed.
 type PreviewRequest is Data: PreviewRequest{cwd: String,input: Edit.EditToolInput}
 type ToolContext is Data:
-  ToolContext{cwd: String,compute: Callback.Callback<PreviewRequest,Edits.Preview()>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,read: Maybe<&2,ReadRenderer.Context>}
+  ToolContext{cwd: String,compute: Callback.Callback<PreviewRequest,Edits.Preview()>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,read: Maybe<&2,ReadRenderer.Context>,markdown: Maybe<&2,Markdown.MarkdownTheme>}
 type Shell is Data:
   Generic{}
   Boxed{call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>}
@@ -104,8 +104,10 @@ def setShowImages(state: ToolExecution,images: Bool) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,expanded,_,partial,started,complete,theme,shell,highlight}: ToolExecution{name,id,args,result,expanded,images,partial,started,complete,theme,shell,highlight}
 def retheme(state: ToolExecution,theme: Theme.Theme) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,expanded,images,partial,started,complete,_,shell,highlight}: ToolExecution{name,id,args,result,expanded,images,partial,started,complete,theme,shell,highlight}
-def context(state: ToolExecution,width: Nat) -> ToolRender.RenderContext:
-  match state: case ToolExecution{name,id,args,result,expanded,_,partial,started,complete,theme,_,_}: ToolRender.RenderContext{name,id,args,result,expanded,partial,started,complete,width,theme}
+def context(state: ToolExecution,width: Nat,tool: Maybe<&2,ToolContext>) -> ToolRender.RenderContext:
+  match state tool:
+    case ToolExecution{name,id,args,result,expanded,_,partial,started,complete,theme,_,_} Some{ToolContext{_,_,_,_,markdown}}: ToolRender.RenderContext{name,id,args,result,expanded,partial,started,complete,width,theme,markdown}
+    case ToolExecution{name,id,args,result,expanded,_,partial,started,complete,theme,_,_} None{}: ToolRender.RenderContext{name,id,args,result,expanded,partial,started,complete,width,theme,None{}}
 def title(state: ToolExecution) -> IO(String):
   match state:
     case ToolExecution{name,_,_,_,_,_,_,_,_,theme,_,_}:
@@ -186,7 +188,7 @@ def builtResult(+name: String,+args: Value.Value,+highlight: Maybe<&2,Callback.C
 def readCall(args: Value.Value,theme: Theme.Theme,expanded: Bool,context: Maybe<&2,ToolContext>) -> IO(String):
   match context:
     case None{}: ReadRenderer.renderCall(args,theme)
-    case Some{ToolContext{cwd,_,_,read}}: ReadRenderer.renderCallWithContext(args,theme,expanded,read,cwd)
+    case Some{ToolContext{cwd,_,_,read,_}}: ReadRenderer.renderCallWithContext(args,theme,expanded,read,cwd)
 def builtCall(name: String,args: Value.Value,context: Maybe<&2,ToolContext>,highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,expanded: Bool,theme: Theme.Theme) -> IO(String):
   match name:
     case "read": readCall(args,theme,expanded,context)
@@ -247,24 +249,24 @@ def resultFallback(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
               end : String <- Messages.foregroundText(theme,"muted",")")
               return joined ++ start ++ " " ++ key ++ hint ++ end)(Unit{})
           textLines(text,0n,0n,width,None{}))(Unit{})
-def renderSlot(renderer: Maybe<&2,ToolRender.Renderer()>,+state: ToolExecution,+width: Nat,call: Bool) -> IO(List<&2,String>):
+def renderSlot(renderer: Maybe<&2,ToolRender.Renderer()>,+state: ToolExecution,+width: Nat,call: Bool,tool: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match renderer:
-    case Some{callback}: Callback.call(ToolRender.RenderContext,List<&2,String>,callback,context(state,width))
+    case Some{callback}: Callback.call(ToolRender.RenderContext,List<&2,String>,callback,context(state,width,tool))
     case None{}: Bool.pick(Unit -> IO(List<&2,String>),call,_ => callFallback(state,width),_ => resultFallback(state,width))(Unit{})
-def resultSlot(renderer: Maybe<&2,ToolRender.Renderer()>,state: ToolExecution,width: Nat) -> IO(List<&2,String>):
+def resultSlot(renderer: Maybe<&2,ToolRender.Renderer()>,state: ToolExecution,width: Nat,tool: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{_,_,_,None{},_,_,_,_,_,_,_,_}: IO.pure(List<&2,String>,Nil{})
-    case _: renderSlot(renderer,state,width,False{})
-def boxContent(+state: ToolExecution,call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>,+width: Nat) -> IO(List<&2,String>):
+    case _: renderSlot(renderer,state,width,False{},tool)
+def boxContent(+state: ToolExecution,call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>,+width: Nat,+tool: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
-    first : List<&2,String> <- renderSlot(call,state,Nat.max(1n,width - 2n),True{})
-    second : List<&2,String> <- resultSlot(result,state,Nat.max(1n,width - 2n))
+    first : List<&2,String> <- renderSlot(call,state,Nat.max(1n,width - 2n),True{},tool)
+    second : List<&2,String> <- resultSlot(result,state,Nat.max(1n,width - 2n),tool)
     return List.append(&2,String,first,second)
-def boxed(+state: ToolExecution,call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>,+width: Nat) -> IO(List<&2,String>):
+def boxed(+state: ToolExecution,call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>,+width: Nat,tool: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{_,_,_,_,_,_,_,_,_,theme,_,_}:
       do IO<List<&2,String>>:
-        +content : List<&2,String> <- boxContent(state,call,result,width)
+        +content : List<&2,String> <- boxContent(state,call,result,width,tool)
         Bool.pick(Unit -> IO(List<&2,String>),List.is_empty(&2,String,content),
           _ => IO.pure(List<&2,String>,Nil{}),
           _ => do IO<List<&2,String>>:
@@ -274,18 +276,18 @@ def boxed(+state: ToolExecution,call: Maybe<&2,ToolRender.Renderer()>,result: Ma
             bottom : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
             Callback.dispose(String,String,bg)
             return "" <> List.append(&2,String,top,List.append(&2,String,body,bottom)))(Unit{})
-def selfRendered(+state: ToolExecution,call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>,+width: Nat) -> IO(List<&2,String>):
+def selfRendered(+state: ToolExecution,call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>,+width: Nat,+tool: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
-    first : List<&2,String> <- renderSlot(call,state,width,True{})
-    second : List<&2,String> <- resultSlot(result,state,width)
+    first : List<&2,String> <- renderSlot(call,state,width,True{},tool)
+    second : List<&2,String> <- resultSlot(result,state,width,tool)
     +content : List<&2,String> <- IO.pure(List<&2,String>,List.append(&2,String,first,second))
     return Bool.pick(List<&2,String>,List.is_empty(&2,String,content),Nil{},"" <> content)
 def renderWithPreview(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,preview: Maybe<&2,Edits.Preview()>,context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{+name,_,_,_,_,_,_,_,_,_,Generic{},_}:
       Bool.pick(Unit -> IO(List<&2,String>),String.eq(name,"read") || String.eq(name,"bash") || String.eq(name,"edit") || String.eq(name,"write") || String.eq(name,"find") || String.eq(name,"grep") || String.eq(name,"ls"),_ => builtinWithPreview(state,width,elapsed,write,preview,context),_ => generic(state,width))(Unit{})
-    case ToolExecution{_,_,_,_,_,_,_,_,_,_,Boxed{+call,+result},_}: boxed(state,call,result,width)
-    case ToolExecution{_,_,_,_,_,_,_,_,_,_,SelfRendered{+call,+result},_}: selfRendered(state,call,result,width)
+    case ToolExecution{_,_,_,_,_,_,_,_,_,_,Boxed{+call,+result},_}: boxed(state,call,result,width,context)
+    case ToolExecution{_,_,_,_,_,_,_,_,_,_,SelfRendered{+call,+result},_}: selfRendered(state,call,result,width,context)
 def renderWithDuration(state: ToolExecution,width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>) -> IO(List<&2,String>):
   renderWithPreview(state,width,elapsed,write,None{},None{})
 def render(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
@@ -369,7 +371,7 @@ def previewInput(value: ToolExecution) -> Maybe<&2,Edit.EditToolInput>:
     case _: None{}
 def requestedPreview(context: ToolContext) -> IO(Unit):
   match context:
-    case ToolContext{_,_,redraw,_}:
+    case ToolContext{_,_,redraw,_,_}:
       do IO<Unit>:
         callback : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.read(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw)
         notifyPreview(callback)
@@ -380,11 +382,11 @@ def previewArrived(current: Stamped,expected: Value.Value,requestRevision: Nat,+
       (Stamped{value,Bool.pick(Nat,accept,version + 1n,version),Bool.pick(Maybe<&2,Edits.Preview()>,accept,Some{result},preview),revision},accept)
 def computePreview(+state: Ref.Ref<Stamped>,+context: ToolContext,expected: Value.Value,revision: Nat,input: Edit.EditToolInput) -> IO(Unit):
   match context:
-    case ToolContext{+cwd,+compute,+redraw,+read}:
+    case ToolContext{+cwd,+compute,+redraw,+read,+markdown}:
       do IO<Unit>:
         result : Edits.Preview() <- Callback.call(PreviewRequest,Edits.Preview(),compute,PreviewRequest{cwd,input})
         accepted : Bool <- Ref.modify(Stamped,Bool,state,current => previewArrived(current,expected,revision,result))
-        Bool.pick(Unit -> IO(Unit),accepted,_ => requestedPreview(ToolContext{cwd,compute,redraw,read}),_ => IO.pure(Unit,Unit{}))(Unit{})
+        Bool.pick(Unit -> IO(Unit),accepted,_ => requestedPreview(ToolContext{cwd,compute,redraw,read,markdown}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def previewStarted(state: Ref.Ref<Stamped>,preflight: Preflight,expected: Value.Value,revision: Nat,input: Maybe<&2,Edit.EditToolInput>) -> IO(Unit):
   match preflight input:
     case Preflight{Some{context},tasks} Some{ready}:

@@ -50,7 +50,7 @@ def args2() -> Value.Value: Value.ObjectValue{R.Record{R.Property{"path",Value.T
     case Succ{rest}: lines(from + 1n,rest,("line-" ++ Nat.show(from)) <> reversed)
 def draw(label: String,context: ToolRender.RenderContext) -> IO(List<&2,String>):
   match context:
-    case ToolRender.RenderContext{_,_,_,_,_,_,_,_,width,_}:
+    case ToolRender.RenderContext{_,_,_,_,_,_,_,_,width,_,_}:
       +label = {label: String}
       IO.pure(List<&2,String>,U.padResult(label,U.visibleWidth(label),width,True{}) <> Nil{})
 def drawEmpty(label: String,context: ToolRender.RenderContext) -> IO(List<&2,String>): IO.pure(List<&2,String>,Nil{})
@@ -83,7 +83,7 @@ def compactReads(theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     +compute : Callback.Callback<Tool.PreviewRequest,Edits.Preview()> <- Callback.create(~Unit,~Tool.PreviewRequest,~Edits.Preview(),~unusedPreview,Unit{})
     +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
-    context : Tool.ToolContext = Tool.ToolContext{"/work/project",compute,redraw,Some{ReadRenderer.Context{Fixture.environment("/work/project","/home/tester"),"/package","ctrl+o"}}}
+    context : Tool.ToolContext = Tool.ToolContext{"/work/project",compute,redraw,Some{ReadRenderer.Context{Fixture.environment("/work/project","/home/tester"),"/package","ctrl+o"}},None{}}
     compactCases(CompactCase{"skill","skills/check/SKILL.md"} <> CompactCase{"resource","AGENTS.md"} <> CompactCase{"override","../AGENTS.override.md"} <> CompactCase{"docs","/package/docs/how.md"} <> CompactCase{"examples","/package/examples/demo/main.bend"} <> CompactCase{"readme","/package/README.md"} <> CompactCase{"docs-skill","/package/docs/guide/SKILL.md"} <> CompactCase{"docs-resource","/package/docs/AGENTS.md"} <> CompactCase{"outside","/package-other/docs/README.md"} <> CompactCase{"outside-resource","/outside/CLAUDE.MD"} <> CompactCase{"ordinary","src/main.bend"} <> CompactCase{"resource-suffix","xAGENTS.md"} <> CompactCase{"tilde","~/AGENTS.md"} <> Nil{},context,theme)
     Callback.dispose(Tool.PreviewRequest,Edits.Preview(),compute)
     retired : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw)

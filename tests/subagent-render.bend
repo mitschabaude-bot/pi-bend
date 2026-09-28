@@ -11,10 +11,13 @@ import ../packages/coding-agent/src/modes/interactive/components/tool-execution.
 import ../packages/coding-agent/src/modes/interactive/transcript.bend as Transcript
 import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
 import ../packages/coding-agent/src/modes/interactive/theme/color.bend as Color
+import ../packages/coding-agent/src/modes/interactive/theme/markdown-theme.bend as MarkdownTheme
+import ../packages/coding-agent/src/utils/syntax-highlight.bend as SyntaxHighlight
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/tui/src/utils.bend as U
+import ../packages/tui/src/components/markdown.bend as Markdown
 
 def loaded(result: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Theme.Theme):
   match result:
@@ -54,8 +57,27 @@ def run(+theme: Theme.Theme) -> IO(Unit):
     C.dispose(ToolRender.RenderContext,List<&2,String>,call)
     C.dispose(ToolRender.RenderContext,List<&2,String>,resultCallback)
     C.dispose(Ext.ToolCallInput,Tools.Output(),executeCallback)
+def styledMode(mode: Subagent.SubagentMode,markdown: Markdown.MarkdownTheme,theme: Theme.Theme) -> IO(Unit):
+  do IO<Unit>:
+    +agent : Subagent.SingleResult = result("worker","**bold** and `code`")
+    +details : Subagent.SubagentDetails = Subagent.SubagentDetails{mode,Agents.UserScope{},None{},[agent]}
+    +toolResult : ToolRender.ToolResult = ToolRender.ToolResult{[Ai.TextImageText{Ai.TextContent{"**bold** and `code`",None{}}}],False{},Some{Tools.RawDetails{Subagent.detailsValue(details)}}}
+    +context : ToolRender.RenderContext = ToolRender.RenderContext{"subagent","call-1",V.ObjectValue{R.Record{Nil{}}},Some{toolResult},True{},False{},True{},True{},80n,theme,Some{markdown}}
+    +rows : List<&2,String> <- Subagent.renderResult(Unit{},context)
+    check(String.contains(clean(rows),"bold and code") && Bool.not(String.contains(clean(rows),"**bold**")) && String.contains(String.join(rows,"\n"),"\u{1b}[1m"),"expanded subagent answer was not rendered as Markdown")
+def styledBorrowed(pair: MarkdownTheme.Styles & Markdown.MarkdownTheme,+theme: Theme.Theme) -> IO(Unit):
+  match pair:
+    case (styles,+markdown):
+      do IO<Unit>:
+        styledMode(Subagent.SingleMode{},markdown,theme)
+        styledMode(Subagent.ChainMode{},markdown,theme)
+        styledMode(Subagent.ParallelMode{},markdown,theme)
+        MarkdownTheme.dispose(styles)
 def main() -> IO(Unit):
   do IO<Unit>:
     loadedTheme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadFromPath("packages/coding-agent/src/modes/interactive/theme/dark.json",Color.Palette256{})
-    theme : Theme.Theme <- loaded(loadedTheme)
+    +theme : Theme.Theme <- loaded(loadedTheme)
     run(theme)
+    highlighter : SyntaxHighlight.Highlighter <- SyntaxHighlight.create("packages/runtime/data/highlight")
+    styles : MarkdownTheme.Styles <- MarkdownTheme.create(theme,highlighter)
+    styledBorrowed(MarkdownTheme.borrow(styles),theme)

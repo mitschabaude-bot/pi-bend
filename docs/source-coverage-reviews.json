@@ -566,13 +566,13 @@
     },
     "packages/coding-agent/src/core/extensions/types.ts": {
       "state": "partial",
-      "note": "Typed native events and results for agent_start/end/settled, turn_start, message_start/update/end, tool_execution_*, tool_call, tool_result, session_before_tree/session_tree (TreePreparation, summary and instruction overrides), session_before_compact/session_compact/session_compact_failed, turn_end/agent_before_settle boundaries (SessionBoundaryDraft, BoundaryContextPreview, BoundaryResult, AgentActivityOutcome), commands, InlineExtension, ExtensionError and the sendMessage/sendUserMessage actions. tool_call input is one JSON value, not upstream's per-tool narrowed variants; compaction details are the typed read/modified file lists. context/context_with_system (results carry messages; no in-place edits). input (InputEvent/InputSource/InputEventResult; no images is an empty list) and sendUserMessage's options (deliverAs, expandPromptTemplates). before_agent_start (BeforeAgentStartEvent/Result; the result also carries edited options) and the setModel action. session_start, session_before_switch, session_before_fork (with Ctx.ForkPosition) and session_shutdown with their results. InlineExtension also has bare factories (BareExtension, <inline:N>). ToolDefinition (execute receives the extension context; native line-render callbacks and shell selection are present; prepareArguments and constrained sampling remain missing), RegisteredTool, ToolInfo and the tool actions. user_bash (UserBashEvent; UserBashEventResult as operations or result), flags (FlagOptions with flagType, since `type` is a keyword; ExtensionFlag, FlagValue), shortcuts (ShortcutOptions, ExtensionShortcut) and AppendEntry. Missing: session_info events, model/thinking select, provider request/response, UI prompt events, entry renderer registration types. ExtensionContext (context.bend) has sessionManager (a ReadonlySessionManager snapshot of the bound session's record, queried with session-manager's pure functions; None before a session binds the runner, as the native runner is created before its session) and ui.theme (the bound UI's live theme; upstream's no-UI context answers the process-global theme, which the native modes do not have, so it is None without a UI or when RPC mode binds no theme). The built-in tools read a narrower ContextView through a reader the runner owns (tool-context.bend), so the context can name the session's tool-details type. ProviderRegistration distinguishes native providers with an optional stream callback from config overlays; deferred ProviderChange/PendingProvider retain the registration value. MessageRenderOptions/Input/Renderer use a typed callback result: failure or absence selects fallback; a successful component carries an affine retirement action.",
+      "note": "Typed native events and results for agent_start/end/settled, turn_start, message_start/update/end, tool_execution_*, tool_call, tool_result, session_before_tree/session_tree (TreePreparation, summary and instruction overrides), session_before_compact/session_compact/session_compact_failed, turn_end/agent_before_settle boundaries (SessionBoundaryDraft, BoundaryContextPreview, BoundaryResult, AgentActivityOutcome), commands, InlineExtension, ExtensionError and the sendMessage/sendUserMessage actions. tool_call input is one JSON value, not upstream's per-tool narrowed variants; compaction details are the typed read/modified file lists. context/context_with_system (results carry messages; no in-place edits). input (InputEvent/InputSource/InputEventResult; no images is an empty list) and sendUserMessage's options (deliverAs, expandPromptTemplates). before_agent_start (BeforeAgentStartEvent/Result; the result also carries edited options) and the setModel action. session_start, session_before_switch, session_before_fork (with Ctx.ForkPosition) and session_shutdown with their results. InlineExtension also has bare factories (BareExtension, <inline:N>). ToolDefinition (execute receives the extension context; native line-render callbacks, shell selection and a borrowed Markdown theme for expanded output are present; prepareArguments and constrained sampling remain missing), RegisteredTool, ToolInfo and the tool actions. user_bash (UserBashEvent; UserBashEventResult as operations or result), flags (FlagOptions with flagType, since `type` is a keyword; ExtensionFlag, FlagValue), shortcuts (ShortcutOptions, ExtensionShortcut) and AppendEntry. Missing: session_info events, model/thinking select, provider request/response, UI prompt events, entry renderer registration types. ExtensionContext (context.bend) has sessionManager (a ReadonlySessionManager snapshot of the bound session's record, queried with session-manager's pure functions; None before a session binds the runner, as the native runner is created before its session) and ui.theme (the bound UI's live theme; upstream's no-UI context answers the process-global theme, which the native modes do not have, so it is None without a UI or when RPC mode binds no theme). The built-in tools read a narrower ContextView through a reader the runner owns (tool-context.bend), so the context can name the session's tool-details type. ProviderRegistration distinguishes native providers with an optional stream callback from config overlays; deferred ProviderChange/PendingProvider retain the registration value. MessageRenderOptions/Input/Renderer use a typed callback result: failure or absence selects fallback; a successful component carries an affine retirement action.",
       "source_sha256": "601261b3deee1d61f85c930efed2767d66fe6c8d9637e19f4f53135b5fecf4d1",
       "port_sha256": {
         "packages/coding-agent/src/core/extensions/types.bend": "7d977c27e33acf8894c1ea601caf657fff0922006399bfc7b8802938bd89298e",
         "packages/coding-agent/src/core/extensions/context.bend": "bbf9d90c14764cd1d61730a5f9370a46181d4987c043f2738bedc396f47df9fa",
         "packages/coding-agent/src/core/extensions/tool-context.bend": "37fc2c8216cb58e2cf27d1300117ec304a7362ebe86a3d86327ab0529cbca803",
-        "packages/coding-agent/src/core/extensions/tool-render.bend": "5b00254630df12a03e35a099f85f0ea025fc705163d91ccf9b8e967ec6054652"
+        "packages/coding-agent/src/core/extensions/tool-render.bend": "bc25ba12b32ab6392e9aad8e12c7b9e8c9d27f52b97727206c05fa282db83da1"
       },
       "ports": [
         "packages/coding-agent/src/core/extensions/types.bend",
@@ -704,7 +704,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "64e6e6b3b9e0d6f235f0f801594b4153c22fda9fc4187df15355c538254e6029"
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "acc3eaa45aa69ec6c6f31c86bf99df7281018eeb495df80ceb15e000f081bead"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/compaction-summary-message.ts": {
@@ -717,7 +717,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "64e6e6b3b9e0d6f235f0f801594b4153c22fda9fc4187df15355c538254e6029"
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "acc3eaa45aa69ec6c6f31c86bf99df7281018eeb495df80ceb15e000f081bead"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/countdown-timer.ts": {
@@ -743,7 +743,7 @@
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/custom-message.bend": "f74a748b5a4b8c898330f9bdf54ed3f6582eb407adcce385d325c51a7e2e5006",
         "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "64e6e6b3b9e0d6f235f0f801594b4153c22fda9fc4187df15355c538254e6029"
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "acc3eaa45aa69ec6c6f31c86bf99df7281018eeb495df80ceb15e000f081bead"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/footer.ts": {
@@ -756,7 +756,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
-        "packages/coding-agent/src/modes/interactive/run.bend": "22aeefc9a05ffb02dee49bc2a21810fcd1feb6e66122dae203c668ba8a150833"
+        "packages/coding-agent/src/modes/interactive/run.bend": "786b6521dd6893a3ca7ad7522fcb596f5e5ccfad078244742867d3d341e5da94"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
@@ -852,7 +852,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "64e6e6b3b9e0d6f235f0f801594b4153c22fda9fc4187df15355c538254e6029"
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "acc3eaa45aa69ec6c6f31c86bf99df7281018eeb495df80ceb15e000f081bead"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/status-indicator.ts": {
@@ -932,13 +932,13 @@
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "1c219cfd23db65f1179e4accd8ba7ee43148585876bb7563281fe19154cd78f0",
-        "packages/coding-agent/src/modes/interactive/run.bend": "22aeefc9a05ffb02dee49bc2a21810fcd1feb6e66122dae203c668ba8a150833",
+        "packages/coding-agent/src/modes/interactive/run.bend": "786b6521dd6893a3ca7ad7522fcb596f5e5ccfad078244742867d3d341e5da94",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
         "packages/coding-agent/src/main.bend": "c1115b09092f2785d2c2acf7b33ef1043850e6768f0817686799b470d650d23b",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "9e2189ff0cdd0cbc81152d17589464b291b11c1b27fcb087d817849948f2dcbf",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "64e6e6b3b9e0d6f235f0f801594b4153c22fda9fc4187df15355c538254e6029"
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "acc3eaa45aa69ec6c6f31c86bf99df7281018eeb495df80ceb15e000f081bead"
       }
     },
     "packages/coding-agent/src/modes/interactive/theme/theme-controller.ts": {
@@ -1301,17 +1301,17 @@
       "source_sha256": "0c1bafcf74ad2b703bf5ab193e72084a1da80231a77abddefc23c5bb20558731",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/renderers/edit.bend": "cc10fcba4952f185f1c2bf47e1550d9036d26866196f58fba0640c826730bdfa",
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "9c9e14aa9b597ecb0910fd5e43d3bc3ae79c8be207fdf63c387fba121db35c0b",
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "d76b966b01e1a6b9f9645469acb36ea11473ba4c62fd3c3231b579cc71b0f72a",
         "packages/coding-agent/src/modes/interactive/components/diff.bend": "bc9f72db8cbf477436b60675048bb75830680fab8ae06ad15ee561fe9d946c87"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/tool-execution.ts": {
       "state": "partial",
-      "note": "Immutable state updates, cached rendering, built-in read/bash/edit/write displays and injectable boxed/self-rendered tool callbacks exist. Edit preflight uses an injected native context and owned reads; saved results render without re-reading source files. A 68-frame pinned oracle compares terminal cells and styles. Definition renderers now flow through transcript mounting and the existing boxed/self shell; images, stateful extension component lifecycle and broader named component contracts remain incomplete. Owned ToolContext now supplies read presentation context; expanding an unfinished read emits no empty result section.",
+      "note": "Immutable state updates, cached rendering, built-in read/bash/edit/write displays and injectable boxed/self-rendered tool callbacks exist. Edit preflight uses an injected native context and owned reads; saved results render without re-reading source files. A 68-frame pinned oracle compares terminal cells and styles. Definition renderers now flow through transcript mounting and the existing boxed/self shell. The mounted render context borrows the live Markdown theme; images, stateful extension component lifecycle and broader named component contracts remain incomplete. Owned ToolContext now supplies read presentation context; expanding an unfinished read emits no empty result section.",
       "source_sha256": "1463e89622b305847fd129ea81a5f8d969778a650daf5357bd3771c79aef349f",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "9c9e14aa9b597ecb0910fd5e43d3bc3ae79c8be207fdf63c387fba121db35c0b",
-        "packages/coding-agent/src/core/extensions/tool-render.bend": "5b00254630df12a03e35a099f85f0ea025fc705163d91ccf9b8e967ec6054652"
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "d76b966b01e1a6b9f9645469acb36ea11473ba4c62fd3c3231b579cc71b0f72a",
+        "packages/coding-agent/src/core/extensions/tool-render.bend": "bc25ba12b32ab6392e9aad8e12c7b9e8c9d27f52b97727206c05fa282db83da1"
       },
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/tool-execution.bend",
@@ -1324,7 +1324,7 @@
       "source_sha256": "93699c267fc824c0016ac182b68c01c45feeb621c64fc44a814a96e3c951f106",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/renderers/read.bend": "946f33173ec908ef0c2c62c5a347c1dc22d4bec35145babede338b803d7f11bc",
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "9c9e14aa9b597ecb0910fd5e43d3bc3ae79c8be207fdf63c387fba121db35c0b"
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "d76b966b01e1a6b9f9645469acb36ea11473ba4c62fd3c3231b579cc71b0f72a"
       },
       "ports": [
         "packages/coding-agent/src/core/tools/renderers/read.bend",
@@ -1569,10 +1569,10 @@
     },
     "packages/coding-agent/examples/extensions/subagent/index.ts": {
       "state": "partial",
-      "note": "The subagent tool execute is ported: parameters and TypeBox schema, project-agent confirmation (scope, confirmProjectAgents, hasUI, isProjectTrusted), single/parallel (8 tasks, 4 workers)/chain modes, per-agent pi --mode json -p --no-session runs with model/thinking/tools/system-prompt file, message_end/tool_result_end parsing, usage, streaming updates and typed details (RawDetails JSON). The executable is /proc/self/exe (bun/node fall back to pi on PATH, as upstream without a script). Native renderCall/renderResult cover single, chain and parallel progress through typed details, but expanded Markdown/component state and some formatting remain partial; abort sends SIGKILL at once (Child.spawn) where upstream sends SIGTERM then SIGKILL after 5 s; the prompt file skips the process-wide file mutation queue, which extensions cannot reach; {previous} is replaced literally.",
+      "note": "The subagent tool execute is ported: parameters and TypeBox schema, project-agent confirmation (scope, confirmProjectAgents, hasUI, isProjectTrusted), single/parallel (8 tasks, 4 workers)/chain modes, per-agent pi --mode json -p --no-session runs with model/thinking/tools/system-prompt file, message_end/tool_result_end parsing, usage, streaming updates and typed details (RawDetails JSON). The executable is /proc/self/exe (bun/node fall back to pi on PATH, as upstream without a script). Native renderCall/renderResult cover single, chain and parallel progress through typed details. Expanded final answers use native Markdown in all three modes when complete; retained component state and some formatting remain partial; abort sends SIGKILL at once (Child.spawn) where upstream sends SIGTERM then SIGKILL after 5 s; the prompt file skips the process-wide file mutation queue, which extensions cannot reach; {previous} is replaced literally.",
       "source_sha256": "4facaa61c9c781748dd000eb5d2ec0a75289986d1a6e11ce13971ca5653dc252",
       "port_sha256": {
-        "packages/coding-agent/examples/extensions/subagent/index.bend": "939cd9bee53b7de07151e5ccdb54de3d435cd7172d45f567ff3ae62cf074bf27"
+        "packages/coding-agent/examples/extensions/subagent/index.bend": "4883ea5c8026c071cbd01e43263072277366f3752b5685446b3d641e05404d78"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/settings-submenu.ts": {
