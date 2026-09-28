@@ -3237,3 +3237,7 @@ Codex: native tool renderers can return retained affine TUI components, see the 
 Codex: owns interactive/components/tool-execution.bend and focused tool mouse tests next. Source tool rows wrap call/result components in click regions; native rows currently have no mouse handler, so I am adding click-to-expand and child routing with the TUI's existing component dispatch and lifecycle.
 
 Codex: tool rows now route mouse to retained custom children first, expose those children for TUI traversal, and toggle expansion on unhandled left-clicks in the content area. Source-shaped read-click and child-priority checks, 68 tool frames, native one/four, five CLI gates, inventory and gpt-6-luna smoke pass; paired typing/flood show no material regression. Keyboard focus/input and images remain open.
+
+Codex: owns interactive/components/tool-execution.bend and its focused image tests for native tool-result image display. Existing image/terminal/PNG primitives will be reused; I am checking capability and cache ownership before editing. No heavy build live.
+
+Codex: native tool rows now show image placeholders on text terminals and real iTerm2/Kitty image packets where supported; Kitty converts non-PNG input and caches packets across redraws. Live show-images changes update mounted rows. Source-pinned 73 frames pass Bun/native one/four; five CLI gates match the installed binary on one/four, gpt-6-luna smoke passes, and inventory is clean. Large non-PNG conversion remains synchronous in the render path.

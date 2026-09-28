@@ -704,7 +704,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "acc3eaa45aa69ec6c6f31c86bf99df7281018eeb495df80ceb15e000f081bead"
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "7004cf45301739e438ad8c1b0468beb4f535acb388b5e6bc1593f52ad7c741ef"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/compaction-summary-message.ts": {
@@ -717,7 +717,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "acc3eaa45aa69ec6c6f31c86bf99df7281018eeb495df80ceb15e000f081bead"
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "7004cf45301739e438ad8c1b0468beb4f535acb388b5e6bc1593f52ad7c741ef"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/countdown-timer.ts": {
@@ -743,7 +743,7 @@
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/custom-message.bend": "f74a748b5a4b8c898330f9bdf54ed3f6582eb407adcce385d325c51a7e2e5006",
         "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "acc3eaa45aa69ec6c6f31c86bf99df7281018eeb495df80ceb15e000f081bead"
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "7004cf45301739e438ad8c1b0468beb4f535acb388b5e6bc1593f52ad7c741ef"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/footer.ts": {
@@ -756,7 +756,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
-        "packages/coding-agent/src/modes/interactive/run.bend": "786b6521dd6893a3ca7ad7522fcb596f5e5ccfad078244742867d3d341e5da94"
+        "packages/coding-agent/src/modes/interactive/run.bend": "ac8034974382482567767261055cf2b492f61800fbc9e71758543f10f864273b"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
@@ -823,10 +823,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/settings-selector.ts": {
       "state": "partial",
-      "note": "Native theme and per-model thinking submenus save and clear settings, with live preview or current-model thinking updates. Hardware-cursor and clear-on-shrink choices persist and update the running terminal; disabling the cursor hides it immediately. Live updates coalesce through the owned render scheduler, preserving independent preferences and avoiding serial-state re-entry from input callbacks. Native one/four-thread PTY tests cover visibility, coalescing, setter return order and terminal restoration; focused settings terminal captures match pi. Fullscreen scrollbar auto/always/hidden choices persist and update the running viewport; source-pinned native one/four terminal checks cover startup settings, all live transitions, immediate scrolling after a change and regular-mode isolation. Other settings controls, some ANSI styling and mouse behavior remain partial. The per-model menu now uses the source reusable SteppedSubmenu: search edits and label/override filtering, current/default/provider ordering, fresh pages on back, completion before loop rebuild, and override save/clear remain explicit native transitions. Shared Input/SelectList/Text frames and callbacks are compared with pinned pi by settings_submenu_check.py and stepped_submenu_check.py; mounted keyboard editing, back/re-entry and save/reset match in regular and fullscreen modes. The marked-override scenario retains the pre-existing extra scrollback row before the header. Fullscreen exit output now cycles transcript/resume-hint and persists the choice. Final shutdown reads the live session setting, so changing it during a session takes effect without restart. Pinned one/four-thread comparisons cover empty/answered sessions and changes in both directions; focused filtered menu frames and persistence match pi, and both exit-output directions take effect immediately. HTTP idle timeout and fullscreen copy-on-select controls remain absent. TUI mode changes switch the running renderer and persist only after acceptance; rejection restores the actual choice. Active CLI overrides and retained scrollbar settings are reflected. Native one/four terminal scenarios cover one-way and round-trip changes, replies and transcript/resume-hint exits. The Warnings submenu uses the shared SettingsList, persists anthropicExtraUsage and restores its saved value on re-entry. Default/saved-disabled and fullscreen source scenarios match text, colors and settings on native one/four threads.",
+      "note": "Native theme and per-model thinking submenus save and clear settings, with live preview or current-model thinking updates. Hardware-cursor and clear-on-shrink choices persist and update the running terminal; disabling the cursor hides it immediately. Live updates coalesce through the owned render scheduler, preserving independent preferences and avoiding serial-state re-entry from input callbacks. Native one/four-thread PTY tests cover visibility, coalescing, setter return order and terminal restoration; focused settings terminal captures match pi. Fullscreen scrollbar auto/always/hidden choices persist and update the running viewport; source-pinned native one/four terminal checks cover startup settings, all live transitions, immediate scrolling after a change and regular-mode isolation. Other settings controls, some ANSI styling and mouse behavior remain partial. The per-model menu now uses the source reusable SteppedSubmenu: search edits and label/override filtering, current/default/provider ordering, fresh pages on back, completion before loop rebuild, and override save/clear remain explicit native transitions. Shared Input/SelectList/Text frames and callbacks are compared with pinned pi by settings_submenu_check.py and stepped_submenu_check.py; mounted keyboard editing, back/re-entry and save/reset match in regular and fullscreen modes. The marked-override scenario retains the pre-existing extra scrollback row before the header. Fullscreen exit output now cycles transcript/resume-hint and persists the choice. Final shutdown reads the live session setting, so changing it during a session takes effect without restart. Pinned one/four-thread comparisons cover empty/answered sessions and changes in both directions; focused filtered menu frames and persistence match pi, and both exit-output directions take effect immediately. HTTP idle timeout and fullscreen copy-on-select controls remain absent. TUI mode changes switch the running renderer and persist only after acceptance; rejection restores the actual choice. Active CLI overrides and retained scrollbar settings are reflected. Native one/four terminal scenarios cover one-way and round-trip changes, replies and transcript/resume-hint exits. The Warnings submenu uses the shared SettingsList, persists anthropicExtraUsage and restores its saved value on re-entry. Default/saved-disabled and fullscreen source scenarios match text, colors and settings on native one/four threads. The show-images control also updates mounted tool results and the default for future tool rows.",
       "source_sha256": "8134b93329c9155bd017df5b6278e2d72b403c8ca1f22c26a81234659ab7e6ea",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "9ca6bd3fbd8f63126d8fe4d36ad70b19ac7c7b99a7a036385d9cfc97b1254ecc",
+        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "3cc4914ad5622ff5fe989308ba374b78d2d1488c8683ae9c56fef5b2c5639ff3",
         "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "302bb406bb7ebf0d7844cba854b14bea8c193be907d1d1a8aef73d51c22f2bbf",
         "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend": "c48afa1974306954c9df3cb0ddb3cc343fc904f042065448dcedb72249ffe95b"
       },
@@ -852,7 +852,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "acc3eaa45aa69ec6c6f31c86bf99df7281018eeb495df80ceb15e000f081bead"
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "7004cf45301739e438ad8c1b0468beb4f535acb388b5e6bc1593f52ad7c741ef"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/status-indicator.ts": {
@@ -932,13 +932,13 @@
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "1c219cfd23db65f1179e4accd8ba7ee43148585876bb7563281fe19154cd78f0",
-        "packages/coding-agent/src/modes/interactive/run.bend": "786b6521dd6893a3ca7ad7522fcb596f5e5ccfad078244742867d3d341e5da94",
+        "packages/coding-agent/src/modes/interactive/run.bend": "ac8034974382482567767261055cf2b492f61800fbc9e71758543f10f864273b",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
         "packages/coding-agent/src/main.bend": "c1115b09092f2785d2c2acf7b33ef1043850e6768f0817686799b470d650d23b",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "9e2189ff0cdd0cbc81152d17589464b291b11c1b27fcb087d817849948f2dcbf",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "acc3eaa45aa69ec6c6f31c86bf99df7281018eeb495df80ceb15e000f081bead"
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "7004cf45301739e438ad8c1b0468beb4f535acb388b5e6bc1593f52ad7c741ef"
       }
     },
     "packages/coding-agent/src/modes/interactive/theme/theme-controller.ts": {
@@ -1301,16 +1301,16 @@
       "source_sha256": "0c1bafcf74ad2b703bf5ab193e72084a1da80231a77abddefc23c5bb20558731",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/renderers/edit.bend": "cc10fcba4952f185f1c2bf47e1550d9036d26866196f58fba0640c826730bdfa",
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "89a628c39823a23766cd4f31db4ac665693130104e29166815f46a3b92b9c826",
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "8152fa031ea2c8f999933b91d033dcd45685cc7a92bbfff44f32c5077b5c6e9f",
         "packages/coding-agent/src/modes/interactive/components/diff.bend": "bc9f72db8cbf477436b60675048bb75830680fab8ae06ad15ee561fe9d946c87"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/tool-execution.ts": {
       "state": "partial",
-      "note": "Immutable state updates, cached rendering, built-in read/bash/edit/write displays and injectable boxed/self-rendered tool callbacks exist. Edit preflight uses an injected native context and owned reads; saved results render without re-reading source files. A 68-frame pinned oracle compares terminal cells and styles. Definition renderers now flow through transcript mounting and the existing boxed/self shell. The mounted render context borrows the live Markdown theme and can retain affine extension components across resize, state updates and invalidation, retiring replacements and unmounted children. Mounted custom children are exposed to the TUI and receive mouse events before the row toggles expansion; built-in and fallback rows respond to result clicks. Keyboard focus/input through custom children, shared mutable renderer state, images and broader named component contracts remain unverified or incomplete. Owned ToolContext now supplies read presentation context; expanding an unfinished read emits no empty result section.",
+      "note": "Immutable state updates, cached rendering, built-in read/bash/edit/write displays and injectable boxed/self-rendered tool callbacks exist. Edit preflight uses an injected native context and owned reads; saved results render without re-reading source files. A source-pinned oracle compares terminal cells and styles, including image placeholders and iTerm2 image rows. Definition renderers now flow through transcript mounting and the existing boxed/self shell. The mounted render context borrows the live Markdown theme and can retain affine extension components across resize, state updates and invalidation, retiring replacements and unmounted children. Mounted custom children are exposed to the TUI and receive mouse events before the row toggles expansion; built-in and fallback rows respond to result clicks. Image blocks render through the native terminal image component, with Kitty PNG conversion, width-aware packet reuse and live show-images updates to mounted rows. Keyboard focus/input through custom children, shared mutable renderer state and broader named component contracts remain unverified or incomplete. Owned ToolContext now supplies read presentation context; expanding an unfinished read emits no empty result section.",
       "source_sha256": "1463e89622b305847fd129ea81a5f8d969778a650daf5357bd3771c79aef349f",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "89a628c39823a23766cd4f31db4ac665693130104e29166815f46a3b92b9c826",
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "8152fa031ea2c8f999933b91d033dcd45685cc7a92bbfff44f32c5077b5c6e9f",
         "packages/coding-agent/src/core/extensions/tool-render.bend": "f890cefa07074872ce896d81fb9d303e67e4151c77638d2163b3f8d64a75bbc7"
       },
       "ports": [
@@ -1320,11 +1320,11 @@
     },
     "packages/coding-agent/src/core/tools/renderers/read.ts": {
       "state": "partial",
-      "note": "Read call paths and line ranges, compact skill/docs/resource classification with skill-over-docs and docs-over-resource precedence, expanded ordinary calls, collapsed success suppression, injected syntax highlighting, trailing empty-line removal, ten-line error previews, overflow hints and typed truncation notices are implemented. Mounted components reuse an explicit path/package/key context; 13 compact/expanded path cases and the earlier display contracts match pinned terminal cells/styles on Bun/native1/native4. Context-dependent path links/home shortening, custom expand-key bindings in error overflow hints and image presentation remain incomplete. Fresh CLI terminal captures match skill/resource compact and expanded views, including a remapped expand key.",
+      "note": "Read call paths and line ranges, compact skill/docs/resource classification with skill-over-docs and docs-over-resource precedence, expanded ordinary calls, collapsed success suppression, injected syntax highlighting, trailing empty-line removal, ten-line error previews, overflow hints and typed truncation notices are implemented. Mounted components reuse an explicit path/package/key context; 13 compact/expanded path cases and the earlier display contracts match pinned terminal cells/styles on Bun/native1/native4. Context-dependent path links/home shortening, custom expand-key bindings in error overflow hints remain incomplete; tool-result images are displayed by the outer tool component. Fresh CLI terminal captures match skill/resource compact and expanded views, including a remapped expand key.",
       "source_sha256": "93699c267fc824c0016ac182b68c01c45feeb621c64fc44a814a96e3c951f106",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/renderers/read.bend": "946f33173ec908ef0c2c62c5a347c1dc22d4bec35145babede338b803d7f11bc",
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "89a628c39823a23766cd4f31db4ac665693130104e29166815f46a3b92b9c826"
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "8152fa031ea2c8f999933b91d033dcd45685cc7a92bbfff44f32c5077b5c6e9f"
       },
       "ports": [
         "packages/coding-agent/src/core/tools/renderers/read.bend",

@@ -12,6 +12,8 @@ import ../packages/tui/src/utils.bend as U
 import ../packages/tui/src/component.bend as Component
 import ../packages/tui/src/tui.bend as Tui
 import ../packages/runtime/src/ref.bend as Ref
+import ../packages/tui/src/terminal-image.bend as TerminalImage
+import ../packages/runtime/src/f64.bend as F
 import ../packages/coding-agent/src/core/tools/renderers/read.bend as ReadRenderer
 import ../packages/coding-agent/src/core/tools/edit-diff.bend as Edits
 import ./edit-preview.bend as Fixture
@@ -27,8 +29,15 @@ def showWide(label: String,state: Tool.ToolExecution) -> IO(Unit):
   do IO<Unit>:
     lines : List<&2,String> <- Tool.render(state,80n)
     output(label,lines)
+def showImage(label: String,state: Tool.ToolExecution,context: Tool.ToolContext) -> IO(Unit):
+  do IO<Unit>:
+    lines : List<&2,String> <- Tool.renderWithPreview(state,28n,None{},None{},None{},Some{context},None{})
+    output(label,lines)
 def text(value: String) -> Ai.TextImageContent: Ai.TextImageText{Ai.TextContent{value,None{}}}
 def result(value: String,error: Bool) -> ToolRender.ToolResult: ToolRender.ToolResult{text(value) <> Nil{},error,None{}}
+def pixel() -> String: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+def imageResult() -> ToolRender.ToolResult:
+  ToolRender.ToolResult{text("picture") <> Ai.TextImageImage{Ai.ImageContent{pixel(),"image/png"}} <> Nil{},False{},None{}}
 def builtinArgs(name: String) -> Value.Value:
   match name:
     case "bash": Value.ObjectValue{R.Record{R.Property{"command",Value.Text{"printf hello"}} <> Nil{}}}
@@ -57,6 +66,23 @@ def draw(label: String,context: ToolRender.RenderContext) -> IO(ToolRender.Rende
 def drawEmpty(label: String,context: ToolRender.RenderContext) -> IO(ToolRender.RenderResult()): IO.pure(ToolRender.RenderResult(),Done{ToolRender.RenderLines{Nil{}}})
 def ensure(yes: Bool,label: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),yes,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,label))(Unit{})
+def mountedImageCheck(pair: Tool.Owner & Component.Component & Tool.Handle) -> IO(Unit):
+  match pair:
+    case (owner,component,handle):
+      do IO<Unit>:
+        +draw : Component.Component = component
+        +mounted : Tool.Handle = handle
+        +first : List<&2,String> <- Component.render(draw,28n)
+        before : Tool.ToolExecution <- Tool.current(mounted)
+        Tool.set(mounted,Tool.setExpanded(before,True{}))
+        second : List<&2,String> <- Component.render(draw,28n)
+        ensure(String.contains(String.join(first,"\n"),"\u{1b}_G"),"Kitty tool image was not emitted")
+        ensure(String.eq(String.join(first,"\n"),String.join(second,"\n")),"unchanged tool image was retransmitted after a state redraw")
+        current : Tool.ToolExecution <- Tool.current(mounted)
+        Tool.set(mounted,Tool.setShowImages(current,False{}))
+        +hidden : List<&2,String> <- Component.render(draw,28n)
+        ensure(Bool.not(String.contains(String.join(hidden,"\n"),"\u{1b}_G")) && String.contains(String.join(hidden,"\n"),"[Image:"),"hiding a mounted tool image did not show its placeholder")
+        Tool.dispose(owner)
 def bumped(counter: Ref.Ref<Nat>) -> IO(Unit): Ref.modify(Nat,Unit,counter,n => (n + 1n,Unit{}))
 def click(+row: Nat) -> Tui.TuiMouseEvent:
   Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},Tui.Forward{2n},Tui.Forward{row},Tui.Forward{2n},Tui.Forward{row},80n,20n,False{},False{},False{},None{},Some{1n}}
@@ -201,7 +227,7 @@ def compactReads(theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     +compute : Callback.Callback<Tool.PreviewRequest,Edits.Preview()> <- Callback.create(~Unit,~Tool.PreviewRequest,~Edits.Preview(),~unusedPreview,Unit{})
     +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
-    context : Tool.ToolContext = Tool.ToolContext{"/work/project",compute,redraw,Some{ReadRenderer.Context{Fixture.environment("/work/project","/home/tester"),"/package","ctrl+o"}},None{}}
+    context : Tool.ToolContext = Tool.ToolContext{"/work/project",compute,redraw,Some{ReadRenderer.Context{Fixture.environment("/work/project","/home/tester"),"/package","ctrl+o"}},None{},None{}}
     compactCases(CompactCase{"skill","skills/check/SKILL.md"} <> CompactCase{"resource","AGENTS.md"} <> CompactCase{"override","../AGENTS.override.md"} <> CompactCase{"docs","/package/docs/how.md"} <> CompactCase{"examples","/package/examples/demo/main.bend"} <> CompactCase{"readme","/package/README.md"} <> CompactCase{"docs-skill","/package/docs/guide/SKILL.md"} <> CompactCase{"docs-resource","/package/docs/AGENTS.md"} <> CompactCase{"outside","/package-other/docs/README.md"} <> CompactCase{"outside-resource","/outside/CLAUDE.MD"} <> CompactCase{"ordinary","src/main.bend"} <> CompactCase{"resource-suffix","xAGENTS.md"} <> CompactCase{"tilde","~/AGENTS.md"} <> Nil{},context,theme)
     Callback.dispose(Tool.PreviewRequest,Edits.Preview(),compute)
     retired : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw)
@@ -219,6 +245,23 @@ def mainRun(+theme: Theme.Theme) -> IO(Unit):
     +success : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(partial,result("first\nsecond",False{}),False{}))
     show("generic-success",success)
     show("generic-error",Tool.updateResult(success,result("bad\r\n\u{1b}[31mred\u{1b}[0m",True{}),False{}))
+    +image : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(Tool.new("custom_tool","image",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.Generic{}),imageResult(),False{}))
+    show("image-no-protocol",image)
+    show("image-disabled",Tool.setShowImages(image,False{}))
+    +computeImage : Callback.Callback<Tool.PreviewRequest,Edits.Preview()> <- Callback.create(~Unit,~Tool.PreviewRequest,~Edits.Preview(),~unusedPreview,Unit{})
+    +redrawImage : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
+    +environment : TerminalImage.Environment = TerminalImage.Environment{R.new(String),"linux","/home/tester"}
+    +capabilities : TerminalImage.TerminalCapabilities = TerminalImage.TerminalCapabilities{TerminalImage.ITerm2{},False{},False{}}
+    +imageContext : Tool.ToolContext = Tool.ToolContext{"/work/project",computeImage,redrawImage,None{},None{},Some{Tool.ImageConfig{environment,capabilities,F.fromU32(60),True{}}}}
+    showImage("image-iterm",image,imageContext)
+    showImage("image-iterm-disabled",Tool.setShowImages(image,False{}),imageContext)
+    +boxedImage : Tool.ToolExecution = Tool.updateResult(Tool.new("custom_tool","image-boxed",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.Boxed{None{},None{}}),imageResult(),False{})
+    showImage("image-boxed-iterm",boxedImage,imageContext)
+    +kittyContext : Tool.ToolContext = Tool.ToolContext{"/work/project",computeImage,redrawImage,None{},None{},Some{Tool.ImageConfig{environment,TerminalImage.TerminalCapabilities{TerminalImage.Kitty{},False{},False{}},F.fromU32(60),True{}}}}
+    mountedImage : Tool.Owner <- Tool.createWithContext(Component.ComponentId{920n},Tool.updateResult(Tool.new("custom_tool","image-running",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.Generic{}),imageResult(),True{}),Some{kittyContext})
+    mountedImageCheck(Tool.borrow(mountedImage))
+    Callback.dispose(Tool.PreviewRequest,Edits.Preview(),computeImage)
+    retiredImage : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Unit,Unit>>,redrawImage)
     +fallback : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("custom_tool","f1",Value.ObjectValue{R.Record{R.Property{"foo",Value.Text{"bar"}} <> Nil{}}},theme,Tool.Boxed{None{},None{}}))
     show("fallback-pending",fallback)
     +preview : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(fallback,result(String.join(lines(1n,12n,Nil{}),"\n"),False{}),False{}))

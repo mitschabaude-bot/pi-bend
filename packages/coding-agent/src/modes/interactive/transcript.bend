@@ -287,7 +287,7 @@ def mountedTool(state: State,toolId: String,componentId: Nat,value: Tool.ToolExe
   match state:
     case State{entries,+tools,active,nextId,view,theme,styles,+expanded,hidden,pad}:
       do IO<State & Bool>:
-        owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{componentId},Tool.setExpanded(value,expanded),toolContext(tools))
+        owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{componentId},Tool.configuredImages(Tool.setExpanded(value,expanded),toolContext(tools)),toolContext(tools))
         mountedBorrowed(State{entries,tools,active,nextId,view,theme,styles,expanded,hidden,pad},toolId,Tool.borrow(owner))
 # Tool previews highlight code with the Markdown theme's highlightCode.
 def codeHighlighter(styles: Markdown.MarkdownTheme) -> Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>:
@@ -697,6 +697,31 @@ def changedThinking(state: State,+hidden: Bool) -> IO(State & Unit):
 def setHideThinking(handle: Handle,hidden: Bool) -> IO(Unit):
   match handle:
     case Handle{resource,_}: Serial.run(State,Unit,resource,state => changedThinking(state,hidden))
+def imageEntries(entries: List<&1,Entry>,+enabled: Bool) -> IO(List<&1,Entry>):
+  match entries:
+    case Nil{}: IO.pure(List<&1,Entry>,Nil{})
+    case ToolEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Tool.Owner <- Tool.showImagesOwner(owner,enabled)
+        next : List<&1,Entry> <- imageEntries(rest,enabled)
+        return ToolEntry{kept} <> next
+    case entry <> rest:
+      do IO<List<&1,Entry>>:
+        next : List<&1,Entry> <- imageEntries(rest,enabled)
+        return entry <> next
+def imageContext(context: Maybe<&2,Tool.ToolContext>,enabled: Bool) -> Maybe<&2,Tool.ToolContext>:
+  match context:
+    case None{}: None{}
+    case Some{ready}: Some{Tool.withImageSetting(ready,enabled)}
+def imagesChanged(state: State,+enabled: Bool) -> IO(State & Unit):
+  match state:
+    case State{entries,RenderRegistry{links,context,extensions},active,id,view,theme,styles,expanded,hidden,pad}:
+      do IO<State & Unit>:
+        changed : List<&1,Entry> <- imageEntries(entries,enabled)
+        return (State{changed,RenderRegistry{links,imageContext(context,enabled),extensions},active,id,view,theme,styles,expanded,hidden,pad},Unit{})
+def setShowImages(handle: Handle,enabled: Bool) -> IO(Unit):
+  match handle:
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => imagesChanged(state,enabled))
 def padEntries(entries: List<&1,Entry>,+pad: Nat) -> IO(List<&1,Entry>):
   match entries:
     case Nil{}: IO.pure(List<&1,Entry>,Nil{})
@@ -792,7 +817,7 @@ def clear(handle: Handle) -> IO(Unit):
 def disposeToolContext(context: Maybe<&2,Tool.ToolContext>) -> IO(Unit):
   match context:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{Tool.ToolContext{_,compute,_,_,_}}: Callback.dispose(Tool.PreviewRequest,Edits.Preview(),compute)
+    case Some{Tool.ToolContext{_,compute,_,_,_,_}}: Callback.dispose(Tool.PreviewRequest,Edits.Preview(),compute)
 def disposeState(state: State) -> IO(Unit):
   match state:
     case State{entries,RenderRegistry{_,context,_},_,_,_,_,_,_,_,_}:
@@ -819,7 +844,7 @@ def setToolContext(handle: Handle,context: Tool.ToolContext) -> IO(Unit):
 def contextCwd(context: Maybe<&2,Tool.ToolContext>,cwd: String) -> Maybe<&2,Tool.ToolContext>:
   match context:
     case None{}: None{}
-    case Some{Tool.ToolContext{_,compute,redraw,read,markdown}}: Some{Tool.ToolContext{cwd,compute,redraw,read,markdown}}
+    case Some{Tool.ToolContext{_,compute,redraw,read,markdown,images}}: Some{Tool.ToolContext{cwd,compute,redraw,read,markdown,images}}
 def contextCwdChanged(state: State,cwd: String) -> IO(State & Unit):
   match state:
     case State{entries,RenderRegistry{links,context,extensions},active,id,view,theme,styles,expanded,hidden,pad}:

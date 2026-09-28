@@ -395,6 +395,7 @@ def editorEffect(id: String,value: String,editor: Ref.Ref<Maybe<&2,Live.Handle>>
 def transcriptEffect(id: String,value: String,transcript: Transcript.Handle) -> IO(Unit):
   match id value:
     case "hide-thinking" _: Transcript.setHideThinking(transcript,boolValue(value))
+    case "show-images" _: Transcript.setShowImages(transcript,boolValue(value))
     case "output-padding" "0": Transcript.setOutputPad(transcript,0n)
     case "output-padding" "1": Transcript.setOutputPad(transcript,1n)
     case _ _: IO.pure(Unit,Unit{})

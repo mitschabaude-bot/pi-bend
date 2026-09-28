@@ -7,6 +7,7 @@ const { KEYBINDINGS } = await import(UPSTREAM + '/packages/coding-agent/src/core
 const { ToolExecutionComponent } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/components/tool-execution.ts');
 const { initTheme } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/theme/theme.ts');
 const { Text } = await import(UPSTREAM + '/packages/tui/src/components/text.ts');
+const { setCapabilities, resetCapabilitiesCache } = await import(UPSTREAM + '/packages/tui/src/terminal-image.ts');
 const { readRenderers } = await import(UPSTREAM + '/packages/coding-agent/src/core/tools/renderers/read.ts');
 const { createShellRenderers } = await import(UPSTREAM + '/packages/coding-agent/src/core/tools/renderers/bash.ts');
 const { editRenderers } = await import(UPSTREAM + '/packages/coding-agent/src/core/tools/renderers/edit.ts');
@@ -36,6 +37,18 @@ generic.markExecutionStarted();generic.setArgsComplete();out('generic-started',g
 generic.updateResult({content:[{type:'text',text:'first\nsecond'}],isError:false},true);out('generic-partial',generic);
 generic.updateResult({content:[{type:'text',text:'first\nsecond'}],isError:false},false);out('generic-success',generic);
 generic.updateResult({content:[{type:'text',text:'bad\r\n\x1b[31mred\x1b[0m'}],isError:true},false);out('generic-error',generic);
+const pixel='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
+const imageResult={content:[{type:'text',text:'picture'},{type:'image',data:pixel,mimeType:'image/png'}],isError:false};
+const imageFallback=new ToolExecutionComponent('custom_tool','image',{}, {}, undefined,ui,process.cwd());
+imageFallback.updateResult(imageResult,false);out('image-no-protocol',imageFallback);
+imageFallback.setShowImages(false);out('image-disabled',imageFallback);
+setCapabilities({images:'iterm2',trueColor:false,hyperlinks:false});
+const imageIterm=new ToolExecutionComponent('custom_tool','image-iterm',{}, {}, undefined,ui,process.cwd());
+imageIterm.updateResult(imageResult,false);out('image-iterm',imageIterm);
+imageIterm.setShowImages(false);out('image-iterm-disabled',imageIterm);
+const imageBoxed=new ToolExecutionComponent('custom_tool','image-boxed',{}, {}, {},ui,process.cwd());
+imageBoxed.updateResult(imageResult,false);out('image-boxed-iterm',imageBoxed);
+resetCapabilitiesCache();
 const defined:any={};
 const fallback=new ToolExecutionComponent('custom_tool','f1',{foo:'bar'}, {}, defined, ui, process.cwd());
 out('fallback-pending',fallback);
