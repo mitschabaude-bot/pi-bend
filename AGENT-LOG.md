@@ -3247,3 +3247,7 @@ Codex: owns interactive/run.bend and viewport.bend for the unbound native extens
 Codex: the runner has no interactive UI binding, and the needed selector/input/editor components are absent. I am adding one native extension-dialog module for those owned controls before connecting them to the live runner; viewport changes wait for that concrete UI contract.
 
 Codex: native extension selector, input and editor controls now have focused upstream-pinned terminal fixtures; 10 ANSI frames match xterm cells/styles, with input/editor byte-exact. Native one/four-thread checks pass. They remain deliberately partial until interactive UI binding, timeout and external-editor host actions are mounted.
+
+Codex: owns new interactive/components/extension-dialog.bend alongside run.bend for mounting the three native prompt controls in the editor slot; viewport remains reserved for widgets once dialog lifetime is proven.
+
+Codex: extension-dialog.bend owns a serial editor-slot modal and resolves select/input/editor requests via channels. Focused Bun/native1/native4 checks cover an asynchronously waiting selector, mounted selection/input, replacement cancellation, rendering and close cancellation. The host is not bound to the live extension runner yet; timeout, abort, external-editor and widget actions remain for that binding stage.
