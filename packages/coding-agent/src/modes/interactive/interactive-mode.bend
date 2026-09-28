@@ -194,7 +194,7 @@ def replacedModels(_old: List<&2,Models.Model()>,next: List<&2,Models.Model()>) 
   (next,Unit{})
 def refreshPicker(host: ModelPicker.Host,catalog: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+runtime: Models.ModelRuntime) -> IO(Unit):
   do IO<Unit>:
-    result : Models.ModelsRefreshResult <- Models.refresh(runtime,Models.refreshOptions())
+    result : Models.ModelsRefreshResult <- Models.refreshShared(runtime,None{})
     +available : List<&2,Models.Model()> <- Models.getAvailable(runtime)
     updated : Maybe<&1,Unit> <- Ref.tryModify(List<&2,Models.Model()>,Unit,catalog,previous => replacedModels(previous,available))
     shown : Bool <- ModelPicker.refreshed(host,available,refreshStatus(result))
@@ -237,7 +237,7 @@ def refreshWithTimer(runtime: Models.ModelRuntime,+controller: Abort.AbortContro
     case (owner,cancel):
       do IO<Models.ModelsRefreshResult & Bool>:
         task : Chan(Unit) <- IO.fork(Unit,modelRefreshDeadline(controller,owner))
-        result : Models.ModelsRefreshResult <- Models.refresh(runtime,Models.ModelsRefreshOptions{None{},None{},None{},Some{Abort.signal(Unit,controller)}})
+        result : Models.ModelsRefreshResult <- Models.refreshShared(runtime,Some{Abort.signal(Unit,controller)})
         cancelled : Bool <- Timer.cancel(cancel)
         IO.join(Unit,task)
         timedOut : Bool <- Abort.aborted(Unit,Abort.signal(Unit,controller))
@@ -361,7 +361,7 @@ def showScoped(picker: Maybe<&2,ScopePicker.Host>,models: List<&2,Models.Model()
     case Some{host}: ScopePicker.open(host,ScopePicker.create(models,scope,"Refreshing model catalogs…"))
 def refreshScoped(host: ScopePicker.Host,models: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+runtime: Models.ModelRuntime) -> IO(Unit):
   do IO<Unit>:
-    result : Models.ModelsRefreshResult <- Models.refresh(runtime,Models.refreshOptions())
+    result : Models.ModelsRefreshResult <- Models.refreshShared(runtime,None{})
     +available : List<&2,Models.Model()> <- Models.getAvailable(runtime)
     Ref.write(List<&2,Models.Model()>,models,available)
     ScopePicker.refreshed(host,available,refreshStatus(result))
