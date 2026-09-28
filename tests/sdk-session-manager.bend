@@ -11,6 +11,7 @@ import ../packages/runtime/src/record.bend as Rec
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/text.bend as Text
 import ../packages/coding-agent/src/core/agent-session.bend as Session
+import ../packages/coding-agent/src/core/extensions/types.bend as Ext
 import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
 import ../packages/coding-agent/src/core/sdk.bend as Sdk
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
@@ -59,7 +60,7 @@ def memorySession(+cwd: String) -> IO(Session.Session()):
     requiredSession(created)
 
 def options(cwd: Maybe<&2, String>, +agentDir: String, thinking: Maybe<&2, Ai.ModelThinkingLevel>, session: Maybe<&2, Session.Session()>) -> Sdk.CreateAgentSessionOptions:
-  Sdk.CreateAgentSessionOptions{cwd, Some{agentDir}, None{}, Some{model()}, thinking, Nil{}, None{}, None{}, None{}, None{}, session, None{}}
+  Sdk.CreateAgentSessionOptions{cwd, Some{agentDir}, None{}, Some{model()}, thinking, Nil{}, None{}, None{}, None{}, None{}, session, None{}, Nil{}}
 
 def recordOf(+session: Session.AgentSession) -> IO(Session.Session()): Session.sessionOf(session)
 
@@ -235,12 +236,50 @@ def exposesCurrentSessionStateToTheBuiltInBashTool(+base: String) -> IO(Unit):
     result : Sdk.CreateAgentSessionResult <- required(created, name)
     exposedChecked(name, Sdk.sessionOf(result))
 
+def sdkTool(_: Unit,_: Ext.ToolCallInput) -> IO(Tools.Output()):
+  IO.pure(Tools.Output(),Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"sdk-ok",None{}}} <> Nil{},None{},None{},None{}}})
+def definition(name: String,execute: Ext.ToolExecute()) -> Ext.ToolDefinition:
+  Ext.ToolDefinition{name,"SDK Tool","Run the SDK tool",Some{"Run the SDK tool"},["Prefer the SDK tool when asked"],V.ObjectValue{Rec.Record{Nil{}}},None{},execute,Ext.DefaultShell{},None{},None{}}
+def namesContain(names: List<&2,String>,+name: String) -> Bool:
+  match names:
+    case Nil{}: False{}
+    case found <> rest: String.eq(found,name) || namesContain(rest,name)
+def infoContains(infos: List<&2,Session.ToolInfo()>,+name: String) -> Bool:
+  match infos:
+    case Nil{}: False{}
+    case Ext.ToolInfo{found,_,_} <> rest: String.eq(found,name) || infoContains(rest,name)
+def customChecked(+name: String,pair: SessionPair()) -> IO(Unit):
+  match pair:
+    case Tuple{result,+session}:
+      do IO<Unit>:
+        +active : List<&2,String> <- Session.getActiveToolNames(session)
+        all : List<&2,Session.ToolInfo()> <- Session.getAllTools(session)
+        +state : Session.AgentState() <- Session.state(session)
+        +prompt : String <- Session.systemPrompt(session)
+        sdkOutput : String <- ranBash(findTool(stateTools(state),"sdk_tool"),"unused")
+        readOutput : String <- ranBash(findTool(stateTools(state),"read"),"unused")
+        Sdk.dispose(result)
+        check(namesContain(active,"sdk_tool") && namesContain(active,"read") && infoContains(all,"sdk_tool") && String.eq(sdkOutput,"sdk-ok") && String.eq(readOutput,"sdk-ok") && String.contains(prompt,"Prefer the SDK tool when asked"),name,"SDK tool not active, executable, overriding read, or contributing its prompt")
+def acceptsSdkCustomTools(+base: String) -> IO(Unit):
+  +name = {"registers SDK custom tools through the session registry" : String}
+  +cwd = Path.join(base,"project")
+  +agentDir = Path.join(base,"agent")
+  do IO<Unit>:
+    mkdirs(cwd)
+    mkdirs(agentDir)
+    +execute : Ext.ToolExecute() <- C.create(~Unit,~Ext.ToolCallInput,~Tools.Output(),~sdkTool,Unit{})
+    created : Created() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{cwd},Some{agentDir},None{},Some{model()},None{},Nil{},None{},None{},None{},None{},None{},None{},[definition("sdk_tool",execute),definition("read",execute)]})
+    result : Sdk.CreateAgentSessionResult <- required(created,name)
+    customChecked(name,Sdk.sessionOf(result))
+    C.dispose(Ext.ToolCallInput,Tools.Output(),execute)
+
 def runIn(+base: String) -> IO(Unit):
   do IO<Unit>:
     usesAgentDirForTheDefaultPersistedSessionPath(Path.join(base, "1"))
     keepsAnExplicitSessionManagerOverride(Path.join(base, "2"))
     derivesCwdFromAnExplicitSessionManager(Path.join(base, "3"))
     exposesCurrentSessionStateToTheBuiltInBashTool(Path.join(base, "4"))
+    acceptsSdkCustomTools(Path.join(base,"5"))
 
 def run(args: List<String>) -> IO(Unit):
   match args:

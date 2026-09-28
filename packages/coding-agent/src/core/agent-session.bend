@@ -272,7 +272,7 @@ type Warming is Data:
 # executor created for them (released with the binding; a tool call in
 # flight may still hold an earlier one).
 type ExtensionTools is Data:
-  ExtensionTools{names: List<&2, String>, executors: List<&2, Tools.Execute()>}
+  ExtensionTools{names: List<&2, String>, executors: List<&2, Tools.Execute()>, sdk: List<&2, ExtensionTypes.ToolDefinition>}
 
 type ExtensionBinding is Data:
   ExtensionBinding{actions: Ctx.ExtensionContextActions, providersChanged: C.Callback<Unit, Unit>, sessionActions: R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>>, shutdownHandler: R.Ref<Maybe<&2, C.Callback<Unit, Unit>>>, extensionTools: R.Ref<ExtensionTools>}
@@ -1268,7 +1268,7 @@ def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -
 
 def executorsOf(tools: ExtensionTools) -> List<&2, Tools.Execute()>:
   match tools:
-    case ExtensionTools{_, executors}: executors
+    case ExtensionTools{_, executors, _}: executors
 
 def disposeExecutors(executors: List<&2, Tools.Execute()>) -> IO(Unit):
   match executors:
@@ -2138,16 +2138,45 @@ def toolPromptsFrom(registered: List<&2, ExtensionTypes.RegisteredTool>, +snippe
     case Nil{}: Runtime.ToolPrompts{snippets, guidelines}
     case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{+name, _, _, snippet, rules, _, _, _, _, _, _}, _} <> rest:
       toolPromptsFrom(rest, withSnippet(snippets, name, snippet), withGuidelines(guidelines, name, trimmedGuidelines(rules, Nil{})))
+def sdkToolName(definition: ExtensionTypes.ToolDefinition) -> String:
+  match definition: case ExtensionTypes.ToolDefinition{name,_,_,_,_,_,_,_,_,_,_}: name
+def sdkNames(definitions: List<&2, ExtensionTypes.ToolDefinition>) -> List<&2, String>:
+  match definitions:
+    case Nil{}: Nil{}
+    case definition <> rest: sdkToolName(definition) <> sdkNames(rest)
+def sdkRegistered(definitions: List<&2, ExtensionTypes.ToolDefinition>) -> List<&2, ExtensionTypes.RegisteredTool>:
+  match definitions:
+    case Nil{}: Nil{}
+    case +definition <> rest: ExtensionTypes.RegisteredTool{definition,"<sdk:" ++ sdkToolName(definition) ++ ">"} <> sdkRegistered(rest)
+def registeredName(tool: ExtensionTypes.RegisteredTool) -> String:
+  match tool:
+    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _}, _}: name
+def withoutSdk(registered: List<&2, ExtensionTypes.RegisteredTool>, +names: List<&2, String>) -> List<&2, ExtensionTypes.RegisteredTool>:
+  match registered:
+    case Nil{}: Nil{}
+    case +tool <> rest:
+      +tail = withoutSdk(rest,names)
+      Bool.pick(List<&2, ExtensionTypes.RegisteredTool>,containsName(names,registeredName(tool)),tail,tool <> tail)
+def withSdk(registered: List<&2, ExtensionTypes.RegisteredTool>, +sdk: List<&2, ExtensionTypes.ToolDefinition>) -> List<&2, ExtensionTypes.RegisteredTool>:
+  List.append(&2, ExtensionTypes.RegisteredTool,sdkRegistered(sdk),withoutSdk(registered,sdkNames(sdk)))
 
 def registeredOf(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>) -> IO(List<&2, ExtensionTypes.RegisteredTool>):
   match runner:
     case None{}: IO.pure(List<&2, ExtensionTypes.RegisteredTool>, Nil{})
     case Some{found}: ExtensionRunner.getAllRegisteredTools(found)
 
-def toolPromptsOf(loadout: Runtime.Loadout) -> IO(Runtime.ToolPrompts):
+def toolPromptsOf(loadout: Runtime.Loadout,sdk: List<&2, ExtensionTypes.ToolDefinition>) -> IO(Runtime.ToolPrompts):
   do IO<Runtime.ToolPrompts>:
     registered : List<&2, ExtensionTypes.RegisteredTool> <- registeredOf(runnerIn(loadout))
-    return toolPromptsFrom(registered, Rec.new(String), Rec.new(List<&2, String>))
+    return toolPromptsFrom(withSdk(registered,sdk), Rec.new(String), Rec.new(List<&2, String>))
+def sdkOf(tools: ExtensionTools) -> List<&2, ExtensionTypes.ToolDefinition>:
+  match tools: case ExtensionTools{_,_,sdk}: sdk
+def sdkFromHooks(hooks: SessionHooks) -> IO(List<&2, ExtensionTypes.ToolDefinition>):
+  match hooks:
+    case SessionHooks{_,_,_,_,_,_,ExtensionBinding{_,_,_,_,tools},_,_,_}:
+      do IO<List<&2, ExtensionTypes.ToolDefinition>>:
+        current : ExtensionTools <- R.read(ExtensionTools,tools)
+        return sdkOf(current)
 
 def withFound(found: Maybe<&2, Tools.Tool()>, rest: List<&2, Tools.Tool()>) -> List<&2, Tools.Tool()>:
   match found:
@@ -3212,12 +3241,13 @@ def runPrepared(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, hooks: SessionH
 # preflight passes, and the agent runs until post-run handling settles.
 def runAgentPrompt(session: AgentSession, +text: String, +images: List<&2, Ai.ImageContent>, preflight: Maybe<&2, C.Callback<Bool, Unit>>) -> IO(Prompted):
   match session:
-    case AgentSession{+agent, +shared, hooks, settingsRef, _, +loadoutRef, _, _}:
+    case AgentSession{+agent, +shared, +hooks, settingsRef, _, +loadoutRef, _, _}:
       do IO<Prompted>:
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         +loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
         compactBeforePrompt(agent, shared, settings)
-        prompts : Runtime.ToolPrompts <- toolPromptsOf(loadout)
+        sdk : List<&2, ExtensionTypes.ToolDefinition> <- sdkFromHooks(hooks)
+        prompts : Runtime.ToolPrompts <- toolPromptsOf(loadout,sdk)
         +start : Maybe<&2, AgentStart> <- agentStart(runnerIn(loadout), text, images, basePrompt(loadout, prompts))
         +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +now : F64 <- Date.now()
@@ -4667,10 +4697,11 @@ def activeToolsIn(loadout: Runtime.Loadout) -> List<&2, Tools.Tool()>:
 # loadout diff).
 def setActiveToolsByName(session: AgentSession, names: List<&2, String>) -> IO(Unit):
   match session:
-    case AgentSession{agent, _, _, _, _, +loadoutRef, _, _}:
+    case AgentSession{agent, _, hooks, _, _, +loadoutRef, _, _}:
       do IO<Unit>:
         current : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
-        prompts : Runtime.ToolPrompts <- toolPromptsOf(current)
+        sdk : List<&2, ExtensionTypes.ToolDefinition> <- sdkFromHooks(hooks)
+        prompts : Runtime.ToolPrompts <- toolPromptsOf(current,sdk)
         +next : Runtime.Loadout <- R.modify(Runtime.Loadout, Runtime.Loadout, loadoutRef, value => activatedPair(value, names, prompts))
         Agent.setTools(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, activeToolsIn(next))
 
@@ -4701,10 +4732,6 @@ def executorsIn(tools: List<&2, Tools.Tool()>) -> List<&2, Tools.Execute()>:
   match tools:
     case Nil{}: Nil{}
     case T.AgentTool{_, _, _, _, _, _, execute, _, _} <> rest: execute <> executorsIn(rest)
-
-def registeredName(tool: ExtensionTypes.RegisteredTool) -> String:
-  match tool:
-    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _}, _}: name
 
 def allowedRegistered(registered: List<&2, ExtensionTypes.RegisteredTool>, +allowed: Maybe<&2, List<&2, String>>, +excluded: List<&2, String>) -> List<&2, ExtensionTypes.RegisteredTool>:
   match registered:
@@ -4770,11 +4797,11 @@ def registryOf(loadout: Runtime.Loadout) -> List<&2, Tools.Tool()>:
 
 def recordedTools(tools: ExtensionTools, +names: List<&2, String>, created: List<&2, Tools.Execute()>) -> ExtensionTools:
   match tools:
-    case ExtensionTools{_, executors}: ExtensionTools{names, List.append(&2, Tools.Execute(), created, executors)}
+    case ExtensionTools{_, executors, sdk}: ExtensionTools{names, List.append(&2, Tools.Execute(), created, executors), sdk}
 
 def previousExtensionNames(tools: ExtensionTools) -> List<&2, String>:
   match tools:
-    case ExtensionTools{names, _}: names
+    case ExtensionTools{names, _, _}: names
 
 def refreshWith(+session: AgentSession, +runner: ExtensionRunner.ExtensionRunner, includeAll: Bool) -> IO(Unit):
   do IO<Unit>:
@@ -4782,10 +4809,10 @@ def refreshWith(+session: AgentSession, +runner: ExtensionRunner.ExtensionRunner
     +selection : Runtime.ToolSelection = selectionIn(loadout)
     +allowed : Maybe<&2, List<&2, String>> = Runtime.allowedOf(selection)
     +excluded : List<&2, String> = Runtime.excludedOf(selection)
-    registered : List<&2, ExtensionTypes.RegisteredTool> <- ExtensionRunner.getAllRegisteredTools(runner)
-    +kept : List<&2, ExtensionTypes.RegisteredTool> = allowedRegistered(registered, allowed, excluded)
-    +extensionNames : List<&2, String> = registeredNames(kept)
     +state : ExtensionTools <- R.read(ExtensionTools, extensionToolsOf(session))
+    registered : List<&2, ExtensionTypes.RegisteredTool> <- ExtensionRunner.getAllRegisteredTools(runner)
+    +kept : List<&2, ExtensionTypes.RegisteredTool> = allowedRegistered(withSdk(registered,sdkOf(state)), allowed, excluded)
+    +extensionNames : List<&2, String> = registeredNames(kept)
     +wrapped : List<&2, Tools.Tool()> <- wrappedTools(runner, kept)
     +base : List<&2, Tools.Tool()> = withoutToolNames(withoutToolNames(registryOf(loadout), previousExtensionNames(state)), extensionNames)
     +registry : List<&2, Tools.Tool()> = List.append(&2, Tools.Tool(), base, wrapped)
@@ -5074,17 +5101,17 @@ def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
     manager : C.Callback<Unit, Ctx.ReadonlySessionManager()> <- C.create(~ContextEnv, ~Unit, ~Ctx.ReadonlySessionManager(), ~contextSessionManager, env)
     return Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager}
 
-def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime) -> IO(ExtensionBinding):
+def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime, sdk: List<&2, ExtensionTypes.ToolDefinition>) -> IO(ExtensionBinding):
   match env:
     case ContextEnv{+agent, shared, scoped, settings, handler}:
       do IO<ExtensionBinding>:
         actions : Ctx.ExtensionContextActions <- createContextActions(ContextEnv{agent, shared, scoped, settings, handler})
         changed : C.Callback<Unit, Unit> <- C.create(~ModelEnv, ~Unit, ~Unit, ~refreshCurrentModel, ModelEnv{agent, models})
         sessionActions : R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>> <- R.new(Maybe<&2, ExtensionTypes.ExtensionActions>, None{})
-        extensionTools : R.Ref<ExtensionTools> <- R.new(ExtensionTools, ExtensionTools{Nil{}, Nil{}})
+        extensionTools : R.Ref<ExtensionTools> <- R.new(ExtensionTools, ExtensionTools{Nil{}, Nil{}, sdk})
         return ExtensionBinding{actions, changed, sessionActions, handler, extensionTools}
 
-def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
+def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>,sdk: List<&2, ExtensionTypes.ToolDefinition>) -> IO(AgentSession):
   do IO<AgentSession>:
     +scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
@@ -5102,7 +5129,7 @@ def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settin
     +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
     Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
     shutdownHandler : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
-    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef, shutdownHandler}, models)
+    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef, shutdownHandler}, models, sdk)
     bindContext(loadout, Some{context})
     inner : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     warming : Warming <- createWarming(agent, shared, settingsRef, inner)
@@ -5123,9 +5150,11 @@ def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settin
 
 # upstream AgentSession constructor: the session, its agent hooks and its
 # extension bindings.
-def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
+def createWithTools(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>,sdk: List<&2, ExtensionTypes.ToolDefinition>) -> IO(AgentSession):
   do IO<AgentSession>:
-    +created : AgentSession <- createUnbound(agent, session, settings, cwd, loadout, models, scopedModels)
+    +created : AgentSession <- createUnbound(agent, session, settings, cwd, loadout, models, scopedModels, sdk)
     bindSessionActions(created)
     refreshToolRegistry(created, True{})
     return created
+def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
+  createWithTools(agent,session,settings,cwd,loadout,models,scopedModels,Nil{})
