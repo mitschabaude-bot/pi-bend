@@ -10,6 +10,7 @@ import ../packages/ai/src/types.bend as Ai
 import ../packages/agent/src/types.bend as Agent
 import ../packages/tui/src/utils.bend as U
 import ../packages/tui/src/component.bend as Component
+import ../packages/tui/src/tui.bend as Tui
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/coding-agent/src/core/tools/renderers/read.bend as ReadRenderer
 import ../packages/coding-agent/src/core/tools/edit-diff.bend as Edits
@@ -54,8 +55,16 @@ def draw(label: String,context: ToolRender.RenderContext) -> IO(ToolRender.Rende
       +label = {label: String}
       IO.pure(ToolRender.RenderResult(),Done{ToolRender.RenderLines{U.padResult(label,U.visibleWidth(label),width,True{}) <> Nil{}}})
 def drawEmpty(label: String,context: ToolRender.RenderContext) -> IO(ToolRender.RenderResult()): IO.pure(ToolRender.RenderResult(),Done{ToolRender.RenderLines{Nil{}}})
-type ComponentProbe is Data: ComponentProbe{phase: Ref.Ref<Nat>,calls: Ref.Ref<Nat>,paints: Ref.Ref<Nat>,retired: Ref.Ref<Nat>,withLast: Ref.Ref<Nat>}
+def ensure(yes: Bool,label: String) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit),yes,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,label))(Unit{})
 def bumped(counter: Ref.Ref<Nat>) -> IO(Unit): Ref.modify(Nat,Unit,counter,n => (n + 1n,Unit{}))
+def click(+row: Nat) -> Tui.TuiMouseEvent:
+  Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},Tui.Forward{2n},Tui.Forward{row},Tui.Forward{2n},Tui.Forward{row},80n,20n,False{},False{},False{},None{},Some{1n}}
+def probeMouse(counter: Ref.Ref<Nat>,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
+  do IO<Maybe<&2,Component.MouseResponse()>>:
+    bumped(counter)
+    return Some{Component.LocalResult{Tui.TuiMouseEventResult{True{},False{},False{},Some{True{}}}}}
+type ComponentProbe is Data: ComponentProbe{phase: Ref.Ref<Nat>,calls: Ref.Ref<Nat>,paints: Ref.Ref<Nat>,retired: Ref.Ref<Nat>,withLast: Ref.Ref<Nat>}
 def paintedProbe(probe: ComponentProbe,width: Nat) -> IO(List<&2,String>):
   match probe:
     case ComponentProbe{_,_,paints,_,_}:
@@ -65,14 +74,16 @@ def paintedProbe(probe: ComponentProbe,width: Nat) -> IO(List<&2,String>):
 def probeInvalidated(_: Unit,unit: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def probeOwner(+probe: ComponentProbe) -> IO(Component.Owner):
   match probe:
-    case ComponentProbe{_,_,_,+retired,_}:
+    case ComponentProbe{_,_,_,+retired,+withLast}:
       do IO<Component.Owner>:
         +draw : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~ComponentProbe,~Nat,~List<&2,String>,~paintedProbe,probe)
         +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~probeInvalidated,Unit{})
-        return Component.Owner{Component.Component{Component.ComponentId{901n},draw,None{},None{},invalidate,None{},False{}},_ => do IO<Unit>:
+        +mouse : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- Callback.create(~Ref.Ref<Nat>,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~probeMouse,withLast)
+        return Component.Owner{Component.Component{Component.ComponentId{901n},draw,None{},Some{mouse},invalidate,None{},False{}},_ => do IO<Unit>:
           bumped(retired)
           Callback.dispose(Nat,List<&2,String>,draw)
-          Callback.dispose(Unit,Unit,invalidate)}
+          Callback.dispose(Unit,Unit,invalidate)
+          Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,mouse)}
 def countLast(probe: ComponentProbe,last: Maybe<&2,Component.Component>) -> IO(Unit):
   match probe last:
     case ComponentProbe{_,_,_,_,withLast} Some{_}: bumped(withLast)
@@ -117,6 +128,13 @@ def mountedProbe(pair: Tool.Owner & Component.Component & Tool.Handle,probe: Com
         readCount(calls,3n,"component renderer missed invalidation")
         readCount(withLast,2n,"invalidated renderer missed previous component")
         readCount(retired,1n,"replaced component was not retired")
+        children : List<&2,Component.Component> <- Component.children(draw)
+        ensure(Nat.is_eq(List.length(&2,Component.Component,children),1n),"mounted tool did not expose its child component")
+        hit : Maybe<&2,Component.TuiMouseDispatchResult()> <- Component.dispatchMouseEvent(draw,click(1n))
+        ensure(Maybe.is_some(&2,Component.TuiMouseDispatchResult(),hit),"custom child mouse handler was not reached")
+        readCount(withLast,3n,"custom child mouse handler did not run")
+        afterHit : Tool.ToolExecution <- Tool.current(mounted)
+        ensure(Bool.not(Tool.expandedOf(afterHit)),"child-handled click expanded the tool")
         Tool.dispose(owner)
         readCount(retired,2n,"mounted component was not retired")
 def retainedComponents(theme: Theme.Theme) -> IO(Unit):
@@ -137,6 +155,23 @@ def retainedComponents(theme: Theme.Theme) -> IO(Unit):
     r : Nat <- Ref.dispose(Nat,retired)
     l : Nat <- Ref.dispose(Nat,withLast)
     return Unit{}
+def clickedRead(pair: Tool.Owner & Component.Component & Tool.Handle) -> IO(Unit):
+  match pair:
+    case (owner,component,handle):
+      do IO<Unit>:
+        +draw : Component.Component = component
+        before : List<&2,String> <- Component.render(draw,80n)
+        ensure(Bool.not(String.contains(String.join(before,"\n"),"hidden content")),"read result was visible before expansion")
+        clicked : Maybe<&2,Component.TuiMouseDispatchResult()> <- Component.dispatchMouseEvent(draw,click(2n))
+        ensure(Maybe.is_some(&2,Component.TuiMouseDispatchResult(),clicked),"read result click was not handled")
+        after : List<&2,String> <- Component.render(draw,80n)
+        ensure(String.contains(String.join(after,"\n"),"hidden content"),"read result click did not expand")
+        Tool.dispose(owner)
+def readClick(theme: Theme.Theme) -> IO(Unit):
+  do IO<Unit>:
+    value : Tool.ToolExecution = Tool.updateResult(Tool.new("read","click-read",args1(),theme,Tool.Generic{}),result("hidden content",False{}),False{})
+    owner : Tool.Owner <- Tool.create(Component.ComponentId{910n},value)
+    clickedRead(Tool.borrow(owner))
 def unusedPreview(_: Unit,request: Tool.PreviewRequest) -> IO(Edits.Preview()):
   IO.die(Edits.Preview(),1,"read rendering invoked edit preflight")
 def compactMounted(pair: Tool.Owner & Component.Component & Tool.Handle,+label: String) -> IO(Unit):
@@ -229,6 +264,7 @@ def mainRun(+theme: Theme.Theme) -> IO(Unit):
     showWide("write-expanded",Tool.setExpanded(longWrite,True{}))
     compactReads(theme)
     retainedComponents(theme)
+    readClick(theme)
     Callback.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),call)
     Callback.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),resultCall)
     Callback.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),ownCall)

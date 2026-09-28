@@ -1301,16 +1301,16 @@
       "source_sha256": "0c1bafcf74ad2b703bf5ab193e72084a1da80231a77abddefc23c5bb20558731",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/renderers/edit.bend": "cc10fcba4952f185f1c2bf47e1550d9036d26866196f58fba0640c826730bdfa",
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "3cb5a91fe3ccdad3a49442f45f8b738d367f9bb83ab50d78a6e5c2c1e123f22c",
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "89a628c39823a23766cd4f31db4ac665693130104e29166815f46a3b92b9c826",
         "packages/coding-agent/src/modes/interactive/components/diff.bend": "bc9f72db8cbf477436b60675048bb75830680fab8ae06ad15ee561fe9d946c87"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/tool-execution.ts": {
       "state": "partial",
-      "note": "Immutable state updates, cached rendering, built-in read/bash/edit/write displays and injectable boxed/self-rendered tool callbacks exist. Edit preflight uses an injected native context and owned reads; saved results render without re-reading source files. A 68-frame pinned oracle compares terminal cells and styles. Definition renderers now flow through transcript mounting and the existing boxed/self shell. The mounted render context borrows the live Markdown theme and can retain affine extension components across resize, state updates and invalidation, retiring replacements and unmounted children. Component mouse/input routing, shared mutable renderer state, images and broader named component contracts remain incomplete. Owned ToolContext now supplies read presentation context; expanding an unfinished read emits no empty result section.",
+      "note": "Immutable state updates, cached rendering, built-in read/bash/edit/write displays and injectable boxed/self-rendered tool callbacks exist. Edit preflight uses an injected native context and owned reads; saved results render without re-reading source files. A 68-frame pinned oracle compares terminal cells and styles. Definition renderers now flow through transcript mounting and the existing boxed/self shell. The mounted render context borrows the live Markdown theme and can retain affine extension components across resize, state updates and invalidation, retiring replacements and unmounted children. Mounted custom children are exposed to the TUI and receive mouse events before the row toggles expansion; built-in and fallback rows respond to result clicks. Keyboard focus/input through custom children, shared mutable renderer state, images and broader named component contracts remain unverified or incomplete. Owned ToolContext now supplies read presentation context; expanding an unfinished read emits no empty result section.",
       "source_sha256": "1463e89622b305847fd129ea81a5f8d969778a650daf5357bd3771c79aef349f",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "3cb5a91fe3ccdad3a49442f45f8b738d367f9bb83ab50d78a6e5c2c1e123f22c",
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "89a628c39823a23766cd4f31db4ac665693130104e29166815f46a3b92b9c826",
         "packages/coding-agent/src/core/extensions/tool-render.bend": "f890cefa07074872ce896d81fb9d303e67e4151c77638d2163b3f8d64a75bbc7"
       },
       "ports": [
@@ -1324,7 +1324,7 @@
       "source_sha256": "93699c267fc824c0016ac182b68c01c45feeb621c64fc44a814a96e3c951f106",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/renderers/read.bend": "946f33173ec908ef0c2c62c5a347c1dc22d4bec35145babede338b803d7f11bc",
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "3cb5a91fe3ccdad3a49442f45f8b738d367f9bb83ab50d78a6e5c2c1e123f22c"
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "89a628c39823a23766cd4f31db4ac665693130104e29166815f46a3b92b9c826"
       },
       "ports": [
         "packages/coding-agent/src/core/tools/renderers/read.bend",
