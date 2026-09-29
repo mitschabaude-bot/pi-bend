@@ -2021,9 +2021,9 @@ def registerProvider(+runtime: ModelRuntime, +id: String, +config: Composer.Prov
 # request headers (auth, model and request headers) and returns the headers
 # sent; it is not forwarded to the provider.
 type RequestTransforms is Data:
-  RequestTransforms{transformHeaders: Maybe<&2, C.Callback<Ai.ProviderHeaders(), Ai.ProviderHeaders()>>}
+  RequestTransforms{transformHeaders: Maybe<&2, C.Callback<Ai.ProviderHeaders(), Ai.ProviderHeaders()>>, fallbackStream: Maybe<&2, Composer.ProviderStream()>}
 
-def noTransforms() -> RequestTransforms: RequestTransforms{None{}}
+def noTransforms() -> RequestTransforms: RequestTransforms{None{}, None{}}
 
 def withApiStreams(streams: Maybe<&2, Composer.ProviderStream()>, state: ExtensionState) -> ExtensionState & Maybe<&2, Composer.ProviderStream()>:
   match state:
@@ -2084,7 +2084,7 @@ def transformedWith(transform: Maybe<&2, C.Callback<Ai.ProviderHeaders(), Ai.Pro
 def transformed(transforms: RequestTransforms, options: Maybe<&2, Composer.StreamOptions()>) -> IO(Maybe<&2, Composer.StreamOptions()>):
   match transforms options:
     case _ None{}: IO.pure(Maybe<&2, Composer.StreamOptions()>, None{})
-    case RequestTransforms{transform} Some{value}:
+    case RequestTransforms{transform, _} Some{value}:
       do IO<Maybe<&2, Composer.StreamOptions()>>:
         found : Composer.StreamOptions() <- transformedWith(transform, value)
         return Some{found}
@@ -2123,9 +2123,12 @@ def dispatchedWith(custom: Maybe<&2, Composer.ProviderStream()>, apiStreams: May
     case Some{stream}: C.call(Composer.StreamRequest(), Composer.StreamOutput(), stream, AgentTypes.StreamInput{model, context, options})
     case None{}: viaApiStreams(apiStreams, model, context, options, streams)
 
-def dispatched(state: ExtensionState, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>, streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
+def dispatched(state: ExtensionState, fallback: Maybe<&2, Composer.ProviderStream()>, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>, streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
   match state:
-    case ExtensionState{entries, apiStreams}: dispatchedWith(entryStream(findEntry(entries, Ai.modelProvider(model)), model), apiStreams, model, context, options, streams)
+    case ExtensionState{entries, apiStreams}: dispatchedWith(entryStream(findEntry(entries, Ai.modelProvider(model)), model), Maybe.or(&2, Composer.ProviderStream(), apiStreams, fallback), model, context, options, streams)
+
+def fallbackStream(transforms: RequestTransforms) -> Maybe<&2, Composer.ProviderStream()>:
+  match transforms: case RequestTransforms{_, fallback}: fallback
 
 def preparedModel(resolution: Resolve.Resolution(), +model: Model()) -> Model():
   match resolution:
@@ -2138,12 +2141,12 @@ def preparedOptions(resolution: Resolve.Resolution(), options: Maybe<&2, Compose
     case Done{Some{auth}} None{}: Some{authorizedOptions(auth, Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError))}
     case _ other: other
 
-def preparedStream(+runtime: ModelRuntime, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, transforms: RequestTransforms, +resolution: Resolve.Resolution(), options: Maybe<&2, Composer.StreamOptions()>) -> IO(Composer.StreamOutput()):
+def preparedStream(+runtime: ModelRuntime, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, +transforms: RequestTransforms, +resolution: Resolve.Resolution(), options: Maybe<&2, Composer.StreamOptions()>) -> IO(Composer.StreamOutput()):
   do IO<Composer.StreamOutput()>:
     final : Maybe<&2, Composer.StreamOptions()> <- transformed(transforms, preparedOptions(resolution, options))
     streams : AiModels.ProviderStreams <- getProviderStreams(runtime, Ai.modelProvider(model))
     state : ExtensionState <- Ref.read(ExtensionState, extensionsRef(runtime))
-    dispatched(state, preparedModel(resolution, model), context, final, streams)
+    dispatched(state, fallbackStream(transforms), preparedModel(resolution, model), context, final, streams)
 
 # upstream ModelRuntime.streamSimple: the request's auth is resolved for its
 # model (the request's key, env and signal override), the auth base URL

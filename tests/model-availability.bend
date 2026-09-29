@@ -7,6 +7,10 @@ import ../packages/ai/src/auth/context.bend as Context
 import ../packages/ai/src/auth/resolve.bend as Resolve
 import ../packages/ai/src/auth/credential-store.bend as MemoryCredentials
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
+import ../packages/coding-agent/src/core/provider-composer.bend as Composer
+import ../packages/coding-agent/src/core/tools/index.bend as Tools
+import ../packages/agent/src/types.bend as AgentTypes
+import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/ref.bend as Ref
 
@@ -82,6 +86,28 @@ def require(ok: Bool, label: String) -> IO(Unit):
   match ok:
     case True{}: IO.pure(Unit, Unit{})
     case False{}: IO.die(Unit, 1, label)
+
+def streamFailure(message: String, _: Composer.StreamRequest()) -> IO(Composer.StreamOutput()):
+  IO.pure(Composer.StreamOutput(), Fail{Tools.Failure{message}})
+
+def failedWith(result: Composer.StreamOutput(), expected: String) -> Bool:
+  match result:
+    case Fail{Tools.Failure{message}}: String.eq(message, expected)
+    case _: False{}
+
+def checkStreamOwnership(+runtime: Models.ModelRuntime) -> IO(Unit):
+  do IO<Unit>:
+    +fallback : Composer.ProviderStream() <- C.create(~String, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~streamFailure, "session")
+    global : Composer.ProviderStream() <- C.create(~String, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~streamFailure, "runtime")
+    +request : Composer.StreamRequest() = AgentTypes.StreamInput{model("a"), Ai.TranscriptContext{Nil{}}, None{}}
+    local : Composer.StreamOutput() <- Models.streamSimple(runtime, request, Models.RequestTransforms{None{}, Some{fallback}})
+    require(failedWith(local, "session"), "per-request stream did not serve an unconfigured runtime")
+    Models.setApiStreams(runtime, Some{global})
+    selected : Composer.StreamOutput() <- Models.streamSimple(runtime, request, Models.RequestTransforms{None{}, Some{fallback}})
+    require(failedWith(selected, "runtime"), "session stream replaced the injected runtime stream")
+    ordinary : Composer.StreamOutput() <- Models.streamSimple(runtime, request, Models.noTransforms())
+    require(failedWith(ordinary, "runtime"), "session stream changed ordinary runtime dispatch")
+    C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), fallback)
 
 def refreshCached(state: Ref.Ref<RefreshState>, context: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, Unit>):
   match context:
@@ -305,9 +331,10 @@ def main() -> IO(Unit):
     b : AiModels.Provider <- provider("b")
     +runtime : Models.ModelRuntime <- Models.fromProviders([a, b], store, context)
     check(runtime, state)
+    checkStreamOwnership(runtime)
     Models.dispose(runtime)
     Auth.disposeStore(store)
     previous : State <- Ref.dispose(State, state)
     checkDynamicSynchronization()
     loginBesideStalledRefresh()
-    IO.print("model availability: scoped reads, credential synchronization, and snapshots pass")
+    IO.print("model availability: scoped reads, credential synchronization, snapshots, and stream ownership pass")

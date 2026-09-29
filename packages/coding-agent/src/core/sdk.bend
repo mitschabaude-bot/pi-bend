@@ -49,8 +49,8 @@ def createAgentSessionOptions() -> CreateAgentSessionOptions:
 # The model runtime and the credential stores behind it, when the SDK
 # created them.
 type OwnedModels is Type:
-  InjectedModels{}
-  CreatedModels{storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore}
+  InjectedModels{apiStream: Maybe<&2, Composer.ProviderStream()>}
+  CreatedModels{storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, apiStream: Maybe<&2, Composer.ProviderStream()>}
 
 type OwnedLoader is Type:
   InjectedLoader{}
@@ -70,12 +70,23 @@ def sessionOf(result: CreateAgentSessionResult) -> CreateAgentSessionResult & Se
 
 def disposeOwnedModels(+models: Models.ModelRuntime, owned: OwnedModels) -> IO(Unit):
   match owned:
-    case InjectedModels{}: Models.setApiStreams(models, None{})
-    case CreatedModels{storage, storageStore}:
+    case InjectedModels{apiStream}: disposeApiStream(apiStream)
+    case CreatedModels{storage, storageStore, apiStream}:
       do IO<Unit>:
+        disposeApiStream(apiStream)
         Models.dispose(models)
         Auth.disposeStore(storageStore)
         Storage.dispose(storage)
+
+def disposeApiStream(stream: Maybe<&2, Composer.ProviderStream()>) -> IO(Unit):
+  match stream:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{callback}: C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), callback)
+
+def withApiStream(owned: OwnedModels, stream: Composer.ProviderStream()) -> OwnedModels:
+  match owned:
+    case InjectedModels{_}: InjectedModels{Some{stream}}
+    case CreatedModels{storage, storageStore, _}: CreatedModels{storage, storageStore, Some{stream}}
 
 def disposeLoader(loader: OwnedLoader) -> IO(Unit):
   match loader:
@@ -151,11 +162,11 @@ def createdModels(+agentDir: String, +fetch: Fetch.Fetch(Unit), pair: Storage.Au
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, Runtime.urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, Runtime.urlContext())
         models : Models.ModelRuntime <- Models.createWithOptions(storageStore, oauth, Some{anthropicOAuth}, Radius.RadiusTransport{fetch, Runtime.urlContext()}, Some{Path.join(agentDir, "models.json")}, Models.createOptions())
-        return ModelsChoice{models, CreatedModels{storage, storageStore}}
+        return ModelsChoice{models, CreatedModels{storage, storageStore, None{}}}
 
 def modelsFor(injected: Maybe<&2, Models.ModelRuntime>, +agentDir: String, +fetch: Fetch.Fetch(Unit)) -> IO(ModelsChoice):
   match injected:
-    case Some{models}: IO.pure(ModelsChoice, ModelsChoice{models, InjectedModels{}})
+    case Some{models}: IO.pure(ModelsChoice, ModelsChoice{models, InjectedModels{None{}}})
     case None{}:
       do IO<ModelsChoice>:
         storage : Storage.AuthStorageOwner <- Storage.create(Path.join(agentDir, "auth.json"))
@@ -408,14 +419,13 @@ def withResources(+assembly: Assembly, transport: Runtime.Transport, choice: Mod
         queue : Queue.Owner <- Queue.create()
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- Runtime.createToolList(Runtime.registryOf(setup), Runtime.toolsOptionsFor(Runtime.builtinsOf(toolSelection), settings, environment), environment, cwd, agentDir, packageDir, fetch, ExtensionRunner.toolContext(runner), Queue.borrow(queue))
         apiStream : Composer.ProviderStream() <- Runtime.createApiStream(codexSessions, authorizer, fetch)
-        Models.setApiStreams(models, Some{apiStream})
-        +stream : Runtime.Stream() <- Runtime.createStream(fetch, Runtime.requestDefaults(settings), Runtime.KeySource{models, None{}}, Models.noTransforms())
+        +stream : Runtime.Stream() <- Runtime.createStream(fetch, Runtime.requestDefaults(settings), Runtime.KeySource{models, None{}}, Models.RequestTransforms{None{}, Some{apiStream}})
         +registry : StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()) <- StreamFn.create(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error())
         +validator : Loop.Validator(Runtime.Error()) <- Loop.createPlain(~Runtime.Error(), ~Runtime.validationError)
         +keys : C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>> <- C.create(~Runtime.KeySource, ~String, ~Result<&2, &2, Runtime.Error(), Maybe<&2, String>>, ~Runtime.resolveKey, Runtime.KeySource{models, None{}})
         +converter : Runtime.Converter() <- Runtime.createConverter(Settings.getBlockImages(settings))
         agent : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~V.Value, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, Runtime.agentOptions(selectionModel(selection), thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
-        withAgentCreated(Assembly{environment, cwd, agentDir, packageDir, settings, sdkOptions}, Runtime.Transport{authorizer, network, fetch, codexSessions}, ModelsChoice{models, owned}, LoaderChoice{loader, ownedLoader}, extensions, session, seed, selection, thinking, options, prepared, created, stream, registry, validator, keys, converter, runner, agent)
+        withAgentCreated(Assembly{environment, cwd, agentDir, packageDir, settings, sdkOptions}, Runtime.Transport{authorizer, network, fetch, codexSessions}, ModelsChoice{models, withApiStream(owned, apiStream)}, LoaderChoice{loader, ownedLoader}, extensions, session, seed, selection, thinking, options, prepared, created, stream, registry, validator, keys, converter, runner, agent)
 
 def failedSession(transport: Runtime.Transport, choice: ModelsChoice, message: String) -> IO(Outcome()):
   match choice:
