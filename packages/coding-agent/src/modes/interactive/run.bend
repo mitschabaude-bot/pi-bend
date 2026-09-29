@@ -2025,20 +2025,23 @@ def logoutNotice(provider: String,kind: Maybe<&2,Auth.CredentialType>) -> String
   match kind:
     case Some{Auth.ApiKeyType{}}: "Removed stored API key for " ++ providerName(provider) ++ ". Environment variables and models.json config are unchanged."
     case _: "Logged out of " ++ providerName(provider)
-def logoutOutcome(+provider: String,kind: Maybe<&2,Auth.CredentialType>,result: AuthLogin.Outcome(),refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.Model()>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink) -> IO(Unit):
+def logoutOutcome(+provider: String,kind: Maybe<&2,Auth.CredentialType>,result: Result<&2,&2,AuthResolve.ModelsError,Unit>,runtime: Models.ModelRuntime,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink) -> IO(Unit):
   match result:
     case Done{_}:
       do IO<Unit>:
-        available : List<&2,Models.Model()> <- refreshLoginModels(refresh,models)
+        available : List<&2,Models.Model()> <- Models.getAvailableSnapshot(runtime)
+        Ref.write(List<&2,Models.Model()>,models,available)
         Interactive.report(failure,Interactive.CommandNotice{logoutNotice(provider,kind)})
-    case Fail{message}: Interactive.report(failure,Interactive.CommandFailure{"Logout failed: " ++ message})
+    case Fail{error}: Interactive.report(failure,Interactive.CommandFailure{"Logout failed: " ++ AuthResolve.errorMessage(error)})
 def logoutChosen(state: LoginState,+chosen: String,infos: List<&2,Auth.CredentialInfo>) -> IO(Unit):
   match state:
-    case LoginState{_,_,_,refresh,models,failure,redraw,_,_}:
+    case LoginState{_,_,_,_,models,failure,redraw,session,_}:
       do IO<Unit>:
         kind : Maybe<&2,Auth.CredentialType> = logoutKind(infos,chosen)
-        result : AuthLogin.Outcome() <- AuthLogin.logout(chosen)
-        logoutOutcome(chosen,kind,result,refresh,models,failure)
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        +runtime : Models.ModelRuntime = Session.modelRuntime(live)
+        result : Result<&2,&2,AuthResolve.ModelsError,Unit> <- Models.logout(runtime,chosen,None{})
+        logoutOutcome(chosen,kind,result,runtime,models,failure)
         Interactive.requestRender(redraw)
 def logoutSelected(state: LoginState,provider: String,infos: List<&2,Auth.CredentialInfo>) -> IO(Unit):
   match provider:

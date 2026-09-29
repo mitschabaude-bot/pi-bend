@@ -3359,9 +3359,13 @@
     },
     {
       "source": "packages/coding-agent/test/model-runtime-credential-sync.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "275163af35dfa1e53393736c9c510607fc7b8121cd13e7101e347ae953c63103"
+      "status": "partial",
+      "ports": [
+        "tests/model-availability.bend",
+        "tests/interactive_login_run_check.py"
+      ],
+      "sha256": "275163af35dfa1e53393736c9c510607fc7b8121cd13e7101e347ae953c63103",
+      "notes": "Local logout deletes through the injected store and updates its provider snapshot before returning (native model-availability); mounted Codex and Anthropic login/logout exercises the UI path. Same-provider operation ordering, concurrent providers, cancellation, dynamic refresh failures and runtime API-key synchronization remain pending."
     },
     {
       "source": "packages/coding-agent/test/model-runtime-modify-models-compat.test.ts",

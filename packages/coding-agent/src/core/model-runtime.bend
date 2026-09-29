@@ -1994,6 +1994,21 @@ def login(+runtime: ModelRuntime, +id: String, kind: Auth.CredentialType, intera
         aborted : Bool <- signalAborted(signal)
         loginUnlessAborted(runtime, id, kind, Auth.AuthInteraction{signal, prompt, notify}, aborted)
 
+def logoutDone(+runtime: ModelRuntime, +id: String, result: Result<&2, &2, Resolve.ModelsError, Unit>) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+  match result:
+    case Fail{error}: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{error})
+    case Done{_}:
+      do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+        refreshProviderAvailability(runtime, id)
+        return Done{Unit{}}
+
+# The credential store may be injected by an SDK caller. Its deletion and the
+# provider's availability update both settle before logout reports success.
+def logout(+runtime: ModelRuntime, +id: String, signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+  do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+    result : Result<&2, &2, Resolve.ModelsError, Unit> <- AiModels.logout(modelsOf(runtime), id, signal)
+    logoutDone(runtime, id, result)
+
 # Creation
 # --------
 
