@@ -1299,3 +1299,87 @@ def removeParsed(+context: Context, parsed: ParsedSource, scope: SourceScope) ->
 
 def remove(+context: Context, +source: String, local: Bool) -> IO(PackageResult()):
   removeParsed(context, parseSource(context, source), scopeOf(local))
+
+def UpdateMatch() -> Data: Result<&2, &2, String, Bool>
+
+def updateEligible(+context: Context, +scope: SourceScope, +entry: Settings.PackageSource, key: Maybe<&2, String>) -> UpdateMatch():
+  match key:
+    case None{}: Done{True{}}
+    case Some{identity}: sourcesMatch(context, scope, entry, identity)
+
+def offlineFlag(value: Result<&1, &1, U32 & String, String>) -> Bool:
+  match value:
+    case Done{+text}: String.eq(text, "1") || String.eq(String.to_lower(text), "true") || String.eq(String.to_lower(text), "yes")
+    case Fail{_}: False{}
+
+def updateOnlineParsed(+context: Context, parsed: ParsedSource, scope: SourceScope) -> IO(PackageResult()):
+  match parsed:
+    case GitRepo{source}: updateGit(context, source, scope)
+    case LocalSource{_}: IO.pure(PackageResult(), Done{Unit{}})
+    case NpmSource{_, _, _, _}: IO.pure(PackageResult(), Fail{"npm package updates are not yet available"})
+
+def updateParsed(+context: Context, +parsed: ParsedSource, +scope: SourceScope) -> IO(PackageResult()):
+  do IO<PackageResult()>:
+    flag : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_OFFLINE")
+    Bool.pick(Unit -> IO(PackageResult()), offlineFlag(flag), _ => IO.pure(PackageResult(), Done{Unit{}}), _ => updateOnlineParsed(context, parsed, scope))(Unit{})
+
+def matchedUpdate(result: PackageResult()) -> UpdateMatch():
+  match result:
+    case Fail{message}: Fail{message}
+    case Done{_}: Done{True{}}
+
+def updateIfMatched(+context: Context, scope: SourceScope, entry: Settings.PackageSource, eligible: UpdateMatch()) -> IO(UpdateMatch()):
+  match eligible:
+    case Fail{message}: IO.pure(UpdateMatch(), Fail{message})
+    case Done{False{}}: IO.pure(UpdateMatch(), Done{False{}})
+    case Done{True{}}:
+      do IO<UpdateMatch()>:
+        updated : PackageResult() <- updateParsed(context, parseSource(context, sourceString(entry)), scope)
+        return matchedUpdate(updated)
+
+def updateEntry(+context: Context, +scope: SourceScope, +entry: Settings.PackageSource, +key: Maybe<&2, String>) -> IO(UpdateMatch()):
+  updateIfMatched(context, scope, entry, updateEligible(context, scope, entry, key))
+
+type UpdateCursor is Data:
+  NextUpdate{entries: List<&2, Settings.PackageSource>, matched: Bool}
+  AfterUpdate{rest: List<&2, Settings.PackageSource>, matched: Bool, result: UpdateMatch()}
+
+@unsafe def updateEntries(+context: Context, +scope: SourceScope, +key: Maybe<&2, String>, cursor: UpdateCursor) -> IO(UpdateMatch()):
+  match cursor:
+    case NextUpdate{Nil{}, matched}: IO.pure(UpdateMatch(), Done{matched})
+    case NextUpdate{entry <> rest, matched}:
+      do IO<UpdateMatch()>:
+        current : UpdateMatch() <- updateEntry(context, scope, entry, key)
+        updateEntries(context, scope, key, AfterUpdate{rest, matched, current})
+    case AfterUpdate{_, _, Fail{message}}: IO.pure(UpdateMatch(), Fail{message})
+    case AfterUpdate{rest, matched, Done{current}}: updateEntries(context, scope, key, NextUpdate{rest, matched || current})
+
+def updateProjects(+context: Context, +key: Maybe<&2, String>, users: UpdateMatch()) -> IO(UpdateMatch()):
+  match users:
+    case Fail{message}: IO.pure(UpdateMatch(), Fail{message})
+    case Done{matched}: updateEntries(context, ProjectSource{}, key, NextUpdate{packagesIn(settingsFor(context, ProjectSource{})), matched})
+
+def updateFound(source: Maybe<&2, String>, result: UpdateMatch()) -> PackageResult():
+  match source result:
+    case _ Fail{message}: Fail{message}
+    case Some{requested} Done{False{}}: Fail{"No matching package found for " ++ requested}
+    case _ Done{_}: Done{Unit{}}
+
+def updateWithKey(+context: Context, +source: Maybe<&2, String>, key: Result<&2, &2, String, Maybe<&2, String>>) -> IO(PackageResult()):
+  match key:
+    case Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case Done{+identity}:
+      do IO<PackageResult()>:
+        users : UpdateMatch() <- updateEntries(context, UserSource{}, identity, NextUpdate{packagesIn(settingsFor(context, UserSource{})), False{}})
+        projects : UpdateMatch() <- updateProjects(context, identity, users)
+        return updateFound(source, projects)
+
+def updateKey(+context: Context, source: Maybe<&2, String>) -> Result<&2, &2, String, Maybe<&2, String>>:
+  match source:
+    case None{}: Done{None{}}
+    case Some{value}: Result.map(&2, &2, String, String, Maybe<&2, String>, identity => Some{identity}, getPackageIdentity(context, value, None{}))
+
+# Upstream update() reconciles configured sources. Npm candidates still need
+# the npm lifecycle; a pinned or unpinned Git entry uses updateGit above.
+def updateConfigured(+context: Context, +source: Maybe<&2, String>) -> IO(PackageResult()):
+  updateWithKey(context, source, updateKey(context, source))

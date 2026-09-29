@@ -13,20 +13,83 @@ type Request is Data:
   Install{source: String, local: Bool}
   Remove{source: String, local: Bool}
   ListPackages{}
+  UpdatePackages{source: Maybe<&2, String>}
+  SelfUpdate{}
 
-def parsed(values: List<&2, String>) -> Result<&2, &2, String, Request>:
+type Command is Data:
+  Command{request: Request, trustOverride: Maybe<&2, Bool>}
+
+type CommandKind is Data:
+  InstallKind{}
+  RemoveKind{}
+  ListKind{}
+  UpdateKind{}
+
+def commandKind(name: String) -> Maybe<&2, CommandKind>:
+  match name:
+    case "install": Some{InstallKind{}}
+    case "remove": Some{RemoveKind{}}
+    case "uninstall": Some{RemoveKind{}}
+    case "list": Some{ListKind{}}
+    case "update": Some{UpdateKind{}}
+    case _: None{}
+
+def finish(kind: CommandKind, source: Maybe<&2, String>, local: Bool, override: Maybe<&2, Bool>, extensions: Bool) -> Result<&2, &2, String, Command>:
+  match kind source extensions:
+    case ListKind{} _ True{}: Fail{"--extensions is only valid with update"}
+    case InstallKind{} _ True{}: Fail{"--extensions is only valid with update"}
+    case RemoveKind{} _ True{}: Fail{"--extensions is only valid with update"}
+    case InstallKind{} Some{source} _: Done{Command{Install{source, local}, override}}
+    case RemoveKind{} Some{source} _: Done{Command{Remove{source, local}, override}}
+    case ListKind{} None{} _: Bool.pick(Result<&2, &2, String, Command>, local, Fail{"--local is not valid with list"}, Done{Command{ListPackages{}, override}})
+    case UpdateKind{} None{} True{}: Bool.pick(Result<&2, &2, String, Command>, local, Fail{"--local is not valid with update"}, Done{Command{UpdatePackages{None{}}, override}})
+    case UpdateKind{} Some{source} True{}: Bool.pick(Result<&2, &2, String, Command>, local, Fail{"--local is not valid with update"}, Done{Command{UpdatePackages{Some{source}}, override}})
+    case UpdateKind{} None{} False{}: Bool.pick(Result<&2, &2, String, Command>, local, Fail{"--local is not valid with update"}, Done{Command{SelfUpdate{}, override}})
+    case UpdateKind{} Some{"pi"} False{}: Bool.pick(Result<&2, &2, String, Command>, local, Fail{"--local is not valid with update"}, Done{Command{SelfUpdate{}, override}})
+    case UpdateKind{} Some{"self"} False{}: Bool.pick(Result<&2, &2, String, Command>, local, Fail{"--local is not valid with update"}, Done{Command{SelfUpdate{}, override}})
+    case UpdateKind{} Some{source} False{}: Bool.pick(Result<&2, &2, String, Command>, local, Fail{"--local is not valid with update"}, Done{Command{UpdatePackages{Some{source}}, override}})
+    case _ _ _: Fail{"Invalid package command arguments"}
+
+type ScanState is Data:
+  ScanState{source: Maybe<&2, String>, local: Bool, override: Maybe<&2, Bool>, extensions: Bool}
+
+def optionStep(arg: String, state: ScanState) -> Result<&2, &2, String, ScanState>:
+  match arg state:
+    case "-l" ScanState{source, _, override, extensions}: Done{ScanState{source, True{}, override, extensions}}
+    case "--local" ScanState{source, _, override, extensions}: Done{ScanState{source, True{}, override, extensions}}
+    case "-a" ScanState{source, local, _, extensions}: Done{ScanState{source, local, Some{True{}}, extensions}}
+    case "--approve" ScanState{source, local, _, extensions}: Done{ScanState{source, local, Some{True{}}, extensions}}
+    case "-na" ScanState{source, local, _, extensions}: Done{ScanState{source, local, Some{False{}}, extensions}}
+    case "--no-approve" ScanState{source, local, _, extensions}: Done{ScanState{source, local, Some{False{}}, extensions}}
+    case "--extensions" ScanState{source, local, override, _}: Done{ScanState{source, local, override, True{}}}
+    case +value ScanState{None{}, local, override, extensions}:
+      Bool.pick(Result<&2, &2, String, ScanState>, String.starts_with(value, "-"), Fail{"Unknown package option: " ++ value}, Done{ScanState{Some{value}, local, override, extensions}})
+    case value ScanState{Some{_}, _, _, _}: Fail{"Unexpected package argument: " ++ value}
+
+def extensionValue(value: String, state: ScanState) -> Result<&2, &2, String, ScanState>:
+  match state:
+    case ScanState{None{}, local, override, _}: Done{ScanState{Some{value}, local, override, True{}}}
+    case ScanState{Some{_}, _, _, _}: Fail{"--extension can only be provided once"}
+
+def finishState(kind: CommandKind, state: ScanState) -> Result<&2, &2, String, Command>:
+  match state:
+    case ScanState{source, local, override, extensions}: finish(kind, source, local, override, extensions)
+
+def scan(+kind: CommandKind, values: List<&2, String>, state: ScanState) -> Result<&2, &2, String, Command>:
   match values:
-    case "install" <> source <> Nil{}: Done{Install{source, False{}}}
-    case "install" <> source <> "-l" <> Nil{}: Done{Install{source, True{}}}
-    case "install" <> source <> "--local" <> Nil{}: Done{Install{source, True{}}}
-    case "remove" <> source <> Nil{}: Done{Remove{source, False{}}}
-    case "remove" <> source <> "-l" <> Nil{}: Done{Remove{source, True{}}}
-    case "remove" <> source <> "--local" <> Nil{}: Done{Remove{source, True{}}}
-    case "uninstall" <> source <> Nil{}: Done{Remove{source, False{}}}
-    case "uninstall" <> source <> "-l" <> Nil{}: Done{Remove{source, True{}}}
-    case "uninstall" <> source <> "--local" <> Nil{}: Done{Remove{source, True{}}}
-    case "list" <> Nil{}: Done{ListPackages{}}
-    case _: Fail{"Usage: pi install|remove <source> [-l], or pi list"}
+    case Nil{}: finishState(kind, state)
+    case "--extension" <> value <> rest: Result.bind(&2, &2, String, ScanState, Command, extensionValue(value, state), next => scan(kind, rest, next))
+    case arg <> rest: Result.bind(&2, &2, String, ScanState, Command, optionStep(arg, state), next => scan(kind, rest, next))
+
+def parsedKind(name: String, rest: List<&2, String>, found: Maybe<&2, CommandKind>) -> Result<&2, &2, String, Command>:
+  match found:
+    case Some{kind}: scan(kind, rest, ScanState{None{}, False{}, None{}, False{}})
+    case None{}: Fail{"Unknown package command: " ++ name}
+
+def parsed(values: List<&2, String>) -> Result<&2, &2, String, Command>:
+  match values:
+    case +name <> rest: parsedKind(name, rest, commandKind(name))
+    case Nil{}: Fail{"Usage: pi install|remove|update|list"}
 
 def settingsOf(pair: Settings.FileSettingsStorage & Settings.SettingsManager) -> Settings.SettingsManager:
   match pair:
@@ -65,6 +128,12 @@ def reportRemove(source: String, outcome: Result<&2, &2, String, Bool>) -> IO(Un
     case Fail{message}: IO.die(Unit, 1, "Error: " ++ message)
     case Done{True{}}: IO.print("Removed " ++ source)
     case Done{False{}}: IO.die(Unit, 1, "No matching package found for " ++ source)
+
+def reportUpdate(source: Maybe<&2, String>, outcome: Package.PackageResult()) -> IO(Unit):
+  match source outcome:
+    case _ Fail{message}: IO.die(Unit, 1, "Error: " ++ message)
+    case Some{requested} Done{_}: IO.print("Updated " ++ requested)
+    case None{} Done{_}: IO.print("Updated packages")
 
 def packageLines(packages: List<&2, Settings.PackageSource>) -> IO(Unit):
   match packages:
@@ -129,6 +198,11 @@ def execute(+context: Package.Context, request: Request) -> IO(Unit):
     case Install{source, local}: installCommand(context, source, local)
     case Remove{source, local}: removeCommand(context, source, local)
     case ListPackages{}: listed(context)
+    case UpdatePackages{+source}:
+      do IO<Unit>:
+        result : Package.PackageResult() <- Package.updateConfigured(context, source)
+        reportUpdate(source, result)
+    case SelfUpdate{}: IO.die(Unit, 1, "Self-update is unavailable for a source build")
 
 def trustedReady(request: Request, +environment: Paths.Environment, +agentDir: String, decision: Result<&2, &2, String, Bool>) -> IO(Unit):
   match decision environment:
@@ -138,13 +212,13 @@ def trustedReady(request: Request, +environment: Paths.Environment, +agentDir: S
         loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.SettingsManagerCreateOptions{trusted})
         execute(Package.contextOf(environment, settingsOf(loaded), cwd, agentDir), request)
 
-def prepared(request: Result<&2, &2, String, Request>, environment: Paths.Environment, +agentDir: String) -> IO(Unit):
+def prepared(request: Result<&2, &2, String, Command>, environment: Paths.Environment, +agentDir: String) -> IO(Unit):
   match request environment:
     case Fail{message} _: IO.die(Unit, 1, message)
-    case Done{action} Paths.Environment{+cwd, +home, +url}:
+    case Done{Command{action, override}} Paths.Environment{+cwd, +home, +url}:
       do IO<Unit>:
         initial : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.SettingsManagerCreateOptions{False{}})
-        decision : Result<&2, &2, String, Bool> <- ProjectTrust.resolveProjectTrusted(ProjectTrust.ResolveProjectTrustedOptions{cwd, Some{home}, Trust.create(agentDir), None{}, Settings.getDefaultProjectTrust(settingsOf(initial))}, None{})
+        decision : Result<&2, &2, String, Bool> <- ProjectTrust.resolveProjectTrusted(ProjectTrust.ResolveProjectTrustedOptions{cwd, Some{home}, Trust.create(agentDir), override, Settings.getDefaultProjectTrust(settingsOf(initial))}, None{})
         trustedReady(action, Paths.Environment{cwd, home, url}, agentDir, decision)
 
 def run(values: List<&2, String>, environment: Paths.Environment, agentDir: String) -> IO(Unit):

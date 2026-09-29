@@ -1796,6 +1796,7 @@ def runValues(values: List<&2, String>) -> IO(Unit):
     case "remove" <> rest: runPackageCommand("remove" <> rest)
     case "uninstall" <> rest: runPackageCommand("uninstall" <> rest)
     case "list" <> rest: runPackageCommand("list" <> rest)
+    case "update" <> rest: runPackageCommand("update" <> rest)
     case other: run(Args.parseArgs(other))
 
 # upstream cli/setup.ts setupCli and main's offline switch: variables the
