@@ -16,7 +16,7 @@ import ../../../../../ai/src/types.bend as Ai
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../tui/src/tui.bend as Tui
 
-type Paint is Data: Paint{theme: Theme.Theme,key: String,background: Bool}
+type Paint is Data: Paint{code: String,reset: String}
 type Content is Data: TextBlock{text: String} ThinkingBlock{text: String} ToolCall{}
 type Stop is Data: Stop{} Length{} Aborted{} Error{}
 type ThinkingOverride is Data: ThinkingOverride{index: Nat,hidden: Bool}
@@ -32,10 +32,14 @@ def colorResult(result: Result<&2,&2,Theme.Error,String>) -> IO(String):
     case Fail{_}: IO.die(String,1,"invalid message theme color")
 def painted(style: Paint,text: String) -> IO(String):
   match style:
-    case Paint{theme,key,False{}}: colorResult(Theme.foreground(theme,key,text))
-    case Paint{theme,key,True{}}: colorResult(Theme.background(theme,key,text))
-def color(theme: Theme.Theme,key: String,background: Bool) -> IO(Callback.Callback<String,String>):
-  Callback.create(~Paint,~String,~String,~painted,Paint{theme,key,background})
+    case Paint{"",_}: IO.die(String,1,"invalid message theme color")
+    case Paint{code,reset}: IO.pure(String,code ++ text ++ reset)
+def paintCode(theme: Theme.Theme,key: String,background: Bool) -> String:
+  match background:
+    case False{}: Theme.foregroundCode(theme,key)
+    case True{}: Theme.backgroundCode(theme,key)
+def color(theme: Theme.Theme,key: String,+background: Bool) -> IO(Callback.Callback<String,String>):
+  Callback.create(~Paint,~String,~String,~painted,Paint{paintCode(theme,key,background),Bool.pick(String,background,"\u{1b}[49m","\u{1b}[39m")})
 def zoneStart() -> String: "\u{1b}]133;A\u{7}"
 def zoneEnd() -> String: "\u{1b}]133;B\u{7}\u{1b}]133;C\u{7}"
 def zoneLast(lines: List<&2,String>) -> List<&2,String>:

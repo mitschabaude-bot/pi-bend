@@ -597,9 +597,9 @@ SCENARIOS = [
     {
         "name": "large-session-typing",
         "args": MODEL + ["--session", "large.jsonl"],
-        "within": {"startup": 2, **{f"key{index}": 2 for index in range(1, 7)}},
+        "within": {"startup": 2, "frame": 1.5, **{f"key{index}": 2 for index in range(1, 7)}},
         "files": {"project/large.jsonl": open(str(UPSTREAM / 'packages/coding-agent/test/fixtures/large-session.jsonl')).read()},
-        "steps": [("wait", "Continue", "prompt"), ("key", "Enter"), ("wait", READY, "startup"), ("settle", 1.0), *typed("typing"), ("settle", 0.3), ("snap", "typed"), ("snap-history", "history")],
+        "steps": [("wait", "Continue", "prompt"), ("key", "Enter"), ("wait", READY, "startup"), ("wait", "Did we revert", "frame"), ("settle", 1.0), *typed("typing"), ("settle", 0.3), ("snap", "typed"), ("snap-history", "history")],
     },
     # A stored session whose cwd is gone: interactive mode asks (upstream
     # promptForMissingSessionCwd); Cancel exits quietly.
