@@ -100,8 +100,18 @@ type SharedRefresh is Data:
   RefreshActive{id: Nat, controller: Abort.AbortController<Unit>, result: Deferred.Deferred<ModelsRefreshResult>, waiters: Nat, finished: Bool, closing: Bool}
   RefreshClosed{}
 
+# A caller may leave a shared refresh before its detached provider work stops.
+# The runtime waits for that work before releasing providers and their stores.
+type RefreshWork is Data:
+  RefreshWork{running: Nat, closing: Bool, drained: Deferred.Deferred<Unit>}
+
+def newRefreshWork() -> IO(Ref.Ref<RefreshWork>):
+  do IO<Ref.Ref<RefreshWork>>:
+    drained : Deferred.Deferred<Unit> <- Deferred.new(Unit)
+    Ref.new(RefreshWork, RefreshWork{0n, False{}, drained})
+
 type ModelRuntime is Data:
-  ModelRuntime{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>, credentials: RuntimeCredentials.RuntimeCredentials}
+  ModelRuntime{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>, credentials: RuntimeCredentials.RuntimeCredentials, refreshWork: Ref.Ref<RefreshWork>}
 
 # Composition (recomposeProvider/rebuildProviders)
 # -----------------------------------------------
@@ -188,9 +198,9 @@ def rebuildProviders(ids: List<&2, String>, +builtins: List<&2, AiModels.Provide
         next : Composition <- recomposeProvider(id, findProvider(builtins, id), Config.getProvider(config, id), composition)
         rebuildProviders(rest, builtins, config, next)
 
-def assembled(composition: Composition, builtins: List<&2, String>, config: Config.ModelConfig, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>, credentials: RuntimeCredentials.RuntimeCredentials) -> ModelRuntime:
+def assembled(composition: Composition, builtins: List<&2, String>, config: Config.ModelConfig, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>, credentials: RuntimeCredentials.RuntimeCredentials, refreshWork: Ref.Ref<RefreshWork>) -> ModelRuntime:
   match composition:
-    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), builtins, config, List.reverse(&2, String, errors), retained, models, catalog, storeState, extensions, sharedRefresh, availability, credentials}
+    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), builtins, config, List.reverse(&2, String, errors), retained, models, catalog, storeState, extensions, sharedRefresh, availability, credentials, refreshWork}
 
 def unknownProvider(id: String) -> Resolve.ModelsError:
   Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ id}
@@ -200,13 +210,13 @@ def unknownProvider(id: String) -> Resolve.ModelsError:
 
 def modelsOf(runtime: ModelRuntime) -> AiModels.Models:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, models, _, _, _, _, _, _}: models
+    case ModelRuntime{_, _, _, _, _, models, _, _, _, _, _, _, _}: models
 
 def credentialsOf(runtime: ModelRuntime) -> Auth.CredentialStore: AiModels.credentialsOf(modelsOf(runtime))
 
 def runtimeCredentialsOf(runtime: ModelRuntime) -> RuntimeCredentials.RuntimeCredentials:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, _, _, _, _, credentials}: credentials
+    case ModelRuntime{_, _, _, _, _, _, _, _, _, _, _, credentials, _}: credentials
 
 def contextOf(runtime: ModelRuntime) -> Auth.AuthContext: AiModels.authContextOf(modelsOf(runtime))
 
@@ -214,7 +224,7 @@ def storeOf(runtime: ModelRuntime) -> Store.ModelsStore: AiModels.modelsStoreOf(
 
 def catalogRef(runtime: ModelRuntime) -> Ref.Ref<Catalog>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, catalog, _, _, _, _, _}: catalog
+    case ModelRuntime{_, _, _, _, _, _, catalog, _, _, _, _, _, _}: catalog
 
 def readCatalog(runtime: ModelRuntime) -> IO(Catalog):
   Ref.read(Catalog, catalogRef(runtime))
@@ -250,7 +260,7 @@ def nativesOf(catalog: Catalog) -> List<&2, AiModels.Provider>:
 
 def providersWith(runtime: ModelRuntime, +natives: List<&2, AiModels.Provider>) -> List<&2, AiModels.Provider>:
   match runtime:
-    case ModelRuntime{providers, builtins, _, _, _, _, _, _, _, _, _, _}: effectiveProviders(providers, builtins, natives)
+    case ModelRuntime{providers, builtins, _, _, _, _, _, _, _, _, _, _, _}: effectiveProviders(providers, builtins, natives)
 
 # upstream rebuildProviders on the collection after the provider of `changed`
 # was registered, replaced or removed.
@@ -281,7 +291,7 @@ def getAuth(+runtime: ModelRuntime, +id: String, overrides: Resolve.AuthResoluti
 
 def getModelConfig(runtime: ModelRuntime) -> Config.ModelConfig:
   match runtime:
-    case ModelRuntime{_, _, config, _, _, _, _, _, _, _, _, _}: config
+    case ModelRuntime{_, _, config, _, _, _, _, _, _, _, _, _, _}: config
 
 def checkFailure(result: AiModels.CheckResult()) -> Result<&2, &2, String, Maybe<&2, Auth.AuthCheck>>:
   match result:
@@ -495,7 +505,7 @@ def disposeApiStreamsOf(streams: Maybe<&2, Composer.ProviderStream()>) -> IO(Uni
 
 def extensionsRef(runtime: ModelRuntime) -> Ref.Ref<ExtensionState>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, _, extensions, _, _, _}: extensions
+    case ModelRuntime{_, _, _, _, _, _, _, _, extensions, _, _, _, _}: extensions
 
 def entryId(entry: ExtensionEntry) -> String:
   match entry:
@@ -520,7 +530,7 @@ def joinedErrors(configError: Maybe<&2, String>, errors: List<&2, String>) -> Ma
 
 def availabilityRef(runtime: ModelRuntime) -> Ref.Ref<AvailabilityStatus>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, _, _, _, availability, _}: availability
+    case ModelRuntime{_, _, _, _, _, _, _, _, _, _, availability, _, _}: availability
 
 def errorWithAvailability(base: Maybe<&2, String>, status: AvailabilityStatus) -> Maybe<&2, String>:
   match status base:
@@ -530,7 +540,7 @@ def errorWithAvailability(base: Maybe<&2, String>, status: AvailabilityStatus) -
 
 def getError(runtime: ModelRuntime) -> IO(Maybe<&2, String>):
   match runtime:
-    case ModelRuntime{_, _, config, errors, _, _, _, _, _, _, availability, _}:
+    case ModelRuntime{_, _, config, errors, _, _, _, _, _, _, availability, _, _}:
       do IO<Maybe<&2, String>>:
         status : AvailabilityStatus <- Ref.read(AvailabilityStatus, availability)
         return errorWithAvailability(joinedErrors(Config.getError(config), errors), status)
@@ -583,7 +593,7 @@ def getModel(+runtime: ModelRuntime, +provider: String, +id: String) -> IO(Maybe
 
 def baseModels(runtime: ModelRuntime) -> List<&2, Model()>:
   match runtime:
-    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _, _, _}: allModels(providers)
+    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _, _, _, _}: allModels(providers)
 
 # Auth
 # ----
@@ -1431,7 +1441,52 @@ def admitRefresh(state: SharedRefresh, +candidate: Abort.AbortController<Unit>, 
 
 def sharedRef(runtime: ModelRuntime) -> Ref.Ref<SharedRefresh>:
   match runtime:
-    case ModelRuntime{_,_,_,_,_,_,_,_,_,sharedRefresh,_, _}: sharedRefresh
+    case ModelRuntime{_,_,_,_,_,_,_,_,_,sharedRefresh,_, _, _}: sharedRefresh
+
+def workRef(runtime: ModelRuntime) -> Ref.Ref<RefreshWork>:
+  match runtime:
+    case ModelRuntime{_,_,_,_,_,_,_,_,_,_,_,_,work}: work
+
+def workStarted(state: RefreshWork) -> RefreshWork & Bool:
+  match state:
+    case RefreshWork{running,True{},drained}: (RefreshWork{running,True{},drained},False{})
+    case RefreshWork{running,False{},drained}: (RefreshWork{running + 1n,False{},drained},True{})
+
+def workFinished(state: RefreshWork) -> RefreshWork & Bool:
+  match state:
+    case RefreshWork{0n,closing,drained}: (RefreshWork{0n,closing,drained},False{})
+    case RefreshWork{1n,+closing,drained}: (RefreshWork{0n,closing,drained},closing)
+    case RefreshWork{1n+(more),closing,drained}: (RefreshWork{more,closing,drained},False{})
+
+def drainedOf(state: RefreshWork) -> Deferred.Deferred<Unit>:
+  match state:
+    case RefreshWork{_,_,drained}: drained
+
+def resolveWorkDrain(work: Ref.Ref<RefreshWork>,ready: Bool) -> IO(Unit):
+  match ready:
+    case False{}: IO.pure(Unit,Unit{})
+    case True{}:
+      do IO<Unit>:
+        state : RefreshWork <- Ref.read(RefreshWork,work)
+        settled : Bool <- Deferred.resolve(Unit,drainedOf(state),Unit{})
+        return Unit{}
+
+def workLeft(+work: Ref.Ref<RefreshWork>) -> IO(Unit):
+  do IO<Unit>:
+    ready : Bool <- Ref.modify(RefreshWork,Bool,work,workFinished)
+    resolveWorkDrain(work,ready)
+
+def workClosing(state: RefreshWork) -> RefreshWork & Bool:
+  match state:
+    case RefreshWork{+running,_,drained}: (RefreshWork{running,True{},drained},Nat.is_eq(running,0n))
+
+def closeRefreshWork(+work: Ref.Ref<RefreshWork>,ready: Bool) -> IO(Unit):
+  do IO<Unit>:
+    resolveWorkDrain(work,ready)
+    state : RefreshWork <- Ref.read(RefreshWork,work)
+    finished : Unit <- Deferred.result(Unit,drainedOf(state))
+    previous : RefreshWork <- Ref.dispose(RefreshWork,work)
+    Deferred.dispose(Unit,drainedOf(previous))
 
 type RefreshDeparture is Data:
   StillWaiting{}
@@ -1479,13 +1534,11 @@ def retireRefresh(state: Ref.Ref<SharedRefresh>, action: RefreshDeparture) -> IO
       do IO<Unit>:
         stopped : Bool <- Abort.abort(Unit,controller,None{})
         return Unit{}
-    case RetireRequest{controller,result,close}:
+    case RetireRequest{controller,result,_}:
       do IO<Unit>:
         Abort.dispose(Unit,controller)
         Deferred.dispose(ModelsRefreshResult,result)
-        Bool.pick(Unit -> IO(Unit),close,_ => do IO<Unit>:
-          previous : SharedRefresh <- Ref.dispose(SharedRefresh,state)
-          return Unit{},_ => IO.pure(Unit,Unit{}))(Unit{})
+        return Unit{}
 
 def retireOptionalRefresh(state: Ref.Ref<SharedRefresh>, action: Maybe<&1,RefreshDeparture>) -> IO(Unit):
   match action:
@@ -1517,6 +1570,7 @@ def performSharedRefresh(+runtime: ModelRuntime, id: Nat, +controller: Abort.Abo
     value : ModelsRefreshResult <- refresh(runtime,ModelsRefreshOptions{None{},None{},None{},Some{Abort.signal(Unit,controller)}})
     settled : Bool <- Deferred.resolve(ModelsRefreshResult,result,value)
     completedRefresh(sharedRef(runtime),id,controller,result)
+    workLeft(workRef(runtime))
 
 type RefreshArrival is Data:
   RefreshSucceeded{result: ModelsRefreshResult}
@@ -1593,11 +1647,13 @@ def beginSharedRefresh(+runtime: ModelRuntime, admission: SharedAdmission, signa
         Deferred.dispose(ModelsRefreshResult,unusedResult)
         value : ModelsRefreshResult <- awaitSharedRefresh(result,signal)
         releaseRefresh(sharedRef(runtime),id)
+        workLeft(workRef(runtime))
         return value
     case ClosedRefresh{unusedController,unusedResult}:
       do IO<ModelsRefreshResult>:
         Abort.dispose(Unit,unusedController)
         Deferred.dispose(ModelsRefreshResult,unusedResult)
+        workLeft(workRef(runtime))
         return cancelledRefresh()
 
 def sharedSignalAborted(signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(Bool):
@@ -1611,10 +1667,14 @@ def refreshShared(+runtime: ModelRuntime, +signal: Maybe<&2,Abort.AbortSignal<Un
     Bool.pick(Unit -> IO(ModelsRefreshResult),callerAborted,
       _ => IO.pure(ModelsRefreshResult,cancelledRefresh()),
       _ => do IO<ModelsRefreshResult>:
-        controller : Abort.AbortController<Unit> <- Abort.new(Unit)
-        result : Deferred.Deferred<ModelsRefreshResult> <- Deferred.new(ModelsRefreshResult)
-        admission : SharedAdmission <- Ref.modify(SharedRefresh,SharedAdmission,sharedRef(runtime),state => admitRefresh(state,controller,result))
-        beginSharedRefresh(runtime,admission,signal))(Unit{})
+        leased : Bool <- Ref.modify(RefreshWork,Bool,workRef(runtime),workStarted)
+        Bool.pick(Unit -> IO(ModelsRefreshResult),leased,
+          _ => do IO<ModelsRefreshResult>:
+            controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+            result : Deferred.Deferred<ModelsRefreshResult> <- Deferred.new(ModelsRefreshResult)
+            admission : SharedAdmission <- Ref.modify(SharedRefresh,SharedAdmission,sharedRef(runtime),state => admitRefresh(state,controller,result))
+            beginSharedRefresh(runtime,admission,signal),
+          _ => IO.pure(ModelsRefreshResult,cancelledRefresh()))(Unit{}))(Unit{})
 
 def closingRefresh(state: SharedRefresh) -> SharedRefresh & Maybe<&2,Abort.AbortController<Unit>>:
   match state:
@@ -1629,25 +1689,26 @@ def closeShared(state: Ref.Ref<SharedRefresh>, pending: Maybe<&2,Abort.AbortCont
       do IO<Unit>:
         stopped : Bool <- Abort.abort(Unit,controller,None{})
         return Unit{}
-    case None{}:
-      do IO<Unit>:
-        previous : SharedRefresh <- Ref.dispose(SharedRefresh,state)
-        return Unit{}
+    case None{}: IO.pure(Unit,Unit{})
 
 # Extension providers stay with the extensions that registered them; the
 # auth callbacks a config registration's composition created go with the
 # runtime. The api stream belongs to whoever installed it.
 
-def disposeSharedRefresh(+state: Ref.Ref<SharedRefresh>) -> IO(Unit):
+def disposeSharedRefresh(+state: Ref.Ref<SharedRefresh>,+work: Ref.Ref<RefreshWork>) -> IO(Unit):
   do IO<Unit>:
+    ready : Bool <- Ref.modify(RefreshWork,Bool,work,workClosing)
     pending : Maybe<&2,Abort.AbortController<Unit>> <- Ref.modify(SharedRefresh,Maybe<&2,Abort.AbortController<Unit>>,state,closingRefresh)
     closeShared(state,pending)
+    closeRefreshWork(work,ready)
+    previous : SharedRefresh <- Ref.dispose(SharedRefresh,state)
+    return Unit{}
 
 def dispose(runtime: ModelRuntime) -> IO(Unit):
   match runtime:
-    case ModelRuntime{providers, _, _, _, retained, +models, catalog, storeState, extensions, sharedRefresh, availability, credentials}:
+    case ModelRuntime{providers, _, _, _, retained, +models, catalog, storeState, extensions, sharedRefresh, availability, credentials, refreshWork}:
       do IO<Unit>:
-        disposeSharedRefresh(sharedRefresh)
+        disposeSharedRefresh(sharedRefresh,refreshWork)
         +registered : ExtensionState <- Ref.dispose(ExtensionState, extensions)
         disposeEntries(extensionEntries(registered))
         disposeApiStreamsOf(apiStreamsOf(registered))
@@ -1731,7 +1792,7 @@ def configOf(entry: Maybe<&2, ExtensionEntry>) -> Composer.ProviderConfigInput:
 
 def baseProvider(runtime: ModelRuntime, +id: String) -> Maybe<&2, AiModels.Provider>:
   match runtime:
-    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _, _, _}: findProvider(providers, id)
+    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _, _, _, _}: findProvider(providers, id)
 
 def maybeProviderAuth(provider: Maybe<&2, AiModels.Provider>) -> Auth.ProviderAuth:
   match provider:
@@ -2114,8 +2175,9 @@ def fromProvidersWithStore(+providers: List<&2, AiModels.Provider>, credentials:
     AiModels.rebuildProviders(models, providers, Nil{})
     extensions : Ref.Ref<ExtensionState> <- Ref.new(ExtensionState, emptyExtensions())
     sharedRefresh : Ref.Ref<SharedRefresh> <- Ref.new(SharedRefresh, RefreshIdle{0n})
+    refreshWork : Ref.Ref<RefreshWork> <- newRefreshWork()
     availability : Ref.Ref<AvailabilityStatus> <- Ref.new(AvailabilityStatus, AvailabilityStatus{0n, None{}})
-    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, builtinIds(providers), Config.empty(), Nil{}, Nil{}, models, catalog, storeState, extensions, sharedRefresh, availability, runtimeCredentials})
+    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, builtinIds(providers), Config.empty(), Nil{}, Nil{}, models, catalog, storeState, extensions, sharedRefresh, availability, runtimeCredentials, refreshWork})
     refreshAvailability(runtime)
     return runtime
 
@@ -2154,8 +2216,9 @@ def assembledWith(composition: Composition, builtins: List<&2, String>, credenti
         models : AiModels.Models <- AiModels.createModels(AiModels.CreateModelsOptions{Some{credentialStore}, Some{store}, Some{context}})
         extensions : Ref.Ref<ExtensionState> <- Ref.new(ExtensionState, emptyExtensions())
         sharedRefresh : Ref.Ref<SharedRefresh> <- Ref.new(SharedRefresh, RefreshIdle{0n})
+        refreshWork : Ref.Ref<RefreshWork> <- newRefreshWork()
         availability : Ref.Ref<AvailabilityStatus> <- Ref.new(AvailabilityStatus, AvailabilityStatus{0n, None{}})
-        +runtime : ModelRuntime <- IO.pure(ModelRuntime, assembled(composition, builtins, config, models, catalog, storeState, extensions, sharedRefresh, availability, runtimeCredentials))
+        +runtime : ModelRuntime <- IO.pure(ModelRuntime, assembled(composition, builtins, config, models, catalog, storeState, extensions, sharedRefresh, availability, runtimeCredentials, refreshWork))
         rebuildCollection(runtime, Nil{})
         return runtime
 

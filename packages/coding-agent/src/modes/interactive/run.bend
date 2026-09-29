@@ -497,13 +497,6 @@ def usageNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.
   match event:
     case Session.EntryAppended{Tree.UsageEntry{_,kind,_,_,spent,note}}: Bool.pick(Unit -> IO(Unit),String.eq(kind,"cache_warm"),_ => cacheWarmNotice(transcript,redraw,session,note,spent),_ => IO.pure(Unit,Unit{}))(Unit{})
     case _: IO.pure(Unit,Unit{})
-def structuralResult(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,result: Result<&2,&2,Tree.Error,List<&2,Session.Message()>>) -> IO(Unit):
-  match result:
-    case Fail{_}: IO.pure(Unit,Unit{})
-    case Done{messages}:
-      do IO<Unit>:
-        Transcript.seedSession(transcript,messages)
-        Interactive.requestRender(redraw)
 def summaryCostText(kind: String,spent: Ai.Usage) -> String:
   match spent:
     case Ai.Usage{input,output,read,write,_,_,_,Ai.UsageCost{_,_,_,_,+cost}}:
@@ -515,24 +508,42 @@ def summaryCostNotice(show: Bool,transcript: Transcript.Handle,entry: Tree.Sessi
     case True{} Tree.Compaction{Tree.CompactionEntry{_,_,_,_,_,Some{spent},_,_}}: Transcript.warningNotice(transcript,summaryCostText("Compaction",spent))
     case True{} Tree.BranchSummaryEntry{_,_,_,_,Some{spent},_}: Transcript.warningNotice(transcript,summaryCostText("Branch summary",spent))
     case _ _: IO.pure(Unit,Unit{})
-def structuralEntry(+transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,showCost: Bool,+entry: Tree.SessionEntry<Unit,Tools.ToolDetails,Schema.Value>) -> IO(Unit):
-  do IO<Unit>:
-    structuralResult(transcript,redraw,Tree.sessionEntryToContextMessages(Unit,Tools.ToolDetails,Schema.Value,entry))
-    summaryCostNotice(showCost,transcript,entry)
-def seedContextEntries(entries: List<&2,Session.Entry()>,+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+showCost: Bool) -> IO(Unit):
+def structuralResultWithCost(+transcript: Transcript.Handle,showCost: Bool,entry: Tree.SessionEntry<Unit,Tools.ToolDetails,Schema.Value>,result: Result<&2,&2,Tree.Error,List<&2,Session.Message()>>) -> IO(Unit):
+  match result:
+    case Fail{_}: IO.pure(Unit,Unit{})
+    case Done{messages}:
+      do IO<Unit>:
+        Transcript.seedSession(transcript,messages)
+        summaryCostNotice(showCost,transcript,entry)
+def structuralEntry(+transcript: Transcript.Handle,showCost: Bool,+entry: Tree.SessionEntry<Unit,Tools.ToolDetails,Schema.Value>) -> IO(Unit):
+  structuralResultWithCost(transcript,showCost,entry,Tree.sessionEntryToContextMessages(Unit,Tools.ToolDetails,Schema.Value,entry))
+def seedContextEntries(entries: List<&2,Session.Entry()>,+transcript: Transcript.Handle,+showCost: Bool) -> IO(Unit):
   match entries:
     case Nil{}: IO.pure(Unit,Unit{})
     case entry <> rest:
       do IO<Unit>:
-        structuralEntry(transcript,redraw,showCost,entry)
-        seedContextEntries(rest,transcript,redraw,showCost)
+        structuralEntry(transcript,showCost,entry)
+        seedContextEntries(rest,transcript,showCost)
+def seedStoredEntries(+transcript: Transcript.Handle,messages: List<&2,Session.Message()>,result: Result<&2,&2,Tree.Error,List<&2,Session.Entry()>>) -> IO(Unit):
+  match result:
+    case Done{entries}: seedContextEntries(entries,transcript,True{})
+    case Fail{_}: Transcript.seedSession(transcript,messages)
+def seedStoredTranscript(+transcript: Transcript.Handle,+session: Session.AgentSession,+messages: List<&2,Session.Message()>) -> IO(Unit):
+  do IO<Unit>:
+    settings : Settings.SettingsManager <- Session.getSettings(session)
+    Bool.pick(Unit -> IO(Unit),Settings.getShowCacheMissNotices(settings),
+      _ => do IO<Unit>:
+        current : Session.Session() <- Session.sessionOf(session)
+        seedStoredEntries(transcript,messages,Tree.sessionContextEntries(Unit,Tools.ToolDetails,Schema.Value,Persistence.stateOf(Unit,Tools.ToolDetails,Schema.Value,current))),
+      _ => Transcript.seedSession(transcript,messages))(Unit{})
 def compactedTranscript(result: Result<&2,&2,Tree.Error,List<&2,Session.Entry()>>,+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+showCost: Bool) -> IO(Unit):
   match result:
     case Done{Tree.Compaction{entry} <> retained}:
       do IO<Unit>:
         Transcript.clear(transcript)
-        seedContextEntries(retained,transcript,redraw,showCost)
-        structuralEntry(transcript,redraw,showCost,Tree.Compaction{entry})
+        seedContextEntries(retained,transcript,showCost)
+        structuralEntry(transcript,showCost,Tree.Compaction{entry})
+        Interactive.requestRender(redraw)
     case _: Transcript.showError(transcript,"Completed compaction is missing from the session context")
 def compactionNotice(+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:
@@ -555,7 +566,8 @@ def structuralCurrent(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Cal
   do IO<Unit>:
     live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     settings : Settings.SettingsManager <- Session.getSettings(live)
-    structuralEntry(transcript,redraw,Settings.getShowCacheMissNotices(settings),entry)
+    structuralEntry(transcript,Settings.getShowCacheMissNotices(settings),entry)
+    Interactive.requestRender(redraw)
 def structuralNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:
     case Session.EntryAppended{Tree.Compaction{entry}}: structuralCurrent(transcript,redraw,session,Tree.Compaction{entry})
@@ -1341,7 +1353,7 @@ def reloadResult(+transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,
       do IO<Unit>:
         messages : List<&2,Session.Message()> <- Session.messages(session)
         Transcript.clear(transcript)
-        Transcript.seedSession(transcript,messages)
+        seedStoredTranscript(transcript,session,messages)
         reloadListed(header,session)
         saved : Bool <- maybeSaveImplicitTrust(trust,cwd,session,transcript)
         Transcript.status(transcript,"Reloaded keybindings, extensions, skills, prompts, themes, and context files" ++ Bool.pick(String,saved,"; saved project trust",""))
@@ -2162,7 +2174,7 @@ def refreshSelection(sink: SelectionSink,result: Controller.SelectionResult) -> 
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         +messages : List<&2,Session.Message()> <- Session.messages(live)
         Transcript.clear(transcript)
-        Transcript.seedSession(transcript,messages)
+        seedStoredTranscript(transcript,live,messages)
         agentState : Session.AgentState() <- Session.state(live)
         settings : Settings.SettingsManager <- Session.getSettings(live)
         initialFooterState : Footer.State <- initialSessionFooter(live,agentState,messages,cwd,home,Settings.getCompactionEnabled(settings))
@@ -2656,7 +2668,7 @@ def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
         Transcript.setToolCwd(transcript,Tree.getCwd(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored)))
         +settings : Settings.SettingsManager <- Session.getSettings(session)
         Transcript.setHideThinking(transcript,Settings.getHideThinkingBlock(settings))
-        Transcript.seedSession(transcript,messages)
+        seedStoredTranscript(transcript,session,messages)
         state : Session.AgentState() <- Session.state(session)
         initialFooterState : Footer.State <- initialSessionFooter(session,state,messages,cwd,home,Settings.getCompactionEnabled(settings))
         Ref.write(Footer.State,footerRef,initialFooterState)
@@ -2899,12 +2911,11 @@ def initializeApplication(failure: Interactive.StatusSink,first: Bool,managed: M
         renderers : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(live)
         Transcript.setExtensions(transcript,renderers)
         existing : List<&2,Session.Message()> <- Session.messages(live)
-        Transcript.seedSession(transcript,existing)
+        seedStoredTranscript(transcript,live,existing)
         startAutocomplete(interaction,session,files)
         Interactive.maybeWarnAboutAnthropicSubscriptionAuth(failure,live)
         startupProjectTrustWarning(transcript,session)
         startupChangelog(transcript,session,builtinDir)
-        Ref.modify(StartupState,Unit,workingReady(workingOf(interaction)),enableStartup)
         # upstream init: once startup is rendered, register the remaining
         # highlight.js languages, then invalidate and render again.
         SyntaxHighlight.loadAllHighlightLanguages(highlighter)
@@ -2958,6 +2969,9 @@ def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & T
         Transcript.invalidate(transcript)
         Callback.call(Unit,Unit,render,Unit{})
         startInput(handle,redraw,queue,initial,failure,render)
+        Bool.pick(Unit -> IO(Unit),first,
+          _ => Ref.modify(StartupState,Unit,workingReady(workingOf(interaction)),enableStartup),
+          _ => IO.pure(Unit,Unit{}))(Unit{})
     case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         Callback.dispose(Unit,Unit,render)

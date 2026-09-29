@@ -17,13 +17,17 @@ BINARY = Path(os.environ.get("PI_BEND_CLI", ROOT / "build/pi-cli")).resolve()
 
 with tempfile.TemporaryDirectory(prefix="pi-resumed-messages-") as directory:
     project = Path(directory)
+    agent_dir = project / "agent"
+    agent_dir.mkdir()
+    (agent_dir / "settings.json").write_text(json.dumps({"showCacheMissNotices": True}))
     session = project / "session.jsonl"
     stamp = "2026-01-01T00:00:00.000Z"
+    usage = {"input": 10, "output": 20, "cacheRead": 30, "cacheWrite": 40, "totalTokens": 100, "cost": {"input": 0.01, "output": 0.02, "cacheRead": 0.03, "cacheWrite": 0.065, "total": 0.125}}
     entries = [
         {"type": "session", "version": 3, "id": "structural", "timestamp": stamp, "cwd": str(project)},
         {"type": "message", "id": "u1", "parentId": None, "timestamp": stamp, "message": {"role": "user", "content": "original prompt", "timestamp": 1}},
-        {"type": "compaction", "id": "c1", "parentId": "u1", "timestamp": stamp, "summary": "Earlier plan", "firstKeptEntryId": "u1", "tokensBefore": 1200},
-        {"type": "branch_summary", "id": "b1", "parentId": "c1", "timestamp": stamp, "fromId": "u1", "summary": "Alternative path"},
+        {"type": "compaction", "id": "c1", "parentId": "u1", "timestamp": stamp, "summary": "Earlier plan", "firstKeptEntryId": "u1", "tokensBefore": 1200, "usage": usage},
+        {"type": "branch_summary", "id": "b1", "parentId": "c1", "timestamp": stamp, "fromId": "u1", "summary": "Alternative path", "usage": usage},
         {"type": "custom_message", "id": "m1", "parentId": "b1", "timestamp": stamp, "customType": "notice", "content": "Visible extension note", "display": True},
         {"type": "custom_message", "id": "m2", "parentId": "m1", "timestamp": stamp, "customType": "private", "content": "Hidden extension note", "display": False},
         {"type": "message", "id": "u2", "parentId": "m2", "timestamp": stamp, "message": {"role": "user", "content": '<skill name="example-skill" location="/tmp/example-skill.md">\nskill details\n</skill>\n\nPlease proceed', "timestamp": 2}},
@@ -34,7 +38,7 @@ with tempfile.TemporaryDirectory(prefix="pi-resumed-messages-") as directory:
     process = subprocess.Popen(
         [str(BINARY), "--no-tools", "--session", str(session)], cwd=project,
         stdin=slave, stdout=slave, stderr=subprocess.PIPE,
-        env={**os.environ, "TERM": "xterm-256color", "BEND_THREADS": "1"},
+        env={**os.environ, "TERM": "xterm-256color", "BEND_THREADS": os.environ.get("BEND_THREADS", "1"), "PI_CODING_AGENT_DIR": str(agent_dir)},
     )
     screen = bytearray()
 
@@ -52,7 +56,9 @@ with tempfile.TemporaryDirectory(prefix="pi-resumed-messages-") as directory:
 
     try:
         until(b"[compaction]")
+        until(b"Compaction: 100 tokens billed (~$0.13)")
         until(b"[branch]")
+        until(b"Branch summary: 100 tokens billed (~$0.13)")
         until(b"Visible extension note")
         until(b"[skill]")
         until(b"Please proceed")

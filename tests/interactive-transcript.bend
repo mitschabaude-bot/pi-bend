@@ -103,6 +103,10 @@ def compactionCostNotices(+handle: Transcript.Handle,+document: Component.Compon
     Run.summaryCostNotice(True{},handle,branchCostEntry())
     branch : List<&2,String> <- Component.render(document,80n)
     check(orderedRows(branch,"branch summary","Branch summary: 100 tokens billed (~$0.13)"),"branch cost was not shown after its summary")
+    Transcript.clear(handle)
+    Run.seedContextEntries(compactionCostEntry() <> branchCostEntry() <> Nil{},handle,True{})
+    +restored : List<&2,String> <- Component.render(document,80n)
+    check(orderedRows(restored,"[compaction]","Compaction: 100 tokens billed (~$0.13)") && orderedRows(restored,"Compaction: 100 tokens billed (~$0.13)","[branch]") && orderedRows(restored,"[branch]","Branch summary: 100 tokens billed (~$0.13)"),"restored summary costs lost their entry order")
 def repeatedLines(count: Nat) -> String:
   match count:
     case Zero{}: ""

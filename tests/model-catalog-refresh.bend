@@ -167,8 +167,41 @@ def abandonedRefresh() -> IO(Unit):
     Abort.dispose(Unit,b)
     Runtime.dispose(r)
 
+def closingWork(state: Runtime.RefreshWork) -> Bool:
+  match state:
+    case Runtime.RefreshWork{1n,True{},_}: True{}
+    case _: False{}
+
+def waitForClosing(+runtime: Runtime.ModelRuntime,remaining: Nat) -> IO(Unit):
+  match remaining:
+    case 0n: IO.die(Unit,1,"runtime disposal did not wait for the refresh worker")
+    case 1n+(rest):
+      do IO<Unit>:
+        state : Runtime.RefreshWork <- Ref.read(Runtime.RefreshWork,Runtime.workRef(runtime))
+        Bool.pick(Unit -> IO(Unit),closingWork(state),_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
+          IO.sleep(1)
+          waitForClosing(runtime,rest))(Unit{})
+
+def detachedRefreshJoinsBeforeDisposal() -> IO(Unit):
+  do IO<Unit>:
+    +g : Gate <- gate()
+    +r : Runtime.ModelRuntime <- runtime(g)
+    +caller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    request : Chan(Runtime.ModelsRefreshResult) <- IO.fork(Runtime.ModelsRefreshResult,sharedCall(r,caller))
+    waitStarted(g)
+    stopped : Bool <- Abort.abort(Unit,caller,None{})
+    returned : Runtime.ModelsRefreshResult <- IO.join(Runtime.ModelsRefreshResult,request)
+    check(aborted(returned),"caller can leave while provider refresh is blocked")
+    closing : Chan(Unit) <- IO.fork(Unit,Runtime.dispose(r))
+    waitForClosing(r,1000n)
+    releaseOne(g)
+    IO.join(Unit,closing)
+    Abort.dispose(Unit,caller)
+    check(True{},"runtime disposal joins a detached provider refresh")
+
 def main() -> IO(Unit):
   do IO<Unit>:
     sharedBetweenCallers()
     independentCancellation()
     abandonedRefresh()
+    detachedRefreshJoinsBeforeDisposal()

@@ -3191,10 +3191,11 @@
       "source": "packages/coding-agent/test/interactive-mode-compaction.test.ts",
       "status": "partial",
       "ports": [
-        "tests/interactive-transcript.bend"
+        "tests/interactive-transcript.bend",
+        "tests/interactive_resumed_messages_check.py"
       ],
       "sha256": "ef2a9834d3166ad4a7b124dd8fb3c0edcf1892305ebd8bb739a81a20674cab6e",
-      "notes": "Rendered native transcript checks cover gated compaction and branch-summary billed-cost notices after their summaries. Live entry and compaction-end event paths now derive notices from persisted usage. Restored-session notice ordering, queued steering after compaction, abort routing and the turn-start working-state assertion remain to be validated against this suite."
+      "notes": "Rendered native transcript and mounted resumed-session checks cover gated compaction and branch-summary billed-cost notices immediately after their summaries, including persisted usage and entry ordering. Live entry and compaction-end event paths derive notices from the same usage. Queued steering after compaction, abort routing and the turn-start working-state assertion remain to be validated against this suite."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-import-command.test.ts",
@@ -3318,7 +3319,7 @@
         "tests/model-catalog-refresh.bend"
       ],
       "sha256": "ccac28bd3496b8500603b49fc8b99139ee87e32dac6c0fb0c6ad0df5315c248a",
-      "notes": "Three upstream concurrency contracts run against a real ModelRuntime: shared refresh, independent cancellation, and a new request after the last waiter leaves. Bun and native one/four threads."
+      "notes": "Three upstream concurrency contracts run against a real ModelRuntime: shared refresh, independent cancellation, and a new request after the last waiter leaves. A supplemental blocked-provider case checks that runtime disposal waits for a detached refresh worker after its caller cancels. Native one/four threads."
     },
     {
       "source": "packages/coding-agent/test/model-registry.test.ts",
