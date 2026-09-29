@@ -3752,9 +3752,12 @@
     },
     {
       "source": "packages/coding-agent/test/session-id-readonly.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "50f752ad090840021931668d4f8554620170980ee5cf103064c138be70a55b0d"
+      "status": "partial",
+      "ports": [
+        "tests/session_id_readonly_check.py"
+      ],
+      "sha256": "50f752ad090840021931668d4f8554620170980ee5cf103064c138be70a55b0d",
+      "notes": "End-to-end CLI parity against pinned pi checks metadata-only IDs, missing-ID warnings without persistence, reopening a renamed exact-ID file, selection beside a large unrelated transcript, cwd filtering in a custom session directory, and rejection of an existing fork target on native one/four threads. Direct in-process createSessionManager identity/file checks and the spy proving list() is never called remain unported."
     },
     {
       "source": "packages/coding-agent/test/session-info-modified-timestamp.test.ts",
