@@ -599,7 +599,7 @@
       "port_sha256": {
         "packages/coding-agent/src/core/session-manager.bend": "66905475905747fb9c53670f213967704ee46c3ed9020e2144a0ebbd9da56158",
         "packages/coding-agent/src/core/session-json.bend": "c8fda396275c2508b582e12595455f473f61775dfd9c8369ed14de89730ca3de",
-        "packages/coding-agent/src/core/session-persistence.bend": "3e9ef4acc8fece5151c10b2b86950b6224ca0bff344f8f5a9107b2846f71934d"
+        "packages/coding-agent/src/core/session-persistence.bend": "9638fa731507914504aa4609d4ee32026678b1c01c21397c2ca96ef44f3e30db"
       },
       "ports": [
         "packages/coding-agent/src/core/session-manager.bend",
@@ -715,7 +715,7 @@
         "packages/coding-agent/src/modes/interactive/components/messages.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef"
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "dd3155f5644e4079553a637b05cbb2fe92974f658a6a3a4a6d8b4abea0b83c39"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/branch-summary-message.ts": {
@@ -727,7 +727,7 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "dd3155f5644e4079553a637b05cbb2fe92974f658a6a3a4a6d8b4abea0b83c39",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "b618f69139d39b47455130bac5d5d8dda47b81c98579dd746966a91d8eab1adc"
       }
     },
@@ -740,7 +740,7 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "dd3155f5644e4079553a637b05cbb2fe92974f658a6a3a4a6d8b4abea0b83c39",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "b618f69139d39b47455130bac5d5d8dda47b81c98579dd746966a91d8eab1adc"
       }
     },
@@ -766,7 +766,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/custom-message.bend": "f74a748b5a4b8c898330f9bdf54ed3f6582eb407adcce385d325c51a7e2e5006",
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "dd3155f5644e4079553a637b05cbb2fe92974f658a6a3a4a6d8b4abea0b83c39",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "b618f69139d39b47455130bac5d5d8dda47b81c98579dd746966a91d8eab1adc"
       }
     },
@@ -875,7 +875,7 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "67d34595a9a662954beb03607f83d05f1e630873f875fc79b79cdd3e971595ef",
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "dd3155f5644e4079553a637b05cbb2fe92974f658a6a3a4a6d8b4abea0b83c39",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "b618f69139d39b47455130bac5d5d8dda47b81c98579dd746966a91d8eab1adc"
       }
     },
@@ -962,7 +962,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "5099c0ab0b4364078255041699de6de5ecb8fec1ebb58be6324fedd3a3ff81b9",
         "packages/coding-agent/src/modes/interactive/commands.bend": "dc44029e5b58c1710514d951bf85e9ea822ab11553590fb4fae0a403effba086",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
-        "packages/coding-agent/src/main.bend": "e7086ca1107357942a5d0e418191dfb8f534640aa1c270fad42ac3f82bdd1eae",
+        "packages/coding-agent/src/main.bend": "70d1c97c03e87971779a16eb708a5a0b9f8f7211332f8322dbb7cad28717eb34",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "ff72310bcc000f7ed6274992caafa10187665e58a7f4ed28b6f93a8b2faa0445",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "b618f69139d39b47455130bac5d5d8dda47b81c98579dd746966a91d8eab1adc",
@@ -1553,7 +1553,7 @@
         "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
         "packages/coding-agent/src/core/agent-runtime.bend": "d3602be64b905faa253cc7f9404040db59c5a53582638b6eed655933822f364b",
-        "packages/coding-agent/src/main.bend": "e7086ca1107357942a5d0e418191dfb8f534640aa1c270fad42ac3f82bdd1eae"
+        "packages/coding-agent/src/main.bend": "70d1c97c03e87971779a16eb708a5a0b9f8f7211332f8322dbb7cad28717eb34"
       }
     },
     "packages/coding-agent/src/core/crash-log.ts": {
@@ -1755,7 +1755,7 @@
         "packages/coding-agent/src/core/agent-runtime.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/main.bend": "e7086ca1107357942a5d0e418191dfb8f534640aa1c270fad42ac3f82bdd1eae",
+        "packages/coding-agent/src/main.bend": "70d1c97c03e87971779a16eb708a5a0b9f8f7211332f8322dbb7cad28717eb34",
         "packages/coding-agent/src/extensions/index.bend": "cac66e23a500ff2bbd041ab89114ad74c7fc09a599fbb4d982dbc77bf502d3d8",
         "packages/coding-agent/src/core/agent-runtime.bend": "d3602be64b905faa253cc7f9404040db59c5a53582638b6eed655933822f364b"
       }
