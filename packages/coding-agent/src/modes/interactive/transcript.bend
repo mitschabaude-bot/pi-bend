@@ -134,6 +134,9 @@ def warningAppended(state: State,message: String,label: Bool) -> IO(State & Unit
 def showWarning(handle: Handle,message: String) -> IO(Unit):
   match handle:
     case Handle{resource,_}: Serial.run(State,Unit,resource,state => warningAppended(state,message,True{}))
+def warningNotice(handle: Handle,message: String) -> IO(Unit):
+  match handle:
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => warningAppended(state,message,False{}))
 def showProjectTrustWarning(handle: Handle,message: String) -> IO(Unit):
   match handle:
     case Handle{resource,_}: Serial.run(State,Unit,resource,state => warningAppended(state,message,False{}))

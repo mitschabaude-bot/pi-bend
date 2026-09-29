@@ -23,6 +23,7 @@ import ../../../../runtime/src/deferred.bend as Deferred
 import ../../../../runtime/src/date.bend as Date
 import ../../../../runtime/src/filesystem.bend as Filesystem
 import ../../../../runtime/src/f64.bend as F
+import ../../../../runtime/src/number-string.bend as NumberString
 import ../../../../runtime/src/u64.bend as W
 import ../../../../runtime/src/posix-path.bend as Path
 import ../../../../runtime/src/record.bend as Record
@@ -503,30 +504,44 @@ def structuralResult(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Call
       do IO<Unit>:
         Transcript.seedSession(transcript,messages)
         Interactive.requestRender(redraw)
-def structuralEntry(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,entry: Tree.SessionEntry<Unit,Tools.ToolDetails,Schema.Value>) -> IO(Unit):
-  structuralResult(transcript,redraw,Tree.sessionEntryToContextMessages(Unit,Tools.ToolDetails,Schema.Value,entry))
-def seedContextEntries(entries: List<&2,Session.Entry()>,+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+def summaryCostText(kind: String,spent: Ai.Usage) -> String:
+  match spent:
+    case Ai.Usage{input,output,read,write,_,_,_,Ai.UsageCost{_,_,_,_,+cost}}:
+      +tokens = count(F.add(F.add(input,output),F.add(read,write)))
+      +price = Bool.pick(String,F64.is_ge(cost,F.divide(F.fromU32(1),F.fromU32(100)))," (~$" ++ Maybe.default(&2,String,NumberString.formatFixed(cost,2n),"0.00") ++ ")","")
+      kind ++ ": " ++ Footer.tokens(tokens) ++ " tokens billed" ++ price
+def summaryCostNotice(show: Bool,transcript: Transcript.Handle,entry: Tree.SessionEntry<Unit,Tools.ToolDetails,Schema.Value>) -> IO(Unit):
+  match show entry:
+    case True{} Tree.Compaction{Tree.CompactionEntry{_,_,_,_,_,Some{spent},_,_}}: Transcript.warningNotice(transcript,summaryCostText("Compaction",spent))
+    case True{} Tree.BranchSummaryEntry{_,_,_,_,Some{spent},_}: Transcript.warningNotice(transcript,summaryCostText("Branch summary",spent))
+    case _ _: IO.pure(Unit,Unit{})
+def structuralEntry(+transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,showCost: Bool,+entry: Tree.SessionEntry<Unit,Tools.ToolDetails,Schema.Value>) -> IO(Unit):
+  do IO<Unit>:
+    structuralResult(transcript,redraw,Tree.sessionEntryToContextMessages(Unit,Tools.ToolDetails,Schema.Value,entry))
+    summaryCostNotice(showCost,transcript,entry)
+def seedContextEntries(entries: List<&2,Session.Entry()>,+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+showCost: Bool) -> IO(Unit):
   match entries:
     case Nil{}: IO.pure(Unit,Unit{})
     case entry <> rest:
       do IO<Unit>:
-        structuralEntry(transcript,redraw,entry)
-        seedContextEntries(rest,transcript,redraw)
-def compactedTranscript(result: Result<&2,&2,Tree.Error,List<&2,Session.Entry()>>,+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+        structuralEntry(transcript,redraw,showCost,entry)
+        seedContextEntries(rest,transcript,redraw,showCost)
+def compactedTranscript(result: Result<&2,&2,Tree.Error,List<&2,Session.Entry()>>,+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+showCost: Bool) -> IO(Unit):
   match result:
     case Done{Tree.Compaction{entry} <> retained}:
       do IO<Unit>:
         Transcript.clear(transcript)
-        seedContextEntries(retained,transcript,redraw)
-        structuralEntry(transcript,redraw,Tree.Compaction{entry})
+        seedContextEntries(retained,transcript,redraw,showCost)
+        structuralEntry(transcript,redraw,showCost,Tree.Compaction{entry})
     case _: Transcript.showError(transcript,"Completed compaction is missing from the session context")
 def compactionNotice(+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:
     case Session.CompactionEnd{_,Some{_},False{},_,_}:
       do IO<Unit>:
-        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         current : Session.Session() <- Session.sessionOf(live)
-        compactedTranscript(Tree.sessionContextEntries(Unit,Tools.ToolDetails,Schema.Value,Persistence.stateOf(Unit,Tools.ToolDetails,Schema.Value,current)),transcript,redraw)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        compactedTranscript(Tree.sessionContextEntries(Unit,Tools.ToolDetails,Schema.Value,Persistence.stateOf(Unit,Tools.ToolDetails,Schema.Value,current)),transcript,redraw,Settings.getShowCacheMissNotices(settings))
     case Session.CompactionEnd{Session.Manual{},_,True{},_,_}: Transcript.showError(transcript,"Compaction cancelled")
     case Session.CompactionEnd{_,_,True{},_,_}: Transcript.status(transcript,"Auto-compaction cancelled")
     case Session.CompactionEnd{_,_,_,_,Some{message}}: Transcript.showError(transcript,message)
@@ -536,11 +551,16 @@ def statusNotice(transcript: Transcript.Handle,event: Session.AgentSessionEvent)
     case Session.AutoRetryEnd{False{},attempt,error}: Transcript.showError(transcript,"Retry failed after " ++ Nat.show(attempt) ++ " attempts: " ++ Text.orElse(error,"Unknown error"))
     case Session.SummarizationRetryScheduled{_,_,_,message}: Transcript.showError(transcript,message)
     case _: IO.pure(Unit,Unit{})
-def structuralNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Session.AgentSessionEvent) -> IO(Unit):
+def structuralCurrent(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>,entry: Tree.SessionEntry<Unit,Tools.ToolDetails,Schema.Value>) -> IO(Unit):
+  do IO<Unit>:
+    live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    settings : Settings.SettingsManager <- Session.getSettings(live)
+    structuralEntry(transcript,redraw,Settings.getShowCacheMissNotices(settings),entry)
+def structuralNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:
-    case Session.EntryAppended{Tree.Compaction{entry}}: structuralEntry(transcript,redraw,Tree.Compaction{entry})
-    case Session.EntryAppended{Tree.BranchSummaryEntry{base,fromId,summary,details,usageValue,fromHook}}: structuralEntry(transcript,redraw,Tree.BranchSummaryEntry{base,fromId,summary,details,usageValue,fromHook})
-    case Session.EntryAppended{Tree.CustomMessageEntry{base,kind,content,details,display}}: structuralEntry(transcript,redraw,Tree.CustomMessageEntry{base,kind,content,details,display})
+    case Session.EntryAppended{Tree.Compaction{entry}}: structuralCurrent(transcript,redraw,session,Tree.Compaction{entry})
+    case Session.EntryAppended{Tree.BranchSummaryEntry{base,fromId,summary,details,usageValue,fromHook}}: structuralCurrent(transcript,redraw,session,Tree.BranchSummaryEntry{base,fromId,summary,details,usageValue,fromHook})
+    case Session.EntryAppended{Tree.CustomMessageEntry{base,kind,content,details,display}}: structuralCurrent(transcript,redraw,session,Tree.CustomMessageEntry{base,kind,content,details,display})
     case _: IO.pure(Unit,Unit{})
 def retryForEvent(session: Ref.Ref<Session.AgentSession>,event: Session.AgentSessionEvent) -> IO(Nat):
   match event:
@@ -560,7 +580,7 @@ def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Un
         statusNotice(transcript,event)
         compactionNotice(transcript,redraw,session,event)
         usageNotice(transcript,redraw,session,event)
-        structuralNotice(transcript,redraw,event)
+        structuralNotice(transcript,redraw,session,event)
         attempt : Nat <- retryForEvent(session,event)
         Interactive.onSessionEvent(Interactive.Events{transcript,redraw,attempt},event)
         Bool.pick(Unit -> IO(Unit),changed,_ => Interactive.requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})

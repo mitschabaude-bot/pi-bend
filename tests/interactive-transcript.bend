@@ -2,6 +2,8 @@ import Base
 import ../packages/agent/src/types.bend as Agent
 import ../packages/ai/src/types.bend as Ai
 import ../packages/coding-agent/src/modes/interactive/transcript.bend as Transcript
+import ../packages/coding-agent/src/modes/interactive/run.bend as Run
+import ../packages/coding-agent/src/core/session-manager.bend as Tree
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/core/messages.bend as CoreMessages
 import ../packages/coding-agent/src/modes/interactive/components/messages.bend as Messages
@@ -11,6 +13,7 @@ import ../packages/coding-agent/src/modes/interactive/theme/color.bend as Color
 import ../packages/coding-agent/src/modes/interactive/theme/markdown-theme.bend as Styles
 import ../packages/coding-agent/src/utils/syntax-highlight.bend as SyntaxHighlight
 import ../packages/runtime/src/schema-value.bend as Value
+import ../packages/runtime/src/f64.bend as F
 import ../packages/runtime/src/serial-resource.bend as Serial
 import ../packages/tui/src/component.bend as Component
 import ../packages/tui/src/tui.bend as Tui
@@ -79,6 +82,27 @@ def orderedRows(+rows: List<&2,String>,first: String,last: String) -> Bool:
   orderedPositions(lineOf(rows,first,0n),lineOf(rows,last,0n))
 def check(value: Bool,message: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),value,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,message))(Unit{})
+def costUsage() -> Ai.Usage:
+  Ai.Usage{U32.to_f64(10),U32.to_f64(20),U32.to_f64(30),U32.to_f64(40),None{},None{},U32.to_f64(100),Ai.UsageCost{U32.to_f64(0),U32.to_f64(0),U32.to_f64(0),U32.to_f64(0),F.divide(U32.to_f64(1),U32.to_f64(8))}}
+def compactionCostEntry() -> Tree.SessionEntry<Unit,Tools.ToolDetails,Value.Value>:
+  Tree.Compaction{Tree.CompactionEntry{Tree.SessionEntryBase{"current",None{},"2025-01-02T00:00:00Z"},"summary","kept",200n,None{},Some{costUsage()},None{},None{}}}
+def branchCostEntry() -> Tree.SessionEntry<Unit,Tools.ToolDetails,Value.Value>:
+  Tree.BranchSummaryEntry{Tree.SessionEntryBase{"previous",None{},"2025-01-01T00:00:00Z"},"from","summary",None{},Some{costUsage()},None{}}
+def compactionCostNotices(+handle: Transcript.Handle,+document: Component.Component) -> IO(Unit):
+  do IO<Unit>:
+    Transcript.clear(handle)
+    Transcript.notice(handle,"compaction summary")
+    Run.summaryCostNotice(True{},handle,compactionCostEntry())
+    shown : List<&2,String> <- Component.render(document,80n)
+    check(orderedRows(shown,"compaction summary","Compaction: 100 tokens billed (~$0.13)"),"compaction cost was not shown after its summary")
+    Transcript.clear(handle)
+    Run.summaryCostNotice(False{},handle,compactionCostEntry())
+    hidden : List<&2,String> <- Component.render(document,80n)
+    check(Bool.not(contains(clean(hidden),"tokens billed")),"disabled cache notices showed compaction cost")
+    Transcript.notice(handle,"branch summary")
+    Run.summaryCostNotice(True{},handle,branchCostEntry())
+    branch : List<&2,String> <- Component.render(document,80n)
+    check(orderedRows(branch,"branch summary","Branch summary: 100 tokens billed (~$0.13)"),"branch cost was not shown after its summary")
 def repeatedLines(count: Nat) -> String:
   match count:
     case Zero{}: ""
@@ -264,6 +288,7 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         afterStatus : Nat <- mountedCount(viewHandle)
         check(contains(clean(replacedStatus),"Thinking blocks: hidden") && Bool.not(contains(clean(replacedStatus),"Tool output: expanded")) && Nat.is_eq(afterStatus,beforeStatus + 1n),"consecutive status did not replace the previous line")
         failureReplay(handle,document)
+        compactionCostNotices(handle,document)
         Transcript.dispose(transcript)
         View.dispose(view)
         Styles.dispose(styles)

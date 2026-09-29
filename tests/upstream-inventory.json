@@ -3189,9 +3189,12 @@
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ef2a9834d3166ad4a7b124dd8fb3c0edcf1892305ebd8bb739a81a20674cab6e"
+      "status": "partial",
+      "ports": [
+        "tests/interactive-transcript.bend"
+      ],
+      "sha256": "ef2a9834d3166ad4a7b124dd8fb3c0edcf1892305ebd8bb739a81a20674cab6e",
+      "notes": "Rendered native transcript checks cover gated compaction and branch-summary billed-cost notices after their summaries. Live entry and compaction-end event paths now derive notices from persisted usage. Restored-session notice ordering, queued steering after compaction, abort routing and the turn-start working-state assertion remain to be validated against this suite."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-import-command.test.ts",
