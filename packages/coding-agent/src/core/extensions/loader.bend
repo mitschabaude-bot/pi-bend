@@ -11,11 +11,17 @@ import ./types.bend as T
 import ./context.bend as Ctx
 import ./tool-context.bend as ToolContext
 import ../tools/bash.bend as Bash
+import ../tools/grep.bend as Grep
+import ../tools/find.bend as Find
+import ../tools/ls.bend as Ls
 import ../tools/index.bend as Tools
 import ../../../../agent/src/types.bend as Agent
 import ../../../../runtime/src/child-process.bend as Child
 import ../../../../runtime/src/utf8.bend as Utf8
 import ../../../../runtime/src/schema-value.bend as V
+import ../../utils/paths.bend as Paths
+import ../../utils/tools-manager.bend as Manager
+import ../../../../runtime/src/collation.bend as Collation
 
 # The part of upstream core/extensions/loader.ts that remains without a
 # module loader: the shared extension runtime (createExtensionRuntime), the
@@ -47,7 +53,7 @@ def createSourceInfo(+path: String) -> Skills.SourceInfo:
 type BashDefinition is Data:
   BashDefinition{cwd: String, options: Bash.BashToolOptions}
 
-def runBashDefinitionOwned(pair: Tools.ToolOwner & Tools.Tool(), input: Tools.Input()) -> IO(Tools.Output()):
+def runToolDefinitionOwned(pair: Tools.ToolOwner & Tools.Tool(), input: Tools.Input()) -> IO(Tools.Output()):
   match pair:
     case (owner,Agent.AgentTool{_,_,_,_,_,_,execute,_,_}):
       do IO<Tools.Output()>:
@@ -62,7 +68,7 @@ def runBashDefinition(env: BashDefinition, call: T.ToolCallInput) -> IO(Tools.Ou
         +reader : C.Callback<Unit,Maybe<&2,ToolContext.ContextView>> <- Ctx.createToolContext(context)
         owner : Bash.ToolOwner <- Bash.createBashTool("",cwd,options,Some{reader})
         bridged : Tools.ToolOwner <- Tools.bridgedBash(Bash.borrowTool(owner))
-        result : Tools.Output() <- runBashDefinitionOwned(Tools.borrowTool(bridged),input)
+        result : Tools.Output() <- runToolDefinitionOwned(Tools.borrowTool(bridged),input)
         C.dispose(Unit,Maybe<&2,ToolContext.ContextView>,reader)
         return result
 
@@ -70,7 +76,54 @@ def createBashToolDefinition(+cwd: String, +options: Bash.BashToolOptions) -> IO
   +guidelines = Bool.pick(List<&2,String>,Tools.exposesSessionEnvironment(Some{options}),Tools.promptGuidelines(Tools.BashTool{}),Nil{})
   do IO<T.ToolDefinition>:
     execute : T.ToolExecute() <- C.create(~BashDefinition,~T.ToolCallInput,~Tools.Output(),~runBashDefinition,BashDefinition{cwd,options})
-    return T.ToolDefinition{"bash","bash",Bash.description(),Some{Tools.promptSnippet(Tools.BashTool{})},guidelines,Bash.bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},None{},execute,T.NativeBash{},None{},None{}}
+    return T.ToolDefinition{"bash","bash",Bash.description(),Some{Tools.promptSnippet(Tools.BashTool{})},guidelines,Bash.bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},None{},execute,T.NativeBuiltin{"bash"},None{},None{}}
+
+# Built-in search definitions share the tool's execution path, but each call
+# receives the extension's live context. The caller owns the rg/fd manager and
+# the preloaded ls collator; constructing a definition never shells out or
+# reloads collation data for every request.
+type SearchDefinition is Data:
+  GrepDefinition{paths: Paths.Environment, tools: Manager.ToolsManager, cwd: String, options: Grep.GrepToolOptions}
+  FindDefinition{paths: Paths.Environment, tools: Manager.ToolsManager, cwd: String, options: Find.FindToolOptions}
+  LsDefinition{collator: Collation.Collator, paths: Paths.Environment, cwd: String, options: Ls.LsToolOptions}
+
+def searchTool(definition: SearchDefinition, source: ToolContext.ContextSource()) -> IO(Tools.ToolOwner):
+  match definition:
+    case GrepDefinition{paths,tools,cwd,options}:
+      do IO<Tools.ToolOwner>:
+        owner : Grep.ToolOwner <- Grep.createGrepTool(paths,tools,cwd,options,source)
+        Tools.bridgedGrep(Grep.borrowTool(owner))
+    case FindDefinition{paths,tools,cwd,options}:
+      do IO<Tools.ToolOwner>:
+        owner : Find.ToolOwner <- Find.createFindTool(paths,tools,cwd,options,source)
+        Tools.bridgedFind(Find.borrowTool(owner))
+    case LsDefinition{collator,paths,cwd,options}:
+      do IO<Tools.ToolOwner>:
+        owner : Ls.ToolOwner <- Ls.createLsTool(collator,paths,cwd,options,source)
+        Tools.bridgedLs(Ls.borrowTool(owner))
+
+def runSearchDefinition(definition: SearchDefinition, call: T.ToolCallInput) -> IO(Tools.Output()):
+  match call:
+    case T.ToolCallInput{input,context}:
+      do IO<Tools.Output()>:
+        +reader : C.Callback<Unit,Maybe<&2,ToolContext.ContextView>> <- Ctx.createToolContext(context)
+        owner : Tools.ToolOwner <- searchTool(definition,Some{reader})
+        result : Tools.Output() <- runToolDefinitionOwned(Tools.borrowTool(owner),input)
+        C.dispose(Unit,Maybe<&2,ToolContext.ContextView>,reader)
+        return result
+
+def searchDefinition(+kind: Tools.ToolName, description: String, parameters: V.Value, definition: SearchDefinition) -> IO(T.ToolDefinition):
+  +name = Tools.toolName(kind)
+  do IO<T.ToolDefinition>:
+    execute : T.ToolExecute() <- C.create(~SearchDefinition,~T.ToolCallInput,~Tools.Output(),~runSearchDefinition,definition)
+    return T.ToolDefinition{name,name,description,Some{Tools.promptSnippet(kind)},Tools.promptGuidelines(kind),parameters,None{},None{},execute,T.NativeBuiltin{name},None{},None{}}
+
+def createGrepToolDefinition(paths: Paths.Environment,tools: Manager.ToolsManager,cwd: String,options: Grep.GrepToolOptions) -> IO(T.ToolDefinition):
+  searchDefinition(Tools.GrepTool{},Grep.description(),Grep.grepSchema(),GrepDefinition{paths,tools,cwd,options})
+def createFindToolDefinition(paths: Paths.Environment,tools: Manager.ToolsManager,cwd: String,options: Find.FindToolOptions) -> IO(T.ToolDefinition):
+  searchDefinition(Tools.FindTool{},Find.description(),Find.findSchema(),FindDefinition{paths,tools,cwd,options})
+def createLsToolDefinition(collator: Collation.Collator,paths: Paths.Environment,cwd: String,options: Ls.LsToolOptions) -> IO(T.ToolDefinition):
+  searchDefinition(Tools.LsTool{},Ls.description(),Ls.lsSchema(),LsDefinition{collator,paths,cwd,options})
 
 # Extension state
 # ---------------

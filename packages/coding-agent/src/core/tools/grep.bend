@@ -34,6 +34,7 @@ def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
 def ToolResult() -> Data: ResultOf(Agent.AgentToolResult<GrepToolDetails>)
 def DEFAULT_LIMIT() -> Nat: 100n
 def promptSnippet() -> String: "Search file contents for patterns (respects .gitignore)"
+def description() -> String: "Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore. Output is truncated to 100 matches or 50KB (whichever is hit first). Long lines are truncated to 500 chars."
 
 type GrepOperations is Data:
   GrepOperations{isDirectory: Callback.Callback<String,ResultOf(Bool)>,readFile: Callback.Callback<String,ResultOf(String)>}
@@ -469,7 +470,7 @@ def createGrepTool(paths: Paths.Environment,tools: Tools.ToolsManager,cwd: Strin
     case GrepToolOptions{operations}:
       do IO<ToolOwner>:
         callback : Callback.Callback<Agent.ToolExecutionInput<GrepToolDetails>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<GrepToolDetails>,~ToolResult(),~invoke,Registered{Invocation{paths,tools,cwd,operations},source})
-        return ToolOwner{Agent.AgentTool{"grep","Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore. Output is truncated to 100 matches or 50KB (whichever is hit first). Long lines are truncated to 500 chars.",grepSchema(),None{},"grep",None{},callback,None{},None{}}}
+        return ToolOwner{Agent.AgentTool{"grep",description(),grepSchema(),None{},"grep",None{},callback,None{},None{}}}
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<GrepToolDetails,Error>:
   match owner:
     case ToolOwner{+tool}: (ToolOwner{tool},tool)

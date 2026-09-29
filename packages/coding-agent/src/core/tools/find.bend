@@ -35,6 +35,7 @@ type Error is Data:
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
 def ToolResult() -> Data: ResultOf(Agent.AgentToolResult<FindToolDetails>)
 def DEFAULT_LIMIT() -> Nat: 1000n
+def description() -> String: "Search for files by glob pattern. Returns matching file paths relative to the search directory. Respects .gitignore. Output is truncated to 1000 results or 50KB (whichever is hit first)."
 
 type FindOperations is Data:
   FindOperations{exists: Callback.Callback<String,ResultOf(Bool)>, glob: Callback.Callback<FindGlobInput,ResultOf(List<&2,String>)>}
@@ -278,7 +279,7 @@ def createFindTool(paths: Paths.Environment,tools: Tools.ToolsManager,cwd: Strin
     case FindToolOptions{operations}:
       do IO<ToolOwner>:
         callback : Callback.Callback<Agent.ToolExecutionInput<FindToolDetails>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<FindToolDetails>,~ToolResult(),~invoke,Registered{Invocation{paths,tools,cwd,operations},source})
-        return ToolOwner{Agent.AgentTool{"find","Search for files by glob pattern. Returns matching file paths relative to the search directory. Respects .gitignore. Output is truncated to 1000 results or 50KB (whichever is hit first).",findSchema(),None{},"find",None{},callback,None{},None{}}}
+        return ToolOwner{Agent.AgentTool{"find",description(),findSchema(),None{},"find",None{},callback,None{},None{}}}
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<FindToolDetails,Error>:
   match owner:
     case ToolOwner{+tool}: (ToolOwner{tool},tool)

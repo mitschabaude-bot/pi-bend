@@ -63,7 +63,7 @@ def bashAlias(+theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     +args : Value.Value <- IO.pure(Value.Value,builtinArgs("bash"))
     +builtin : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("bash","original",args,theme,Tool.Generic{}))
-    +alias : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("run_shell","alias",args,theme,Tool.NativeBash{}))
+    +alias : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("run_shell","alias",args,theme,Tool.NativeBuiltin{"bash"}))
     +partialText : ToolRender.ToolResult <- IO.pure(ToolRender.ToolResult,result("one\ntwo\nthree\nfour\nfive\nsix",False{}))
     +running : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(builtin,partialText,True{}))
     +aliasRunning : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(alias,partialText,True{}))

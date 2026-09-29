@@ -25,7 +25,7 @@ import ../extensions/tool-context.bend as Ctx
 # The public coding tools behind one agent-tool type. Upstream erases each
 # tool's details to `any`; here the details and errors are explicit sums, and
 # every tool is bridged into AgentTool<ToolDetails, ToolError> without
-# changing what the model sees. powershell and ls are not registered yet.
+# changing what the model sees. PowerShell remains unported.
 
 type ToolName is Data:
   ReadTool{}
