@@ -962,7 +962,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "005664a660ac255d2e49d72f2187fe5130d80887cc31f1bffcd23e1333d79592",
         "packages/coding-agent/src/modes/interactive/commands.bend": "dc44029e5b58c1710514d951bf85e9ea822ab11553590fb4fae0a403effba086",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
-        "packages/coding-agent/src/main.bend": "cfdd635b3e361a052244e33b5258f8e1f9ba45e6b7eb594019c6e2ebae78df3d",
+        "packages/coding-agent/src/main.bend": "e537f97c177d5794fb209254272f7888f6f908c1deb159c7d48f2b28ebc3eb18",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "2953a0fd626f212d3e94cd4ee387462307e710be9590551e69ac362997c7f6f8",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "32cccab2dde6e9413d1ea84f1e471a0774e1a2a261d971be689fa3e8af147546",
@@ -1552,8 +1552,8 @@
         "packages/coding-agent/src/core/http-dispatcher.bend": "ebdef30af7fff2fd0f4529bced421f752bc290f3b92698f5a173e29b90b9e6f8",
         "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
-        "packages/coding-agent/src/core/agent-runtime.bend": "d3602be64b905faa253cc7f9404040db59c5a53582638b6eed655933822f364b",
-        "packages/coding-agent/src/main.bend": "cfdd635b3e361a052244e33b5258f8e1f9ba45e6b7eb594019c6e2ebae78df3d"
+        "packages/coding-agent/src/core/agent-runtime.bend": "6e1f14a64da0d5a895bd77eb322ea76109442303506b97dddfaf2dc9df1084c2",
+        "packages/coding-agent/src/main.bend": "e537f97c177d5794fb209254272f7888f6f908c1deb159c7d48f2b28ebc3eb18"
       }
     },
     "packages/coding-agent/src/core/crash-log.ts": {
@@ -1630,10 +1630,10 @@
     },
     "packages/coding-agent/src/core/sdk.ts": {
       "state": "partial",
-      "note": "createAgentSession assembles injected or default settings, persisted/in-memory session, model runtime, resource loader, tools, extension runner and provider stream. Owned services have explicit disposal; injected session identity is represented by immutable session IDs. All six sdk-session-manager and three sdk-skills assertions pass on native one/four, including agentDir session paths, inherited cwd, Bash PI_* fields and injected skill results. SDK customTools are accepted as direct Bend definitions and registered without an extension factory, including same-name built-in override. getAllTools now reports SDK tool source metadata. Remaining: sessionStartEvent, upstream SDK re-export surface, stream-options/attribution suites and shared injected-ModelRuntime API-stream ownership and other injected-service lifetime coverage; the CLI still has its separate assembly path. SDK-created ModelRuntime now owns the one runtime credential overlay and retires it with the runtime.",
+      "note": "createAgentSession assembles injected or default settings, persisted/in-memory session, model runtime, resource loader, tools, extension runner and provider stream. Owned services have explicit disposal; injected session identity is represented by immutable session IDs. All six sdk-session-manager and three sdk-skills assertions pass on native one/four, including agentDir session paths, inherited cwd, Bash PI_* fields and injected skill results. SDK customTools are accepted as direct Bend definitions and registered without an extension factory, including same-name built-in override. getAllTools now reports SDK tool source metadata. Remaining: sessionStartEvent, upstream SDK re-export surface, stream-options/attribution suites and shared injected-ModelRuntime API-stream ownership and other injected-service lifetime coverage; the CLI still has its separate assembly path. SDK-created ModelRuntime now owns the one runtime credential overlay and retires it with the runtime. The SDK binds transcript image filtering to the live session settings after construction, so changing blockImages affects later provider conversions.",
       "source_sha256": "b419cd7aa1515d5f85d68d210daa0d79360a1e8eabe456e96b97857bec0498de",
       "port_sha256": {
-        "packages/coding-agent/src/core/sdk.bend": "097a8a669ec95ff4ebcc9bf0743910a43589ba8a9c9a91fa5d39f1e6beeb4b4b"
+        "packages/coding-agent/src/core/sdk.bend": "ee6754cc290a627b54d1b1a2c452d3d7622baff342d36af1eb5e6f3bf8236d30"
       }
     },
     "packages/coding-agent/src/core/resource-loader.ts": {
@@ -1755,9 +1755,9 @@
         "packages/coding-agent/src/core/agent-runtime.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/main.bend": "cfdd635b3e361a052244e33b5258f8e1f9ba45e6b7eb594019c6e2ebae78df3d",
+        "packages/coding-agent/src/main.bend": "e537f97c177d5794fb209254272f7888f6f908c1deb159c7d48f2b28ebc3eb18",
         "packages/coding-agent/src/extensions/index.bend": "cac66e23a500ff2bbd041ab89114ad74c7fc09a599fbb4d982dbc77bf502d3d8",
-        "packages/coding-agent/src/core/agent-runtime.bend": "d3602be64b905faa253cc7f9404040db59c5a53582638b6eed655933822f364b"
+        "packages/coding-agent/src/core/agent-runtime.bend": "6e1f14a64da0d5a895bd77eb322ea76109442303506b97dddfaf2dc9df1084c2"
       }
     },
     "packages/coding-agent/src/cli/args.ts": {
@@ -1779,7 +1779,7 @@
         "packages/coding-agent/src/core/agent-runtime.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-runtime.bend": "d3602be64b905faa253cc7f9404040db59c5a53582638b6eed655933822f364b"
+        "packages/coding-agent/src/core/agent-runtime.bend": "6e1f14a64da0d5a895bd77eb322ea76109442303506b97dddfaf2dc9df1084c2"
       }
     },
     "packages/coding-agent/src/core/session-export.ts": {

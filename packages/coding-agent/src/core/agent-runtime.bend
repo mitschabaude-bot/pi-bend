@@ -867,8 +867,23 @@ def convertMessages(blockImages: Bool, messages: T.AgentMessageArray(V.Value, De
 def createConverter(blockImages: Bool) -> IO(Converter()):
   C.create(~Bool, ~T.AgentMessageArray(V.Value, Details(), Custom()), ~Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>, ~convertMessages, blockImages)
 
+def convertWithSettings(settings: Ref.Ref<Settings.SettingsManager>, messages: T.AgentMessageArray(V.Value, Details(), Custom())) -> IO(Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>):
+  do IO<Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>>:
+    current : Settings.SettingsManager <- Ref.read(Settings.SettingsManager, settings)
+    convertMessages(Settings.getBlockImages(current), messages)
+
+def createSettingsConverter(settings: Ref.Ref<Settings.SettingsManager>) -> IO(Converter()):
+  C.create(~Ref.Ref<Settings.SettingsManager>, ~T.AgentMessageArray(V.Value, Details(), Custom()), ~Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>, ~convertWithSettings, settings)
+
 def disposeConverter(converter: Converter()) -> IO(Unit):
   C.dispose(T.AgentMessageArray(V.Value, Details(), Custom()), Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>, converter)
+
+def installSettingsConverter(agent: Owner(), previous: Converter(), settings: Ref.Ref<Settings.SettingsManager>) -> IO(Converter()):
+  do IO<Converter()>:
+    +current : Converter() <- createSettingsConverter(settings)
+    Agent.setConvertToLlm(V.Value, Details(), Custom(), Error(), Unit, agent, current)
+    disposeConverter(previous)
+    return current
 
 def budget(value: Maybe<&2, W.U64>) -> Maybe<&2, F64>: Maybe.map(&2, W.U64, F64, F.fromU64, value)
 
@@ -1143,6 +1158,13 @@ def selectStartup(runtime: AgentRuntime,+chosen: Models.Model(),+level: Ai.Model
         Agent.setModel(V.Value,Details(),Custom(),Error(),Unit,agent,chosen)
         Agent.setThinkingLevel(V.Value,Details(),Custom(),Error(),Unit,agent,level)
         return AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, Some{chosen}, level, loadout}
+
+def withSettingsConverter(runtime: AgentRuntime, settings: Ref.Ref<Settings.SettingsManager>) -> IO(AgentRuntime):
+  match runtime:
+    case AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, +agent, model, thinking, loadout}:
+      do IO<AgentRuntime>:
+        current : Converter() <- installSettingsConverter(agent, converter, settings)
+        return AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, current, agent, model, thinking, loadout}
 
 def dispose(runtime: AgentRuntime) -> IO(Unit):
   match runtime:

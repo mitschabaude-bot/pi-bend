@@ -2515,9 +2515,12 @@
     },
     {
       "source": "packages/coding-agent/test/block-images.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "739ffc6dc4c9cc9de971e8bac12cd73e3e6e5b9f266a56228238f66ccb4673b8"
+      "status": "partial",
+      "ports": [
+        "tests/block-images-dynamic.bend"
+      ],
+      "sha256": "739ffc6dc4c9cc9de971e8bac12cd73e3e6e5b9f266a56228238f66ccb4673b8",
+      "notes": "The same native converter reads the current settings reference on each call: off/on/off preserves the image, replaces it with the upstream disabled-image notice, then restores it (Bun and native one/four). SDK and interactive CLI install that converter on their live agents. Original read/file-processor/BMP and settings persistence assertions are tracked by their separate native suites; this suite remains partial until they are tied to these named cases and a full-session toggle is checked."
     },
     {
       "source": "packages/coding-agent/test/branch-summarization.test.ts",

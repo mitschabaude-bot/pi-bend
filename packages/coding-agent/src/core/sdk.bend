@@ -377,8 +377,9 @@ def withAgent(+assembly: Assembly, transport: Runtime.Transport, choice: ModelsC
       do IO<Outcome()>:
         recorded : Session.Session() <- recordStartup(session, seed, selectionModel(selection), thinking)
         +loadout : Runtime.Loadout = Runtime.loadoutFrom(prepared, tools, runner, Runtime.LoadoutSource{environment, options, packageDir, Some{loader}})
-        live : Session.AgentSession <- Session.createWithTools(agent, recorded, settings, cwd, loadout, models, scopedOf(sdkOptions), customToolsOf(sdkOptions))
-        return Done{CreateAgentSessionResult{live, extensions, selectionMessage(selection), Services{transport, models, owned, ownedLoader, queue, owners, stream, registry, validator, keys, converter, runner}}}
+        +live : Session.AgentSession <- Session.createWithTools(agent, recorded, settings, cwd, loadout, models, scopedOf(sdkOptions), customToolsOf(sdkOptions))
+        dynamicConverter : Runtime.Converter() <- Runtime.installSettingsConverter(agent, converter, Session.settingsOf(live))
+        return Done{CreateAgentSessionResult{live, extensions, selectionMessage(selection), Services{transport, models, owned, ownedLoader, queue, owners, stream, registry, validator, keys, dynamicConverter, runner}}}
     case _ ModelsChoice{models, owned} LoaderChoice{_, ownedLoader} Tuple{owners, _} Fail{message} Done{agent}:
       do IO<Outcome()>:
         Agent.dispose(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)

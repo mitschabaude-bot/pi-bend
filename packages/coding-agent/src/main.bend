@@ -747,8 +747,9 @@ def sessionWithLoadout(cwd: String, +settings: Settings.SettingsManager, +scope:
   match pair:
     case (runtime, loadout):
       do IO<Result<&1, &1, String, Created()>>:
-        live : AgentSession.AgentSession <- AgentSession.create(agent, session, settings, cwd, loadout, models, scope)
-        return Done{SessionRuntime.Created{Services{runtime, scope}, live}}
+        +live : AgentSession.AgentSession <- AgentSession.create(agent, session, settings, cwd, loadout, models, scope)
+        current : Runtime.AgentRuntime <- Runtime.withSettingsConverter(runtime, AgentSession.settingsOf(live))
+        return Done{SessionRuntime.Created{Services{current, scope}, live}}
 
 def sessionWithModels(cwd: String, settings: Settings.SettingsManager, scope: List<&2, Models.ScopedModel>, session: Session(), agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Result<&1, &1, String, Created()>):
   match pair:
