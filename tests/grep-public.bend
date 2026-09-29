@@ -111,7 +111,7 @@ def parsed(result: Result<&2,&2,Json.ParseError,V.Value>) -> V.Value:
 
 def call(pair: L.ToolOwner & Agent.AgentTool<L.GrepToolDetails,L.Error>, args: V.Value, signal: A.AbortSignal<Unit>) -> IO(Unit):
   match pair:
-    case (owner,Agent.AgentTool{name,_,_,Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},label,None{},callback,None{},None{}}):
+    case (owner,Agent.AgentTool{name,_,_,None{},label,None{},callback,None{},None{}}):
       do IO<Unit>:
         check(String.eq(name,"grep") && String.eq(label,"grep"),"grep metadata")
         result : L.ToolResult() <- C.call(Agent.ToolExecutionInput<L.GrepToolDetails>,L.ToolResult(),callback,Agent.ToolExecutionInput{"grep-1",args,Some{signal},None{}})

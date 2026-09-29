@@ -631,6 +631,30 @@
         "packages/coding-agent/src/core/tools/edit.bend": "82e9720babcb10011dddcc73c94405d3da5abf547b133e4bd8e0bf428c5e7205"
       }
     },
+    "packages/coding-agent/src/core/tools/find.ts": {
+      "state": "partial",
+      "note": "The native find tool uses fd with upstream's glob arguments, Git-ignore behavior, injected operations, context cwd, cancellation, result paths and truncation. The public oracle covers 84 POSIX scenarios on native one/four threads, including the named upstream find cases. Remaining source coverage: Windows path semantics and the public createFindToolDefinition extension adapter.",
+      "source_sha256": "b06bcae6821a0e9fda1b63be613a7ce28eb0e66e1d01d16564e59e83f9ce10ea",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/find.bend": "89bc7ae13660759b51d0aece0bbb5406fbd10fdbfce659e654080c7d604a1525"
+      }
+    },
+    "packages/coding-agent/src/core/tools/grep.ts": {
+      "state": "partial",
+      "note": "The native grep tool uses rg JSON match events with upstream's options, context reads, injected operations, context cwd, cancellation, output limits and notices. The public oracle covers 112 scenarios on native one/four threads, including the named upstream grep cases. Remaining source coverage: the public createGrepToolDefinition extension adapter and an abort after rg closes but before the native final signal check.",
+      "source_sha256": "88be3d00217d1a1caf8a9e7bb2b8d2e6d96edfa4b790c2cf76c746ab36b8841b",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/grep.bend": "f01ffc99a8c718d0911df43f4912b868ad26b275a4d24b009c8c28f55cdbca37"
+      }
+    },
+    "packages/coding-agent/src/core/tools/ls.ts": {
+      "state": "partial",
+      "note": "Native ls supports local and injected filesystem operations, context cwd, cancellation, stat-based directory suffixes, limits and truncation; 45 public scenarios pass on native one/four threads. The registered default uses ICU-root collation after JavaScript-style lowercase, matching Node on 40 mixed names. Remaining source coverage: the public createLsToolDefinition extension adapter and non-POSIX path behavior.",
+      "source_sha256": "3d0a5457e4f5b9e9967c44608b76b060374d047e80d6871ecec4459b612cb6a3",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/ls.bend": "499f42c4d432f925a9f17567664a0cb4222ba7489df12aea4c35a04eb7978e1d"
+      }
+    },
     "packages/coding-agent/src/core/tools/path-utils.ts": {
       "state": "ported",
       "note": "expandPath, resolveToCwd and resolveReadPath (existing path, then AM/PM, NFD, curly-quote and NFD+curly variants) live in utils/paths.bend; the whole upstream path-utils suite passes (tests/paths.bend). resolveReadPathAsync is the same IO function; pathExists is FS.accessible.",

@@ -165,4 +165,4 @@ for backend in a.backends:
             assert value['error'].startswith('Cannot read directory: Error 13:'), value
         finally:
             denied.chmod(0o700)
-    print(f'{backend}: {checks} public ls scenarios passed (explicit scalar comparator; default locale policy pending)')
+    print(f'{backend}: {checks} public ls scenarios passed (explicit scalar comparator; default ordering checked separately)')

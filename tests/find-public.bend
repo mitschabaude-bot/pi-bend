@@ -110,7 +110,7 @@ def arguments(pattern: String,path: String, maximum: String) -> V.Value:
 
 def call(pair: L.ToolOwner & Agent.AgentTool<L.FindToolDetails,L.Error>, args: V.Value, signal: A.AbortSignal<Unit>) -> IO(Unit):
   match pair:
-    case (owner,Agent.AgentTool{name,_,_,Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},label,None{},callback,None{},None{}}):
+    case (owner,Agent.AgentTool{name,_,_,None{},label,None{},callback,None{},None{}}):
       do IO<Unit>:
         check(String.eq(name,"find") && String.eq(label,"find"),"ls metadata")
         result : L.ToolResult() <- C.call(Agent.ToolExecutionInput<L.FindToolDetails>,L.ToolResult(),callback,Agent.ToolExecutionInput{"ls-1",args,Some{signal},None{}})

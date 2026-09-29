@@ -11,7 +11,7 @@
 
 ## Executed reference assertions
 
-The pinned Pi source is `pi-mono` commit `46c9de402`. The fixture preserves these `tools.test.ts` assertions:
+The reference is the pinned sibling `pi-mono` checkout. The fixture preserves these `tools.test.ts` assertions:
 
 - **"should include filename when searching a single file"**
 - **"should respect global limit and include context lines"**, including exclusion of the second match
