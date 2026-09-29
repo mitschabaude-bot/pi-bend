@@ -14,6 +14,7 @@ import ../../../runtime/src/text.bend as Text
 import ../../../runtime/src/url.bend as URL
 import ../../../runtime/src/sha256.bend as Sha256
 import ../../../runtime/src/utf8.bend as Utf8
+import ../../../runtime/src/child-process.bend as Child
 
 # upstream PackageManager.resolve for local resources: the skills, prompt
 # templates and themes named by the global and project settings (plain paths
@@ -1038,3 +1039,206 @@ def getManagedNpmInstallPath(+context: Context, +name: String, scope: SourceScop
         return npmPackageUnder(name, root)
     case ProjectSource{}: IO.pure(Result<&2, &2, String, String>, npmPackageUnder(name, Bool.pick(Result<&2, &2, String, String>, trusted(context), Done{Path.join(projectBase(context), "npm")}, Fail{PROJECT_UNTRUSTED()})))
     case UserSource{}: IO.pure(Result<&2, &2, String, String>, npmPackageUnder(name, Done{Path.join(globalBase(context), "npm")}))
+
+# Managed Git sources
+# -------------------
+
+def CommandResult() -> Data: Result<&2, &2, String, String>
+def PackageResult() -> Data: Result<&2, &2, String, Unit>
+
+def commandStatus(success: Bool, shown: String, output: List<&2, U32>, errors: List<&2, U32>) -> CommandResult():
+  match success:
+    case True{}: Done{String.trim(Utf8.decodeBuffer(output))}
+    case False{}: Fail{shown ++ " failed: " ++ String.trim(Utf8.decodeBuffer(errors))}
+
+def spawnFailure(shown: String, errors: List<&2, Child.Error>) -> CommandResult():
+  match errors:
+    case Child.Error{operation, code, message} <> _: Fail{shown ++ " " ++ operation ++ " (" ++ U32.show(code) ++ "): " ++ message}
+    case Nil{}: Fail{shown ++ " failed to start"}
+
+def completedCommand(shown: String, completed: Child.Completed) -> CommandResult():
+  match completed:
+    case Child.Completed{Done{code}, output, errors}: commandStatus(U32.is_eq(code, 0), shown, output, errors)
+    case Child.Completed{Fail{Child.ExecutionFailed{errors}}, _, _}: spawnFailure(shown, errors)
+    case Child.Completed{Fail{_}, _, errors}: Fail{shown ++ " failed: " ++ String.trim(Utf8.decodeBuffer(errors))}
+
+def command(+program: String, args: List<String>, cwd: String) -> IO(CommandResult()):
+  do IO<CommandResult()>:
+    environment : List<String> <- IO.environment()
+    completed : Child.Completed <- Child.spawnSync(program, args, cwd, environment, Nil{})
+    return completedCommand(program, completed)
+
+def commandDone(result: CommandResult()) -> PackageResult():
+  match result:
+    case Fail{message}: Fail{message}
+    case Done{_}: Done{Unit{}}
+
+def runCommand(program: String, args: List<String>, cwd: String) -> IO(PackageResult()):
+  do IO<PackageResult()>:
+    result : CommandResult() <- command(program, args, cwd)
+    return commandDone(result)
+
+def directoryMade(path: String, result: Result<&2, &2, FS.Error, Unit>) -> PackageResult():
+  match result:
+    case Done{_}: Done{Unit{}}
+    case Fail{error}: Fail{"Cannot create " ++ path ++ ": " ++ FS.errorMessage(error)}
+
+def checkedOut(target: String, ref: Maybe<&2, String>, cloned: PackageResult()) -> IO(PackageResult()):
+  match cloned ref:
+    case Fail{message} _: IO.pure(PackageResult(), Fail{message})
+    case Done{_} None{}: IO.pure(PackageResult(), Done{Unit{}})
+    case Done{_} Some{revision}: runCommand("git", ["checkout", revision], target)
+
+def installedDependencies(+target: String, clean: PackageResult()) -> IO(PackageResult()):
+  match clean:
+    case Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case Done{_}:
+      do IO<PackageResult()>:
+        manifest : Bool <- FS.accessible(Path.join(target, "package.json"), 0)
+        Bool.pick(Unit -> IO(PackageResult()), manifest, _ => runCommand("npm", ["install", "--omit=dev"], target), _ => IO.pure(PackageResult(), Done{Unit{}}))(Unit{})
+
+def cloned(source: Git.GitSource, +target: String, made: PackageResult()) -> IO(PackageResult()):
+  match source made:
+    case _ Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case Git.GitSource{repo, _, _, ref, _} Done{_}:
+      do IO<PackageResult()>:
+        result : PackageResult() <- runCommand("git", ["clone", repo, target], Path.dirname(target))
+        checked : PackageResult() <- checkedOut(target, ref, result)
+        installedDependencies(target, checked)
+
+def installGit(source: Git.GitSource, +target: String) -> IO(PackageResult()):
+  do IO<PackageResult()>:
+    made : Result<&2, &2, FS.Error, Unit> <- FS.mkdir(Path.dirname(target))
+    cloned(source, target, directoryMade(Path.dirname(target), made))
+
+type GitTarget is Data:
+  GitTarget{fetchRef: String, ref: String, pinned: Bool}
+
+def branchTarget(+branch: String) -> GitTarget:
+  GitTarget{branch, "refs/remotes/origin/" ++ branch, False{}}
+
+def trackedTarget(upstream: CommandResult()) -> Maybe<&2, GitTarget>:
+  match upstream:
+    case Done{+branch}: Bool.pick(Maybe<&2, GitTarget>, String.starts_with(branch, "origin/") && Bool.not(String.is_empty(String.drop(branch, 7n))), Some{branchTarget(String.drop(branch, 7n))}, None{})
+    case Fail{_}: None{}
+
+def symbolicTarget(origin: CommandResult()) -> CommandResult():
+  match origin:
+    case Done{+ref}: Bool.pick(CommandResult(), String.starts_with(ref, "refs/remotes/origin/"), Done{String.drop(ref, 20n)}, Fail{"Cannot determine origin's default branch"})
+    case Fail{message}: Fail{message}
+
+def selectedBranch(branch: CommandResult()) -> Result<&2, &2, String, GitTarget>:
+  match branch:
+    case Fail{message}: Fail{message}
+    case Done{value}: Done{branchTarget(value)}
+
+def defaultGitTarget(target: String) -> IO(Result<&2, &2, String, GitTarget>):
+  do IO<Result<&2, &2, String, GitTarget>>:
+    origin : CommandResult() <- command("git", ["symbolic-ref", "refs/remotes/origin/HEAD"], target)
+    return selectedBranch(symbolicTarget(origin))
+
+def fromTracked(target: String, selected: Maybe<&2, GitTarget>) -> IO(Result<&2, &2, String, GitTarget>):
+  match selected:
+    case Some{found}: IO.pure(Result<&2, &2, String, GitTarget>, Done{found})
+    case None{}: defaultGitTarget(target)
+
+def unpinnedTarget(target: String, tracked: CommandResult()) -> IO(Result<&2, &2, String, GitTarget>): fromTracked(target, trackedTarget(tracked))
+
+def updateTarget(+target: String, ref: Maybe<&2, String>) -> IO(Result<&2, &2, String, GitTarget>):
+  match ref:
+    case Some{revision}: IO.pure(Result<&2, &2, String, GitTarget>, Done{GitTarget{revision, "FETCH_HEAD", True{}}})
+    case None{}:
+      do IO<Result<&2, &2, String, GitTarget>>:
+        upstream : CommandResult() <- command("git", ["rev-parse", "--abbrev-ref", "@{upstream}"], target)
+        unpinnedTarget(target, upstream)
+
+def markerFor(+target: String) -> String: Path.join(Path.dirname(target), "." ++ Path.basename(target) ++ ".pi-update-incomplete")
+
+def clearedMarker(marker: String, result: Result<&2, &2, FS.Error, Unit>) -> PackageResult():
+  match result:
+    case Done{_}: Done{Unit{}}
+    case Fail{error}: Fail{"Cannot clear " ++ marker ++ ": " ++ FS.errorMessage(error)}
+
+def updateDependenciesFinished(+marker: String, result: PackageResult()) -> IO(PackageResult()):
+  match result:
+    case Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case Done{_}:
+      do IO<PackageResult()>:
+        removed : Result<&2, &2, FS.Error, Unit> <- FS.remove(marker, False{}, True{})
+        return clearedMarker(marker, removed)
+
+def cleanedUpdate(+target: String, marker: String, reset: PackageResult()) -> IO(PackageResult()):
+  match reset:
+    case Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case Done{_}:
+      do IO<PackageResult()>:
+        clean : PackageResult() <- runCommand("git", ["clean", "-fdx"], target)
+        dependencies : PackageResult() <- installedDependencies(target, clean)
+        updateDependenciesFinished(marker, dependencies)
+
+def resetMarked(+target: String, marker: String, ref: String, marked: Result<&2, &2, FS.Error, Unit>) -> IO(PackageResult()):
+  match marked:
+    case Fail{error}: IO.pure(PackageResult(), Fail{"Cannot mark Git update: " ++ FS.errorMessage(error)})
+    case Done{_}:
+      do IO<PackageResult()>:
+        reset : PackageResult() <- runCommand("git", ["reset", "--hard", ref ++ "^{commit}"], target)
+        cleanedUpdate(target, marker, reset)
+
+def resetTo(+target: String, ref: String) -> IO(PackageResult()):
+  do IO<PackageResult()>:
+    +marker : String = markerFor(target)
+    marked : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(marker, "")
+    resetMarked(target, marker, ref, marked)
+
+def reconciled(+target: String, ref: String, local: CommandResult(), remote: CommandResult()) -> IO(PackageResult()):
+  match local remote:
+    case Fail{message} _: IO.pure(PackageResult(), Fail{message})
+    case _ Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case Done{current} Done{latest}:
+      do IO<PackageResult()>:
+        interrupted : Bool <- FS.accessible(markerFor(target), 0)
+        Bool.pick(Unit -> IO(PackageResult()), String.eq(current, latest) && Bool.not(interrupted), _ => IO.pure(PackageResult(), Done{Unit{}}), _ => resetTo(target, ref))(Unit{})
+
+def fetched(+target: String, gitTarget: GitTarget, fetchedResult: PackageResult()) -> IO(PackageResult()):
+  match gitTarget fetchedResult:
+    case _ Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case GitTarget{_, +ref, _} Done{_}:
+      do IO<PackageResult()>:
+        current : CommandResult() <- command("git", ["rev-parse", "HEAD"], target)
+        latest : CommandResult() <- command("git", ["rev-parse", ref ++ "^{commit}"], target)
+        reconciled(target, ref, current, latest)
+
+def fetchArgs(selected: GitTarget) -> List<String>:
+  match selected:
+    case GitTarget{fetchRef, _, True{}}: ["fetch", "origin", fetchRef]
+    case GitTarget{+fetchRef, _, False{}}: ["fetch", "--prune", "--no-tags", "origin", "+refs/heads/" ++ fetchRef ++ ":refs/remotes/origin/" ++ fetchRef]
+
+def updateAt(+target: String, selected: Result<&2, &2, String, GitTarget>) -> IO(PackageResult()):
+  match selected:
+    case Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case Done{+gitTarget}:
+      do IO<PackageResult()>:
+        result : PackageResult() <- runCommand("git", fetchArgs(gitTarget), target)
+        fetched(target, gitTarget, result)
+
+def updateExisting(source: Git.GitSource, +target: String) -> IO(PackageResult()):
+  match source:
+    case Git.GitSource{_, _, _, ref, _}:
+      do IO<PackageResult()>:
+        selected : Result<&2, &2, String, GitTarget> <- updateTarget(target, ref)
+        updateAt(target, selected)
+
+def updateLocated(+source: Git.GitSource, located: Result<&2, &2, String, String>) -> IO(PackageResult()):
+  match located:
+    case Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case Done{+target}:
+      do IO<PackageResult()>:
+        present : Bool <- FS.accessible(target, 0)
+        Bool.pick(Unit -> IO(PackageResult()), present, _ => updateExisting(source, target), _ => installGit(source, target))(Unit{})
+
+# Upstream's updateGit: a missing checkout is installed; an existing one is
+# fetched and reconciled to the configured ref, including rewritten history.
+def updateGit(+context: Context, +source: Git.GitSource, scope: SourceScope) -> IO(PackageResult()):
+  do IO<PackageResult()>:
+    located : Result<&2, &2, String, String> <- getGitInstallPath(context, source, scope)
+    updateLocated(source, located)

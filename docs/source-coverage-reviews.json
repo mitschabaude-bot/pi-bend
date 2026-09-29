@@ -1199,13 +1199,13 @@
     },
     "packages/coding-agent/src/core/package-manager.ts": {
       "state": "partial",
-      "note": "Ported: resolve for local settings entries and auto-discovered skills, prompts and themes (patterns, overrides, ignore files, precedence, canonical dedupe); parseSource/parseNpmSpec/isExactNpmVersion, getPackageIdentity, addSourceToSettings/removeSourceFromSettings with settings normalization, getBaseDirForScope with the project-trust check, resolveManagedPath, getExtensionTempFolder, getTemporaryDir, getGitInstallPath and getManagedNpmInstallPath. Missing: package sources in resolve (install on missing, manifests, package filters, dedupePackages), extensions, install/remove/update through npm and git, update checks, legacy global npm paths, progress events, listConfiguredPackages and getInstalledPath; NpmSource has no `range` until semver ranges are ported.",
+      "note": "Ported: resolve for local settings entries and auto-discovered skills, prompts and themes (patterns, overrides, ignore files, precedence, canonical dedupe); parseSource/parseNpmSpec/isExactNpmVersion, getPackageIdentity, addSourceToSettings/removeSourceFromSettings with settings normalization, getBaseDirForScope with the project-trust check, resolveManagedPath, getExtensionTempFolder, getTemporaryDir, getGitInstallPath and getManagedNpmInstallPath. Managed Git update now clones missing sources, checks out pinned refs, installs manifest dependencies, fetches tracked branches with force-refspec reconciliation, and resets/cleans changed checkouts with an interruption marker. Native local-Git integration test covers clone, no-op, advance, rewritten history and pins. Missing: package sources in resolve (install on missing, manifests, package filters, dedupePackages), extensions, public install/remove/update through npm and git, missing-dependency repair, failed-clone cleanup, update checks, legacy global npm paths, progress events, listConfiguredPackages and getInstalledPath; NpmSource has no `range` until semver ranges are ported.",
       "ports": [
         "packages/coding-agent/src/core/package-manager.bend"
       ],
       "source_sha256": "e2fdd18093dc69cb8fe82bb6bef674f20f8a5093d0d13fd1b7180f49dbe751fd",
       "port_sha256": {
-        "packages/coding-agent/src/core/package-manager.bend": "ccc2c4e26dc9f5320c6dd1d9bd029b6b9c9c5c99f200d931570798781d8585ba"
+        "packages/coding-agent/src/core/package-manager.bend": "3c142f2aad2aa9b38e83a4953adaaadf064b80d6bd4c86fcbe832e8b6100c184"
       }
     },
     "packages/ai/src/providers/faux.ts": {

@@ -29,6 +29,14 @@ def components(parts: List<&2, String>, reversed: List<&2, String>, +root: Bool)
 def absolute(parts: List<&2, String>) -> String:
   "/" ++ String.join(List.reverse(&2, String, components(parts, Nil{}, True{})), "/")
 
+def dirnameParts(parts: List<&2, String>) -> String:
+  match parts:
+    case Nil{}: "/"
+    case _ <> rest: absolute(List.reverse(&2, String, rest))
+
+def dirname(path: String) -> String:
+  dirnameParts(components(Strings.split(path, '/'), Nil{}, True{}))
+
 def under(base: String, path: String) -> Maybe<&2, String>:
   match base:
     case SCon{'/', rest}: Some{absolute(Strings.split(rest ++ "/" ++ path, '/'))}
