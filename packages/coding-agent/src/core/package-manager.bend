@@ -21,7 +21,7 @@ import ../../../runtime/src/record.bend as R
 
 # Resource resolution combines local settings, auto-discovered paths and
 # installed package manifests or convention directories. Extension execution
-# and automatic installation of missing package sources remain separate work.
+# remains separate work; configured Git sources install on a missing checkout.
 
 type ResourceType is Data:
   SkillResources{}
@@ -1506,14 +1506,33 @@ def rootFromResult(result: Result<&2, &2, String, String>) -> Maybe<&2, String>:
   match result:
     case Done{path}: Some{path}
     case Fail{_}: None{}
+def installedGitPath(path: String, result: PackageResult()) -> IO(Maybe<&2, String>):
+  match result:
+    case Done{_}: IO.pure(Maybe<&2, String>, Some{path})
+    case Fail{message}: IO.die(Maybe<&2, String>, 1, message)
+def gitPackageRoot(+context: Context, +git: Git.GitSource, +scope: SourceScope, result: Result<&2, &2, String, String>) -> IO(Maybe<&2, String>):
+  match result:
+    case Fail{message}: IO.die(Maybe<&2, String>, 1, message)
+    case Done{+path}:
+      do IO<Maybe<&2, String>>:
+        present : Bool <- FS.accessible(path, 0)
+        Bool.pick(Unit -> IO(Maybe<&2, String>), present,
+          _ => IO.pure(Maybe<&2, String>, Some{path}),
+          _ => do IO<Maybe<&2, String>>:
+            flag : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_OFFLINE")
+            Bool.pick(Unit -> IO(Maybe<&2, String>), offlineFlag(flag),
+              _ => IO.pure(Maybe<&2, String>, None{}),
+              _ => do IO<Maybe<&2, String>>:
+                installed : PackageResult() <- updateGit(context, git, scope)
+                installedGitPath(path, installed))(Unit{}))(Unit{})
 def packageRootParsed(+context: Context, +scope: SourceScope, parsed: ParsedSource) -> IO(Maybe<&2, String>):
   match parsed:
     case LocalSource{path}:
       IO.pure(Maybe<&2, String>, rootFromResult(Result.map(&2, &2, String, String, String, base => resolvePathFromBase(context, path, base), baseDirForScope(context, scope))))
-    case GitRepo{git}:
+    case GitRepo{+git}:
       do IO<Maybe<&2, String>>:
         result : Result<&2, &2, String, String> <- getGitInstallPath(context, git, scope)
-        return rootFromResult(result)
+        gitPackageRoot(context, git, scope, result)
     case NpmSource{_, name, _, _}:
       do IO<Maybe<&2, String>>:
         result : Result<&2, &2, String, String> <- getManagedNpmInstallPath(context, name, scope)

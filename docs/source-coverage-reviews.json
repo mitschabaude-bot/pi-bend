@@ -1199,13 +1199,13 @@
     },
     "packages/coding-agent/src/core/package-manager.ts": {
       "state": "partial",
-      "note": "Local and auto resource resolution plus configured local/Git/npm install-path package discovery for skills, prompts and themes are ported. Package manifests, convention directories, positive file/directory globs, manifest overrides and package filters match the focused upstream differential fixture. Managed Git install/update/remove and public package commands are ported. Missing: native extension discovery/loading, install of missing configured sources during resolve, full autoload:false delta and package-identity deduplication, npm lifecycle, update checks and remaining package-management APIs.",
+      "note": "Local/auto resource resolution and configured package discovery for skills, prompts and themes are ported. Manifests, convention directories, positive file/directory globs, overrides and filters match the focused upstream fixture; missing configured Git checkouts auto-install unless PI_OFFLINE is set. Managed Git install/update/remove and package commands are ported. Missing: native extension discovery/loading, full autoload:false delta and package-identity deduplication, npm lifecycle, update checks and remaining package-management APIs.",
       "ports": [
         "packages/coding-agent/src/core/package-manager.bend"
       ],
       "source_sha256": "e2fdd18093dc69cb8fe82bb6bef674f20f8a5093d0d13fd1b7180f49dbe751fd",
       "port_sha256": {
-        "packages/coding-agent/src/core/package-manager.bend": "3f02e23c893559557869c346c5ddc9eee75d9e6505f6b7ff6ea292f9d0bdf330"
+        "packages/coding-agent/src/core/package-manager.bend": "52c76af97251b68ada4cf3a6aef6dec68532dac683b898f4284565f193eff5a6"
       }
     },
     "packages/ai/src/providers/faux.ts": {
@@ -1864,7 +1864,7 @@
       ],
       "source_sha256": "cdeed96fef83e03043bb25081ad4b7abd26e739dfa464a0e1763c6473330bac3",
       "port_sha256": {
-        "packages/coding-agent/src/core/package-manager.bend": "3f02e23c893559557869c346c5ddc9eee75d9e6505f6b7ff6ea292f9d0bdf330"
+        "packages/coding-agent/src/core/package-manager.bend": "52c76af97251b68ada4cf3a6aef6dec68532dac683b898f4284565f193eff5a6"
       }
     }
   }

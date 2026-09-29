@@ -3464,10 +3464,11 @@
         "tests/package_git_update_check.py",
         "tests/package_command_check.py",
         "tests/package-command.bend",
-        "tests/package_git_command_check.py"
+        "tests/package_git_command_check.py",
+        "tests/package_manager_missing_git_check.py"
       ],
       "sha256": "ca17de96e051959a93d8c294a037f04f5cb6a6fd6618553457e5da7d09d563f7",
-      "notes": "Source parsing, settings normalization, Git lifecycle and public package commands have focused native/upstream checks. tests/package_manager_check.py now also compares configured local package manifests, skill-directory globs, convention directories, package filters and resolved metadata on Bun and native one/four threads. Pending: extension discovery/loading, missing-source installation during resolve, full autoload:false delta and identity deduplication, npm lifecycle, update checks and remaining package APIs."
+      "notes": "Source parsing, settings normalization, Git lifecycle and package commands have focused native/upstream checks. Package resource manifests, skill-directory globs, convention directories, filters and metadata match pinned pi in Bun and native one/four threads. A native local-SSH fixture confirms missing configured Git packages auto-install at startup and PI_OFFLINE skips them. Pending: extension discovery/loading, full autoload:false delta and package identity deduplication, npm lifecycle, update checks and remaining package APIs."
     },
     {
       "source": "packages/coding-agent/test/path-utils.test.ts",
