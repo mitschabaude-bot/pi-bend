@@ -30,6 +30,9 @@ const cases: Case[] = [
   { label: 'cache', width: 120, cwd: '/tmp/project', id: 'test-model', provider: 'test', entries: [assistant(usage(100, 10, 50, 50, .001))], percent: 72.5 },
   { label: 'subscription', width: 120, cwd: '/tmp/project', id: 'test-model', provider: 'anthropic', subscription: true, percent: 91.1, auto: false },
   { label: 'statuses', width: 48, cwd: '/tmp/project', id: 'test-model', provider: 'test', percent: null, statuses: [['z', ' build\n done '], ['a', ' lint\t pass  ']] },
+  { label: 'home', width: 93, cwd: '/home/user', home: '/home/user', branch: 'main', id: 'test-model', provider: 'test', percent: 12.3 },
+  { label: 'kimi', width: 120, cwd: '/tmp/project', branch: 'main', id: 'test-model', provider: 'kimi-coding', entries: [assistant(usage(100, 10, 0, 0, 1.234))], percent: 12.3 },
+  { label: 'oauth', width: 120, cwd: '/tmp/project', branch: 'main', id: 'test-model', provider: 'openrouter', entries: [assistant(usage(100, 10, 0, 0, 1.234))], percent: 12.3 },
 ];
 for (const c of cases) {
   process.env.HOME = c.home ?? '/home/no-match';

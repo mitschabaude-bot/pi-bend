@@ -3039,8 +3039,12 @@
     },
     {
       "source": "packages/coding-agent/test/footer-width.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/footer.bend",
+        "tests/footer_check.py",
+        "tests/footer_reference.ts"
+      ],
       "sha256": "1b9823a70848bacaee7c5f201a754aed7ee8ee8a28bf17a7fb5dec76ca5b5aa9"
     },
     {
