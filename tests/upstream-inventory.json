@@ -4558,12 +4558,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6999-models-json-hot-reload.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
-        "tests/models-json-hot-reload.bend"
+        "tests/models-json-hot-reload.bend",
+        "tests/models_json_hot_reload_check.py",
+        "tests/parity/scenarios.py"
       ],
       "sha256": "f06a2e4cd202a21854d1b652eeeb202adc4645189f74191725e30ec7e021eadc",
-      "notes": "Native ModelRuntime.refresh reloads changed models.json and replaces provider/model visibility. Focused old-provider/new-provider regression passes on Bun and native; interactive /model selector scenario remains unported."
+      "notes": "Replacing models.json during a live session updates the /model selector: new-model [new-provider] appears and old-model [old-provider] disappears. The focused rendered-selector fixture passes on Bun and native one/four threads; the terminal scenario matches pinned pi on one/four threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7027-credential-refresh-hang.test.ts",

@@ -18,6 +18,8 @@ from pathlib import Path
 
 MODEL = ["--provider", "openai", "--model", "gpt-5"]
 READY = r"gpt-5 • "  # the footer's model line: the editor is mounted
+HOT_OLD = {"baseUrl": "https://example.test/v1", "api": "openai-completions", "apiKey": "test-key", "models": [{"id": "old-model"}]}
+HOT_NEW = {"providers": {"new-provider": {**HOT_OLD, "models": [{"id": "new-model"}]}}}
 THEME_BAR = json.dumps({**json.loads((Path(__file__).resolve().parents[2] / "packages/coding-agent/src/modes/interactive/theme/dark.json").read_text()), "name": "bar"})
 THEME_OTHER = json.dumps({**json.loads(THEME_BAR), "name": "other"})
 
@@ -940,6 +942,15 @@ SCENARIOS = [
         "steps": [("wait", READY, "startup"), ("settle", 0.3),
                   ("keys", "/model no-such-model"), ("key", "Enter"),
                   ("wait", "No matching models", "picker"), ("settle", 0.2), ("snap", "picker")],
+    },
+    {
+        "name": "models-json-hot-reload",
+        "args": ["--provider", "old-provider", "--model", "old-model"],
+        "providers": {"old-provider": HOT_OLD},
+        "steps": [("wait", r"\(old-provider\) old-model", "startup"), ("settle", 0.3),
+                  ("write", "home/.pi/agent/models.json", json.dumps(HOT_NEW)),
+                  ("keys", "/model"), ("key", "Enter"),
+                  ("wait", r"new-model \[new-provider\]", "refreshed"), ("settle", 0.3), ("snap", "picker")],
     },
     {
         "name": "login-cancel", "args": MODEL, "env": FD_PATH,
