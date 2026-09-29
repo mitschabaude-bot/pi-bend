@@ -24,4 +24,4 @@ const [cwd, agentDir] = process.argv.slice(2);
 const settingsManager = SettingsManager.create(cwd, agentDir);
 const resolved = await new DefaultPackageManager({ cwd, agentDir, settingsManager }).resolve();
 const rows = (list: any[]) => list.map((r) => ({ path: r.path, enabled: r.enabled, source: r.metadata.source, scope: r.metadata.scope, baseDir: r.metadata.baseDir ?? null }));
-console.log(JSON.stringify({ skills: rows(resolved.skills), prompts: rows(resolved.prompts), themes: rows(resolved.themes) }));
+console.log(JSON.stringify({ extensions: rows(resolved.extensions), skills: rows(resolved.skills), prompts: rows(resolved.prompts), themes: rows(resolved.themes) }));

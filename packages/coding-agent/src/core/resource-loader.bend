@@ -224,7 +224,7 @@ def skillsFrom(+environment: Paths.Environment, +cwd: String, agentDir: String, 
 
 def resolvedSkills(resolved: PackageManager.ResolvedPaths) -> List<&2, String>:
   match resolved:
-    case PackageManager.ResolvedPaths{skills, _, _}: PackageManager.enabledPaths(skills)
+    case PackageManager.ResolvedPaths{_, skills, _, _}: PackageManager.enabledPaths(skills)
 
 def skillSourceName(source: PackageManager.Source) -> String:
   match source:
@@ -240,7 +240,7 @@ def skillScope(scope: PackageManager.Scope) -> Skills.SourceScope:
 # upstream metadataByPath: every resolved resource's metadata, first path wins.
 def resolvedResources(resolved: PackageManager.ResolvedPaths) -> List<&2, PackageManager.ResolvedResource>:
   match resolved:
-    case PackageManager.ResolvedPaths{skills, prompts, themes}: List.append(&2, PackageManager.ResolvedResource, skills, List.append(&2, PackageManager.ResolvedResource, prompts, themes))
+    case PackageManager.ResolvedPaths{extensions, skills, prompts, themes}: List.append(&2, PackageManager.ResolvedResource, extensions, List.append(&2, PackageManager.ResolvedResource, skills, List.append(&2, PackageManager.ResolvedResource, prompts, themes)))
 
 def resourceSource(metadata: PackageManager.PathMetadata, path: String) -> Skills.SourceInfo:
   match metadata:
@@ -288,7 +288,7 @@ def cliPaths(+environment: Paths.Environment, paths: List<&2, String>) -> List<&
 
 def resolvedPrompts(resolved: PackageManager.ResolvedPaths) -> List<&2, String>:
   match resolved:
-    case PackageManager.ResolvedPaths{_, prompts, _}: PackageManager.enabledPaths(prompts)
+    case PackageManager.ResolvedPaths{_, _, prompts, _}: PackageManager.enabledPaths(prompts)
 
 def templateNamed(templates: List<&2, Templates.PromptTemplate>, +name: String) -> Bool:
   match templates:
@@ -439,7 +439,7 @@ def dedupedThemes(themes: List<&2, Theme.Theme>, +kept: List<&2, Theme.Theme>) -
 
 def resolvedThemes(resolved: PackageManager.ResolvedPaths) -> List<&2, String>:
   match resolved:
-    case PackageManager.ResolvedPaths{_, _, themes}: PackageManager.enabledPaths(themes)
+    case PackageManager.ResolvedPaths{_, _, _, themes}: PackageManager.enabledPaths(themes)
 
 def dedupedResult(result: ThemesResult) -> ThemesResult:
   match result:

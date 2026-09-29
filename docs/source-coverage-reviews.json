@@ -1199,13 +1199,13 @@
     },
     "packages/coding-agent/src/core/package-manager.ts": {
       "state": "partial",
-      "note": "Local/auto resource resolution and configured package discovery for skills, prompts and themes are ported. Manifests, convention directories, positive file/directory globs, overrides and filters match the focused upstream fixture; missing configured Git checkouts auto-install unless PI_OFFLINE is set. Managed Git install/update/remove and package commands are ported. Missing: native extension discovery/loading, full autoload:false delta and package-identity deduplication, npm lifecycle, update checks and remaining package-management APIs.",
+      "note": "Local, auto and configured-package resolution exposes native `.bend` extensions, skills, prompts and themes with metadata, precedence and canonical deduplication. Package manifests, convention directories, file/directory globs and filters match the focused upstream fixture; configured missing Git checkouts auto-install unless offline. Git lifecycle and package commands are ported. Missing: dynamic build/link of extension sources, full autoload:false delta and package-identity deduplication, npm lifecycle, update checks and remaining package APIs.",
       "ports": [
         "packages/coding-agent/src/core/package-manager.bend"
       ],
       "source_sha256": "e2fdd18093dc69cb8fe82bb6bef674f20f8a5093d0d13fd1b7180f49dbe751fd",
       "port_sha256": {
-        "packages/coding-agent/src/core/package-manager.bend": "52c76af97251b68ada4cf3a6aef6dec68532dac683b898f4284565f193eff5a6"
+        "packages/coding-agent/src/core/package-manager.bend": "6f09ca8888afb3b40acd4c6f6897ca56fe53dc9d0f6d071ce9b9ae6adbbd6e21"
       }
     },
     "packages/ai/src/providers/faux.ts": {
@@ -1638,10 +1638,10 @@
     },
     "packages/coding-agent/src/core/resource-loader.ts": {
       "state": "partial",
-      "note": "Native ResourceLoader exposes skills, prompts, themes, context files, prompt content, extendResources and reload. It now accepts package-origin skill paths from PackageManager.resolve as well as local/auto paths; focused package discovery is checked differentially. Injected compiled Bend extension factories work. Remaining: native extension discovery/loading, reload re-execution of affine extension factories, resources_discover, project-trust resolution, override hooks and broader lifecycle diagnostics.",
+      "note": "Native ResourceLoader exposes skills, prompts, themes, context files, prompt content, extendResources and reload. It now receives extension resource paths and package-origin metadata from PackageManager.resolve, though arbitrary discovered Bend extension sources are not loaded. Injected compiled Bend extension factories work. Remaining: dynamic build/link, reload re-execution of affine factories, resources_discover, project-trust resolution, override hooks and broader lifecycle diagnostics.",
       "source_sha256": "60e8b49790ab7ab7997dcaa647bef5eaaabdb8273c317c72b1f9567d78e99620",
       "port_sha256": {
-        "packages/coding-agent/src/core/resource-loader.bend": "3bc8946d43df58b30c511b0b7854dc907bcd5d7f02341ad37967f4a5bc69dac4"
+        "packages/coding-agent/src/core/resource-loader.bend": "309c7cb2dd9a2b3ffb5aabcc4ab38f1ca6336fc1f67a78d3f97393bb3b38c27c"
       }
     },
     "packages/coding-agent/src/core/provider-composer.ts": {
@@ -1858,13 +1858,13 @@
     },
     "packages/coding-agent/src/core/pi-manifest.ts": {
       "state": "partial",
-      "note": "The package.json pi object and string-array resource fields are read within package-manager.bend for installed resource discovery. A standalone exported readPiManifest API and its direct tests remain to be ported.",
+      "note": "readPiManifest is a typed Bend module: it strips a BOM, parses package.json pi resource arrays and distinguishes absent/malformed fields from explicit empty arrays. Package resource fixtures exercise the manifest through resolution; direct malformed-field API coverage remains pending.",
       "ports": [
-        "packages/coding-agent/src/core/package-manager.bend"
+        "packages/coding-agent/src/core/pi-manifest.bend"
       ],
       "source_sha256": "cdeed96fef83e03043bb25081ad4b7abd26e739dfa464a0e1763c6473330bac3",
       "port_sha256": {
-        "packages/coding-agent/src/core/package-manager.bend": "52c76af97251b68ada4cf3a6aef6dec68532dac683b898f4284565f193eff5a6"
+        "packages/coding-agent/src/core/pi-manifest.bend": "df1dea15a4021a581fe8b786c7468ab07e7260dfe2cb5e9a586f6ee2f138e0b1"
       }
     },
     "packages/coding-agent/src/cli/config-selector.ts": {

@@ -3468,7 +3468,7 @@
         "tests/package_manager_missing_git_check.py"
       ],
       "sha256": "ca17de96e051959a93d8c294a037f04f5cb6a6fd6618553457e5da7d09d563f7",
-      "notes": "Source parsing, settings normalization, Git lifecycle and package commands have focused native/upstream checks. Package resource manifests, skill-directory globs, convention directories, filters and metadata match pinned pi in Bun and native one/four threads. A native local-SSH fixture confirms missing configured Git packages auto-install at startup and PI_OFFLINE skips them. Pending: extension discovery/loading, full autoload:false delta and package identity deduplication, npm lifecycle, update checks and remaining package APIs."
+      "notes": "Source parsing, settings normalization, Git lifecycle and package commands have focused native/upstream checks. Resource manifests, extension entries (paired `.ts`/`.bend`), skill-directory globs, convention directories, filters and metadata match pinned pi in Bun and native one/four threads; a local-SSH fixture checks missing Git startup installation and offline skip. Pending: build/link of discovered Bend extensions, full autoload:false delta and package identity deduplication, npm lifecycle, update checks and remaining package APIs."
     },
     {
       "source": "packages/coding-agent/test/path-utils.test.ts",

@@ -31,8 +31,8 @@ def rows(resources: List<&2, PM.ResolvedResource>) -> List<&2, String>:
 
 def printed(paths: PM.ResolvedPaths) -> IO(Unit):
   match paths:
-    case PM.ResolvedPaths{skills, prompts, themes}:
-      IO.print("{\"skills\":[" ++ String.join(rows(skills), ",") ++ "],\"prompts\":[" ++ String.join(rows(prompts), ",") ++ "],\"themes\":[" ++ String.join(rows(themes), ",") ++ "]}")
+    case PM.ResolvedPaths{extensions, skills, prompts, themes}:
+      IO.print("{\"extensions\":[" ++ String.join(rows(extensions), ",") ++ "],\"skills\":[" ++ String.join(rows(skills), ",") ++ "],\"prompts\":[" ++ String.join(rows(prompts), ",") ++ "],\"themes\":[" ++ String.join(rows(themes), ",") ++ "]}")
 
 def settingsOf(pair: Settings.FileSettingsStorage & Settings.SettingsManager) -> Settings.SettingsManager:
   match pair:

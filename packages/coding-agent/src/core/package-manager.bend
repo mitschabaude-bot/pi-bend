@@ -15,15 +15,14 @@ import ../../../runtime/src/url.bend as URL
 import ../../../runtime/src/sha256.bend as Sha256
 import ../../../runtime/src/utf8.bend as Utf8
 import ../../../runtime/src/child-process.bend as Child
-import ../../../runtime/src/json.bend as Json
-import ../../../runtime/src/schema-value.bend as V
-import ../../../runtime/src/record.bend as R
+import ./pi-manifest.bend as Manifest
 
 # Resource resolution combines local settings, auto-discovered paths and
 # installed package manifests or convention directories. Extension execution
 # remains separate work; configured Git sources install on a missing checkout.
 
 type ResourceType is Data:
+  ExtensionResources{}
   SkillResources{}
   PromptResources{}
   ThemeResources{}
@@ -44,7 +43,7 @@ type ResolvedResource is Data:
   ResolvedResource{path: String, enabled: Bool, metadata: PathMetadata}
 
 type ResolvedPaths is Data:
-  ResolvedPaths{skills: List<&2, ResolvedResource>, prompts: List<&2, ResolvedResource>, themes: List<&2, ResolvedResource>}
+  ResolvedPaths{extensions: List<&2, ResolvedResource>, skills: List<&2, ResolvedResource>, prompts: List<&2, ResolvedResource>, themes: List<&2, ResolvedResource>}
 
 # Patterns
 # --------
@@ -411,13 +410,69 @@ def collectFiles(+dir: String, extension: String) -> IO(List<&2, String>):
 
 def extensionOf(kind: ResourceType) -> String:
   match kind:
+    case ExtensionResources{}: ".bend"
     case SkillResources{}: ".md"
     case PromptResources{}: ".md"
     case ThemeResources{}: ".json"
 
-# upstream collectResourceFiles.
+def declaredExtensionPaths(+dir: String, entries: List<&2, String>) -> IO(List<&2, String>):
+  match entries:
+    case Nil{}: IO.pure(List<&2, String>, Nil{})
+    case +entry <> rest:
+      do IO<List<&2, String>>:
+        +path : String = Path.join(dir, entry)
+        present : Bool <- FS.accessible(path, 0)
+        +later : List<&2, String> <- declaredExtensionPaths(dir, rest)
+        return Bool.pick(List<&2, String>, present, path <> later, later)
+def extensionManifestPaths(dir: String, manifest: Maybe<&2, Manifest.PiManifest>) -> IO(List<&2, String>):
+  match manifest:
+    case Some{Manifest.PiManifest{Some{entries}, _, _, _}}: declaredExtensionPaths(dir, entries)
+    case _: IO.pure(List<&2, String>, Nil{})
+def extensionRootEntries(+dir: String) -> IO(List<&2, String>):
+  do IO<List<&2, String>>:
+    manifest : Maybe<&2, Manifest.PiManifest> <- Manifest.readPiManifest(Path.join(dir, "package.json"))
+    +declared : List<&2, String> <- extensionManifestPaths(dir, manifest)
+    Bool.pick(Unit -> IO(List<&2, String>), Bool.not(List.is_empty(&2, String, declared)),
+      _ => IO.pure(List<&2, String>, declared),
+      _ => do IO<List<&2, String>>:
+        +index : String = Path.join(dir, "index.bend")
+        present : Bool <- FS.accessible(index, 0)
+        return Bool.pick(List<&2, String>, present, index <> Nil{}, Nil{}))(Unit{})
+def extensionDirEntry(+dir: String, +rules: Skills.Rules, entry: FS.DirectoryEntry) -> IO(List<&2, String>):
+  match entry:
+    case FS.DirectoryEntry{+name, kind}:
+      Bool.pick(Unit -> IO(List<&2, String>), hidden(name),
+        _ => IO.pure(List<&2, String>, Nil{}),
+        _ => do IO<List<&2, String>>:
+          +path : String = Path.join(dir, name)
+          +followed : Maybe<&2, FS.FileKind> <- followedKind(path, kind)
+          Bool.pick(Unit -> IO(List<&2, String>), ignored(rulesOf(rules), name ++ Bool.pick(String, isDir(followed), "/", "")),
+            _ => IO.pure(List<&2, String>, Nil{}),
+            _ => Bool.pick(Unit -> IO(List<&2, String>), isDir(followed),
+              _ => extensionRootEntries(path),
+              _ => IO.pure(List<&2, String>, Bool.pick(List<&2, String>, isRegular(followed) && String.ends_with(name, ".bend"), path <> Nil{}, Nil{})))(Unit{}))(Unit{}))(Unit{})
+def extensionDirEntries(+dir: String, +rules: Skills.Rules, entries: List<&2, FS.DirectoryEntry>) -> IO(List<&2, String>):
+  match entries:
+    case Nil{}: IO.pure(List<&2, String>, Nil{})
+    case entry <> rest:
+      do IO<List<&2, String>>:
+        first : List<&2, String> <- extensionDirEntry(dir, rules, entry)
+        later : List<&2, String> <- extensionDirEntries(dir, rules, rest)
+        return List.append(&2, String, first, later)
+def collectExtensionEntries(+dir: String) -> IO(List<&2, String>):
+  do IO<List<&2, String>>:
+    +declared : List<&2, String> <- extensionRootEntries(dir)
+    Bool.pick(Unit -> IO(List<&2, String>), Bool.not(List.is_empty(&2, String, declared)),
+      _ => IO.pure(List<&2, String>, declared),
+      _ => do IO<List<&2, String>>:
+        rules : Skills.Rules <- Skills.addIgnoreFiles(ignoreFiles(), dir, "", Skills.Rules{Ignore.empty(), Nil{}})
+        entries : List<&2, FS.DirectoryEntry> <- readSorted(dir)
+        extensionDirEntries(dir, rules, entries))(Unit{})
+
+# upstream collectResourceFiles, using .bend entries for native extensions.
 def collectResourceFiles(+dir: String, kind: ResourceType) -> IO(List<&2, String>):
   match kind:
+    case ExtensionResources{}: collectExtensionEntries(dir)
     case SkillResources{}: collectSkillEntries(dir, PiSkills{})
     case _: collectFiles(dir, extensionOf(kind))
 
@@ -524,6 +579,7 @@ def resolveLocalEntries(+environment: Paths.Environment, +entries: List<&2, Stri
 
 def settingEntries(kind: ResourceType, found: Maybe<&2, Settings.Setting>) -> List<&2, String>:
   match kind found:
+    case ExtensionResources{} Some{Settings.Extensions{values}}: values
     case SkillResources{} Some{Settings.Skills{values}}: values
     case PromptResources{} Some{Settings.Prompts{values}}: values
     case ThemeResources{} Some{Settings.Themes{values}}: values
@@ -531,6 +587,7 @@ def settingEntries(kind: ResourceType, found: Maybe<&2, Settings.Setting>) -> Li
 
 def settingName(kind: ResourceType) -> String:
   match kind:
+    case ExtensionResources{}: "extensions"
     case SkillResources{}: "skills"
     case PromptResources{}: "prompts"
     case ThemeResources{}: "themes"
@@ -661,6 +718,12 @@ def autoSkills(+context: Context, +resources: List<&2, ResolvedResource>) -> IO(
     userAgentSkills : List<&2, String> <- collectSkillEntries(userAgents, AgentsSkills{})
     return addedAuto(addedAuto(withAgents, user, UserScope{}, userOverrides, globalBase(context)), userAgentSkills, UserScope{}, userOverrides, Skills.parent(userAgents))
 
+def autoExtensions(+context: Context, +resources: List<&2, ResolvedResource>) -> IO(List<&2, ResolvedResource>):
+  do IO<List<&2, ResolvedResource>>:
+    project : List<&2, String> <- whenTrusted(trusted(context), collectExtensionEntries(Path.join(projectBase(context), "extensions")))
+    user : List<&2, String> <- collectExtensionEntries(Path.join(globalBase(context), "extensions"))
+    return addedAuto(addedAuto(resources, project, ProjectScope{}, projectEntries(context, ExtensionResources{}), projectBase(context)), user, UserScope{}, globalEntries(context, ExtensionResources{}), globalBase(context))
+
 # Prompts and themes: the project's own directory when trusted, then the user's.
 def autoFiles(+context: Context, +kind: ResourceType, +resources: List<&2, ResolvedResource>) -> IO(List<&2, ResolvedResource>):
   +folder = settingName(kind)
@@ -702,6 +765,7 @@ def toResolved(+resources: List<&2, ResolvedResource>) -> IO(List<&2, ResolvedRe
 
 def autoFor(+context: Context, +kind: ResourceType, +resources: List<&2, ResolvedResource>) -> IO(List<&2, ResolvedResource>):
   match kind:
+    case ExtensionResources{}: autoExtensions(context, resources)
     case SkillResources{}: autoSkills(context, resources)
     case _: autoFiles(context, kind, resources)
 
@@ -1371,41 +1435,6 @@ def updateConfigured(+context: Context, +source: Maybe<&2, String>) -> IO(Packag
 # Package resource discovery
 # --------------------------
 
-def manifestStringTail(value: String, tail: Maybe<&2, List<&2, String>>) -> Maybe<&2, List<&2, String>>:
-  match tail:
-    case Some{later}: Some{value <> later}
-    case None{}: None{}
-def manifestStrings(values: List<&2, V.Value>) -> Maybe<&2, List<&2, String>>:
-  match values:
-    case Nil{}: Some{Nil{}}
-    case V.Text{value} <> rest: manifestStringTail(value, manifestStrings(rest))
-    case _: None{}
-def manifestFieldValue(found: Maybe<&2, V.Value>) -> Maybe<&2, List<&2, String>>:
-  match found:
-    case Some{V.ArrayValue{values}}: manifestStrings(values)
-    case _: None{}
-def manifestField(fields: R.Record<V.Value>, name: String) -> Maybe<&2, List<&2, String>>:
-  manifestFieldValue(R.get(V.Value, fields, name))
-def manifestPiValue(found: Maybe<&2, V.Value>) -> Maybe<&2, R.Record<V.Value>>:
-  match found:
-    case Some{V.ObjectValue{pi}}: Some{pi}
-    case _: None{}
-def manifestPi(value: V.Value) -> Maybe<&2, R.Record<V.Value>>:
-  match value:
-    case V.ObjectValue{fields}: manifestPiValue(R.get(V.Value, fields, "pi"))
-    case _: None{}
-def parsedManifest(result: Result<&2, &2, Json.ParseError, V.Value>) -> Maybe<&2, R.Record<V.Value>>:
-  match result:
-    case Done{value}: manifestPi(value)
-    case Fail{_}: None{}
-def manifestBytes(bytes: Result<&2, &2, FS.Error, List<&2, U32>>) -> Maybe<&2, R.Record<V.Value>>:
-  match bytes:
-    case Done{data}: parsedManifest(Json.parse(Utf8.decodeBuffer(data)))
-    case Fail{_}: None{}
-def packageManifest(root: String) -> IO(Maybe<&2, R.Record<V.Value>>):
-  do IO<Maybe<&2, R.Record<V.Value>>>:
-    bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(Path.join(root, "package.json"))
-    return manifestBytes(bytes)
 def matchKindSkill(kind: ResourceType) -> Bool:
   match kind:
     case SkillResources{}: True{}
@@ -1475,9 +1504,15 @@ def manifestDefault(+root: String, +kind: ResourceType, found: Maybe<&2, List<&2
         files : List<&2, String> <- manifestFiles(root, entries, kind)
         return applyPatterns(files, manifestOverrides(entries), root)
     case None{}: Bool.pick(Unit -> IO(List<&2, String>), fallback, _ => collectResourceFiles(Path.join(root, settingName(kind)), kind), _ => IO.pure(List<&2, String>, Nil{}))(Unit{})
-def defaultPackageFiles(+root: String, +kind: ResourceType, manifest: Maybe<&2, R.Record<V.Value>>, fallback: Bool) -> IO(List<&2, String>):
+def manifestEntries(kind: ResourceType, manifest: Manifest.PiManifest) -> Maybe<&2, List<&2, String>>:
+  match kind manifest:
+    case ExtensionResources{} Manifest.PiManifest{extensions, _, _, _}: extensions
+    case SkillResources{} Manifest.PiManifest{_, skills, _, _}: skills
+    case PromptResources{} Manifest.PiManifest{_, _, prompts, _}: prompts
+    case ThemeResources{} Manifest.PiManifest{_, _, _, themes}: themes
+def defaultPackageFiles(+root: String, +kind: ResourceType, manifest: Maybe<&2, Manifest.PiManifest>, fallback: Bool) -> IO(List<&2, String>):
   match manifest:
-    case Some{fields}: manifestDefault(root, kind, manifestField(fields, settingName(kind)), fallback)
+    case Some{fields}: manifestDefault(root, kind, manifestEntries(kind, fields), fallback)
     case None{}: collectResourceFiles(Path.join(root, settingName(kind)), kind)
 def filterFor(kind: ResourceType, pkg: Settings.PackageSource) -> Maybe<&2, Settings.PackageFilter>:
   match pkg:
@@ -1485,6 +1520,7 @@ def filterFor(kind: ResourceType, pkg: Settings.PackageSource) -> Maybe<&2, Sett
     case _: None{}
 def filterEntries(kind: ResourceType, filter: Settings.PackageFilter) -> Maybe<&2, List<&2, String>>:
   match kind filter:
+    case ExtensionResources{} Settings.PackageFilter{_, extensions, _, _, _}: extensions
     case SkillResources{} Settings.PackageFilter{_, _, skills, _, _}: skills
     case PromptResources{} Settings.PackageFilter{_, _, _, prompts, _}: prompts
     case ThemeResources{} Settings.PackageFilter{_, _, _, _, themes}: themes
@@ -1543,14 +1579,27 @@ def isProjectScope(scope: SourceScope) -> Bool:
   match scope:
     case ProjectSource{}: True{}
     case _: False{}
+def isExtensionResource(kind: ResourceType) -> Bool:
+  match kind:
+    case ExtensionResources{}: True{}
+    case _: False{}
+def packageAtKind(+path: String, source: String, scope: SourceScope, +kind: ResourceType, +pkg: Settings.PackageSource, +resources: List<&2, ResolvedResource>, found: Result<&2, &2, FS.Error, FS.FileKind>) -> IO(List<&2, ResolvedResource>):
+  match found:
+    case Done{FS.RegularFile{}}:
+      IO.pure(List<&2, ResolvedResource>, Bool.pick(List<&2, ResolvedResource>, isExtensionResource(kind), added(resources, path, PathMetadata{Package{source}, Bool.pick(Scope, isProjectScope(scope), ProjectScope{}, UserScope{}), Some{Path.dirname(path)}}, True{}), resources))
+    case Done{FS.Directory{}}:
+      do IO<List<&2, ResolvedResource>>:
+        manifest : Maybe<&2, Manifest.PiManifest> <- Manifest.readPiManifest(Path.join(path, "package.json"))
+        +files : List<&2, String> <- defaultPackageFiles(path, kind, manifest, Maybe.is_some(&2, Settings.PackageFilter, filterFor(kind, pkg)))
+        return addedAll(files, resources, PathMetadata{Package{source}, Bool.pick(Scope, isProjectScope(scope), ProjectScope{}, UserScope{}), Some{path}}, selectedPackageFiles(files, path, kind, pkg))
+    case _: IO.pure(List<&2, ResolvedResource>, resources)
 def packageAtRoot(root: Maybe<&2, String>, source: String, scope: SourceScope, +kind: ResourceType, +pkg: Settings.PackageSource, resources: List<&2, ResolvedResource>) -> IO(List<&2, ResolvedResource>):
   match root:
     case None{}: IO.pure(List<&2, ResolvedResource>, resources)
     case Some{+path}:
       do IO<List<&2, ResolvedResource>>:
-        manifest : Maybe<&2, R.Record<V.Value>> <- packageManifest(path)
-        +files : List<&2, String> <- defaultPackageFiles(path, kind, manifest, Maybe.is_some(&2, Settings.PackageFilter, filterFor(kind, pkg)))
-        return addedAll(files, resources, PathMetadata{Package{source}, Bool.pick(Scope, isProjectScope(scope), ProjectScope{}, UserScope{}), Some{path}}, selectedPackageFiles(files, path, kind, pkg))
+        found : Result<&2, &2, FS.Error, FS.FileKind> <- FS.fileKind(path)
+        packageAtKind(path, source, scope, kind, pkg, resources, found)
 def packageResources(+context: Context, packages: List<&2, Settings.PackageSource>, +scope: SourceScope, +kind: ResourceType, resources: List<&2, ResolvedResource>) -> IO(List<&2, ResolvedResource>):
   match packages:
     case Nil{}: IO.pure(List<&2, ResolvedResource>, resources)
@@ -1569,9 +1618,10 @@ def resolvedType(+context: Context, +kind: ResourceType) -> IO(List<&2, Resolved
     toResolved(user)
 def resolvedIn(+context: Context) -> IO(ResolvedPaths):
   do IO<ResolvedPaths>:
+    extensions : List<&2, ResolvedResource> <- resolvedType(context, ExtensionResources{})
     skills : List<&2, ResolvedResource> <- resolvedType(context, SkillResources{})
     prompts : List<&2, ResolvedResource> <- resolvedType(context, PromptResources{})
     themes : List<&2, ResolvedResource> <- resolvedType(context, ThemeResources{})
-    return ResolvedPaths{skills, prompts, themes}
+    return ResolvedPaths{extensions, skills, prompts, themes}
 def resolve(environment: Paths.Environment, settings: Settings.SettingsManager, cwd: String, agentDir: String) -> IO(ResolvedPaths):
   resolvedIn(contextOf(environment, settings, cwd, agentDir))
