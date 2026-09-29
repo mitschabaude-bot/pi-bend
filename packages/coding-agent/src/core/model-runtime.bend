@@ -1206,6 +1206,24 @@ def resolveScope(patterns: List<&2,String>,+models: List<&2,Model()>,items: List
     case pattern <> rest:
       Result.bind(&2,&2,String,List<&2,ScopedModel>,List<&2,ScopedModel>,scopedOne(pattern,models,items),next => resolveScope(rest,models,next))
 
+# Keep stale settings references visible in the scope picker while still
+# resolving every valid pattern. Invalid pattern syntax remains an error.
+type ScopeResolution is Data: ScopeResolution{scoped: List<&2,ScopedModel>, unmatched: List<&2,String>}
+def scopeStep(+pattern: String,+scoped: List<&2,ScopedModel>,+unmatched: List<&2,String>,result: Result<&2,&2,String,List<&2,ScopedModel>>) -> Result<&2,&2,String,ScopeResolution>:
+  match result:
+    case Done{next}: Done{ScopeResolution{next,unmatched}}
+    case Fail{+error}:
+      Bool.pick(Unit -> Result<&2,&2,String,ScopeResolution>,String.starts_with(error,"No models match pattern: "),_ => Done{ScopeResolution{scoped,List.append(&2,String,unmatched,[pattern])}},_ => Fail{error})(Unit{})
+def resolvedModels(result: ScopeResolution) -> List<&2,ScopedModel>:
+  match result: case ScopeResolution{scoped,_}: scoped
+def unresolvedPatterns(result: ScopeResolution) -> List<&2,String>:
+  match result: case ScopeResolution{_,unmatched}: unmatched
+def resolveScopeWithMissing(patterns: List<&2,String>, +models: List<&2,Model()>, +scoped: List<&2,ScopedModel>, unmatched: List<&2,String>) -> Result<&2,&2,String,ScopeResolution>:
+  match patterns:
+    case Nil{}: Done{ScopeResolution{scoped,unmatched}}
+    case +pattern <> rest:
+      Result.bind(&2,&2,String,ScopeResolution,ScopeResolution,scopeStep(pattern,scoped,unmatched,scopedOne(pattern,models,scoped)),+next => resolveScopeWithMissing(rest,models,resolvedModels(next),unresolvedPatterns(next)))
+
 type ResolveCliModelResult is Data:
   ResolveCliModelResult{model: Maybe<&2, Model()>, thinkingLevel: Maybe<&2, Ai.ModelThinkingLevel>, warning: Maybe<&2, String>, error: Maybe<&2, String>}
 

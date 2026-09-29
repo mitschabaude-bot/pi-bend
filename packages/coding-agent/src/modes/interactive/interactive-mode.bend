@@ -342,12 +342,12 @@ def scopedIds(items: List<&2,Models.ScopedModel>) -> List<&2,String>:
   match items:
     case Nil{}: Nil{}
     case Models.ScopedModel{model,_} <> rest: Models.reference(model) <> scopedIds(rest)
-def resolvedResult(patterns: List<&2,String>,result: Result<&2,&2,String,List<&2,Models.ScopedModel>>) -> List<&2,String>:
+def resolvedResult(patterns: List<&2,String>,result: Result<&2,&2,String,Models.ScopeResolution>) -> List<&2,String>:
   match result:
-    case Done{scope}: scopedIds(scope)
+    case Done{Models.ScopeResolution{scope,missing}}: List.append(&2,String,scopedIds(scope),missing)
     case Fail{_}: patterns
 def resolvedIds(+patterns: List<&2,String>,models: List<&2,Models.Model()>) -> List<&2,String>:
-  resolvedResult(patterns,Models.resolveScope(patterns,models,Nil{}))
+  resolvedResult(patterns,Models.resolveScopeWithMissing(patterns,models,Nil{},Nil{}))
 def configuredScope(configured: Maybe<&2,List<&2,String>>,models: List<&2,Models.Model()>) -> ScopePicker.Scope:
   match configured:
     case None{}: ScopePicker.All{}

@@ -703,9 +703,9 @@ def themeOverride(parsed: Args.Args) -> Maybe<&2,String>:
   match parsed:
     case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, useTheme, _, _, _, _, _, _, _, _, _, _, _}: useTheme
 
-def resolveFlags(flags: ScopeFlags,available: List<&2,Models.Model()>) -> Result<&2,&2,String,List<&2,Models.ScopedModel>>:
+def resolveFlags(flags: ScopeFlags,available: List<&2,Models.Model()>) -> Result<&2,&2,String,Models.ScopeResolution>:
   match flags:
-    case ScopeFlags{patterns,_,_}: Models.resolveScope(patterns,available,Nil{})
+    case ScopeFlags{patterns,_,_}: Models.resolveScopeWithMissing(patterns,available,Nil{},Nil{})
 # Runtime factory
 # ---------------
 
@@ -777,10 +777,26 @@ def scopeApplied(cwd: String, session: Session(), +hasExisting: Bool, hasThinkin
     selected : Runtime.AgentRuntime <- startupScope(runtime, scope, seed, settings, flags, hasExisting)
     selectionRecorded(cwd, session, hasExisting, hasThinking, settings, scope, Runtime.selectionOf(selected))
 
-def scopeResolved(cwd: String, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, seed: Runtime.SessionSeed, flags: ScopeFlags, runtime: Runtime.AgentRuntime, result: Result<&2, &2, String, List<&2, Models.ScopedModel>>) -> IO(Result<&1, &1, String, Created()>):
+def unmatchedWarning(pattern: String,color: Bool) -> String:
+  match color:
+    case True{}: "\u{1b}[33mWarning: No models match pattern \"" ++ pattern ++ "\"\u{1b}[39m"
+    case False{}: "Warning: No models match pattern \"" ++ pattern ++ "\""
+def warnUnmatched(patterns: List<&2,String>,+color: Bool) -> IO(Unit):
+  match patterns:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case pattern <> rest:
+      do IO<Unit>:
+        IO.print_err(unmatchedWarning(pattern,color))
+        warnUnmatched(rest,color)
+
+def scopeResolved(cwd: String, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, seed: Runtime.SessionSeed, flags: ScopeFlags, runtime: Runtime.AgentRuntime, result: Result<&2, &2, String, Models.ScopeResolution>) -> IO(Result<&1, &1, String, Created()>):
   match result:
     case Fail{message}: factoryFailed(runtime, message)
-    case Done{scope}: scopeApplied(cwd, session, hasExisting, hasThinking, settings, seed, flags, scope, runtime)
+    case Done{Models.ScopeResolution{scope,missing}}:
+      do IO<Result<&1, &1, String, Created()>>:
+        color : Bool <- IO.isTerminal(2)
+        warnUnmatched(missing,color)
+        scopeApplied(cwd, session, hasExisting, hasThinking, settings, seed, flags, scope, runtime)
 
 def catalogScoped(cwd: String, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, seed: Runtime.SessionSeed, +flags: ScopeFlags, pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Result<&1, &1, String, Created()>):
   match pair:

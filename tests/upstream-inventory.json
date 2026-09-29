@@ -4551,10 +4551,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6949-unavailable-scoped-model.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py",
+        "tests/scoped-selector-input.bend",
+        "tests/scoped_selector_input_check.py"
+      ],
       "sha256": "20c6f5a0a13fd7a666fd1f02561c35fe4223f05c309765912a1c0a31f9cde928",
-      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
+      "notes": "Mounted terminal cases cover stale-only settings display/removal/save and mixed valid/stale startup resolution; the selector differential suite covers unavailable ID toggling and save. Session-only unavailable models and partial-scope reorder after refresh remain untested."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6999-models-json-hot-reload.test.ts",
