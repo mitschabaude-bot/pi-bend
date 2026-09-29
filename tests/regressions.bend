@@ -1014,7 +1014,7 @@ def extensionToolExecute(unit: Unit, call: Ext.ToolCallInput) -> IO(Tools.Output
 def registerTestTool(+api: Ext.ExtensionAPI, +name: String, +label: String, +description: String, +snippet: String) -> IO(Unit):
   do IO<Unit>:
     execute : Ext.ToolExecute() <- C.create(~Unit, ~Ext.ToolCallInput, ~Tools.Output(), ~extensionToolExecute, Unit{})
-    registered : Result<&2, &2, String, Unit> <- Loader.registerTool(api, Ext.ToolDefinition{name, label, description, Some{snippet}, Nil{}, Json.object(Json.field("type", Json.text("object"), Json.field("properties", Json.object(Nil{}), Nil{}))), None{}, execute, Ext.DefaultShell{}, None{}, None{}})
+    registered : Result<&2, &2, String, Unit> <- Loader.registerTool(api, Ext.ToolDefinition{name, label, description, Some{snippet}, Nil{}, Json.object(Json.field("type", Json.text("object"), Json.field("properties", Json.object(Nil{}), Nil{}))), None{}, None{}, execute, Ext.DefaultShell{}, None{}, None{}})
     return Unit{}
 
 # `ask`: also ask_question (5109 and 2835 register both; 3592 dynamic_tool only).

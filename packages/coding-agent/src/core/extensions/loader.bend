@@ -70,7 +70,7 @@ def createBashToolDefinition(+cwd: String, +options: Bash.BashToolOptions) -> IO
   +guidelines = Bool.pick(List<&2,String>,Tools.exposesSessionEnvironment(Some{options}),Tools.promptGuidelines(Tools.BashTool{}),Nil{})
   do IO<T.ToolDefinition>:
     execute : T.ToolExecute() <- C.create(~BashDefinition,~T.ToolCallInput,~Tools.Output(),~runBashDefinition,BashDefinition{cwd,options})
-    return T.ToolDefinition{"bash","bash",Bash.description(),Some{Tools.promptSnippet(Tools.BashTool{})},guidelines,Bash.bashSchema(),None{},execute,T.NativeBash{},None{},None{}}
+    return T.ToolDefinition{"bash","bash",Bash.description(),Some{Tools.promptSnippet(Tools.BashTool{})},guidelines,Bash.bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},None{},execute,T.NativeBash{},None{},None{}}
 
 # Extension state
 # ---------------
@@ -184,7 +184,7 @@ def registerCommand(api: T.ExtensionAPI, name: String, options: T.CommandOptions
 
 def toolNameOf(definition: T.ToolDefinition) -> String:
   match definition:
-    case T.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _}: name
+    case T.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _, _}: name
 
 def definedTool(tools: List<&2, T.ToolDefinition>, +definition: T.ToolDefinition) -> List<&2, T.ToolDefinition>:
   match tools:

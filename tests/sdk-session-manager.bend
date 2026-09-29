@@ -244,7 +244,7 @@ def exposesCurrentSessionStateToTheBuiltInBashTool(+base: String) -> IO(Unit):
 def sdkTool(_: Unit,_: Ext.ToolCallInput) -> IO(Tools.Output()):
   IO.pure(Tools.Output(),Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"sdk-ok",None{}}} <> Nil{},None{},None{},None{}}})
 def definition(name: String,execute: Ext.ToolExecute()) -> Ext.ToolDefinition:
-  Ext.ToolDefinition{name,"SDK Tool","Run the SDK tool",Some{"Run the SDK tool"},["Prefer the SDK tool when asked"],V.ObjectValue{Rec.Record{Nil{}}},None{},execute,Ext.DefaultShell{},None{},None{}}
+  Ext.ToolDefinition{name,"SDK Tool","Run the SDK tool",Some{"Run the SDK tool"},["Prefer the SDK tool when asked"],V.ObjectValue{Rec.Record{Nil{}}},None{},None{},execute,Ext.DefaultShell{},None{},None{}}
 def namesContain(names: List<&2,String>,+name: String) -> Bool:
   match names:
     case Nil{}: False{}
@@ -291,11 +291,11 @@ def captureSpawn(capture: Capture, context: Bash.BashSpawnContext) -> IO(Result<
         return Done{Bash.BashSpawnContext{command,cwd,env}}
 def renamed(definition: Ext.ToolDefinition,name: String,label: String) -> Ext.ToolDefinition:
   match definition:
-    case Ext.ToolDefinition{_,_,description,snippet,guidelines,parameters,mode,execute,shell,call,result}:
-      Ext.ToolDefinition{name,label,description,snippet,guidelines,parameters,mode,execute,shell,call,result}
+    case Ext.ToolDefinition{_,_,description,snippet,guidelines,parameters,sampling,mode,execute,shell,call,result}:
+      Ext.ToolDefinition{name,label,description,snippet,guidelines,parameters,sampling,mode,execute,shell,call,result}
 def definitionExecute(definition: Ext.ToolDefinition) -> Ext.ToolExecute():
   match definition:
-    case Ext.ToolDefinition{_,_,_,_,_,_,_,execute,_,_,_}: execute
+    case Ext.ToolDefinition{_,_,_,_,_,_,_,_,execute,_,_,_}: execute
 def envValue(variables: Shell.Environment(),+name: String) -> Maybe<&2,String>:
   match variables:
     case Nil{}: None{}

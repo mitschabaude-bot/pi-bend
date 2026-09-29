@@ -642,6 +642,7 @@ def extension_tool_checks(f):
     assert all(captured['exposed'][key] == expected[key] for key in keys), captured
     assert all(captured['hidden'][key] == '<missing>' for key in keys), captured
     assert {event['name'] for event in of_type(events, 'bash_result') if event.get('ok')} == {'bash', 'bash_without_session_env'}, events
+    assert {event['name'] for event in of_type(events, 'bash_sampling') if event.get('preferJsonSchema')} == {'bash', 'bash_without_session_env'}, events
     checks += 1
     # dynamic tools: refreshes the registry and reports the tool's source and guidelines
     events = run(f, 'prompt', 'dynamic_tool')

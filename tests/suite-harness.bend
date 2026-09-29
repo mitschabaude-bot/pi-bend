@@ -2045,7 +2045,7 @@ def switchExecute(env: SwitchEnv, call: Ext.ToolCallInput) -> IO(Tools.Output())
 def switchTool(+api: Ext.ExtensionAPI, +name: String, +kind: String, +label: String, +description: String, +snippet: String) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     execute : Ext.ToolExecute() <- C.create(~SwitchEnv, ~Ext.ToolCallInput, ~Tools.Output(), ~switchExecute, SwitchEnv{api, kind})
-    Loader.registerTool(api, Ext.ToolDefinition{name, label, description, Some{snippet}, Nil{}, emptySchema(), None{}, execute, Ext.DefaultShell{}, None{}, None{}})
+    Loader.registerTool(api, Ext.ToolDefinition{name, label, description, Some{snippet}, Nil{}, emptySchema(), None{}, None{}, execute, Ext.DefaultShell{}, None{}, None{}})
 
 def registerSwitchTools(+api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
@@ -2113,8 +2113,8 @@ def dynamicExecute(env: Unit, call: Ext.ToolCallInput) -> IO(Tools.Output()): IO
 
 def dynamicDefinition(hidden: Bool, execute: Ext.ToolExecute()) -> Ext.ToolDefinition:
   match hidden:
-    case True{}: Ext.ToolDefinition{"hidden_tool", "Hidden Tool", "Description should not appear in available tools", None{}, Nil{}, emptySchema(), None{}, execute, Ext.DefaultShell{}, None{}, None{}}
-    case False{}: Ext.ToolDefinition{"dynamic_tool", "Dynamic Tool", "Tool registered from session_start", Some{"Run dynamic test behavior"}, ["Use dynamic_tool when the user asks for dynamic behavior tests."], emptySchema(), None{}, execute, Ext.DefaultShell{}, None{}, None{}}
+    case True{}: Ext.ToolDefinition{"hidden_tool", "Hidden Tool", "Description should not appear in available tools", None{}, Nil{}, emptySchema(), None{}, None{}, execute, Ext.DefaultShell{}, None{}, None{}}
+    case False{}: Ext.ToolDefinition{"dynamic_tool", "Dynamic Tool", "Tool registered from session_start", Some{"Run dynamic test behavior"}, ["Use dynamic_tool when the user asks for dynamic behavior tests."], emptySchema(), None{}, None{}, execute, Ext.DefaultShell{}, None{}, None{}}
 
 def registerOnStart(env: DynamicEnv, call: Ext.HandlerCall<Ext.SessionStartEvent>) -> IO(Handled(Unit)):
   match env:
@@ -2169,10 +2169,10 @@ def bashSpawnHook(label: String, context: Bash.BashSpawnContext) -> IO(Result<&2
         return Done{Bash.BashSpawnContext{command,cwd,env}}
 def bashDefinitionName(definition: Ext.ToolDefinition,name: String,label: String) -> Ext.ToolDefinition:
   match definition:
-    case Ext.ToolDefinition{_,_,description,snippet,guidelines,parameters,mode,execute,shell,call,result}: Ext.ToolDefinition{name,label,description,snippet,guidelines,parameters,mode,execute,shell,call,result}
+    case Ext.ToolDefinition{_,_,description,snippet,guidelines,parameters,sampling,mode,execute,shell,call,result}: Ext.ToolDefinition{name,label,description,snippet,guidelines,parameters,sampling,mode,execute,shell,call,result}
 def bashDefinitionExecute(definition: Ext.ToolDefinition) -> Ext.ToolExecute():
   match definition:
-    case Ext.ToolDefinition{_,_,_,_,_,_,_,execute,_,_,_}: execute
+    case Ext.ToolDefinition{_,_,_,_,_,_,_,_,execute,_,_,_}: execute
 def bashFactory(first: Ext.ToolDefinition,second: Ext.ToolDefinition,+api: Ext.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
   do IO<Result<&2,&2,String,Unit>>:
     a : Result<&2,&2,String,Unit> <- Loader.registerTool(api,first)
@@ -2195,11 +2195,16 @@ def reportBashResult(name: String,result: Tools.Output()) -> IO(Unit):
   match result:
     case Done{_}: print("bash_result",Json.field("name",Json.text(name),Json.field("ok",V.Boolean{True{}},Nil{})))
     case Fail{error}: print("bash_result",Json.field("name",Json.text(name),Json.field("error",Json.text(Tools.errorMessage(error)),Nil{})))
-def bashResult(name: String,tool: Maybe<&2,Tools.Tool()>) -> IO(Unit):
+def prefersJsonSchema(sampling: Maybe<&2,Ai.ToolConstrainedSampling>) -> Bool:
+  match sampling:
+    case Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}}: True{}
+    case _: False{}
+def bashResult(+name: String,tool: Maybe<&2,Tools.Tool()>) -> IO(Unit):
   match tool:
     case None{}: print("bash_result",Json.field("name",Json.text(name),Json.field("error",Json.text("missing tool"),Nil{})))
-    case Some{T.AgentTool{_,_,_,_,_,_,execute,_,_}}:
+    case Some{T.AgentTool{_,_,_,sampling,_,_,execute,_,_}}:
       do IO<Unit>:
+        print("bash_sampling",Json.field("name",Json.text(name),Json.field("preferJsonSchema",V.Boolean{prefersJsonSchema(sampling)},Nil{})))
         result : Tools.Output() <- C.call(Tools.Input(),Tools.Output(),execute,T.ToolExecutionInput{"bash-definition",Json.object(Json.field("command",Json.text("printf ok"),Nil{})),None{},None{}})
         reportBashResult(name,result)
 def bashDefinitionScenario(+dir: String,agentDir: String) -> IO(Unit):

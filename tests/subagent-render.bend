@@ -41,7 +41,7 @@ def run(+theme: Theme.Theme) -> IO(Unit):
     +executeCallback : Ext.ToolExecute() <- C.create(~Unit,~Ext.ToolCallInput,~Tools.Output(),~execute,Unit{})
     +call : ToolRender.Renderer() <- C.create(~Unit,~ToolRender.RenderContext,~ToolRender.RenderResult(),~Subagent.renderCall,Unit{})
     +resultCallback : ToolRender.Renderer() <- C.create(~Unit,~ToolRender.RenderContext,~ToolRender.RenderResult(),~Subagent.renderResult,Unit{})
-    +definition : Ext.ToolDefinition <- IO.pure(Ext.ToolDefinition,Ext.ToolDefinition{"subagent","Subagent","delegate",None{},Nil{},V.ObjectValue{R.Record{Nil{}}},None{},executeCallback,Ext.DefaultShell{},Some{call},Some{resultCallback}})
+    +definition : Ext.ToolDefinition <- IO.pure(Ext.ToolDefinition,Ext.ToolDefinition{"subagent","Subagent","delegate",None{},Nil{},V.ObjectValue{R.Record{Nil{}}},None{},None{},executeCallback,Ext.DefaultShell{},Some{call},Some{resultCallback}})
     +shell : Tool.Shell <- IO.pure(Tool.Shell,Transcript.registeredShell([Ext.RegisteredTool{definition,ExtensionLoader.createSourceInfo("<test:subagent>")}],"subagent"))
     +args : V.Value <- IO.pure(V.Value,Json.object(Json.field("agent",Json.text("worker"),Json.field("task",Json.text("Find the issue"),Nil{}))))
     +pending : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("subagent","call-1",args,theme,shell))

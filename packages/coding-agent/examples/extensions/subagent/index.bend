@@ -1518,7 +1518,7 @@ def subagentExtensionWith(+agentDir: String, +api: Ext.ExtensionAPI) -> IO(Resul
     execute : Ext.ToolExecute() <- C.create(~ExtensionEnv, ~Ext.ToolCallInput, ~Tools.Output(), ~executeSubagent, ExtensionEnv{agentDir})
     call : ToolRender.Renderer() <- C.create(~Unit, ~ToolRender.RenderContext, ~ToolRender.RenderResult(), ~renderCall, Unit{})
     result : ToolRender.Renderer() <- C.create(~Unit, ~ToolRender.RenderContext, ~ToolRender.RenderResult(), ~renderResult, Unit{})
-    Loader.registerTool(api, Ext.ToolDefinition{"subagent", "Subagent", toolDescription(agentDir), None{}, Nil{}, subagentParams(), None{}, execute, Ext.DefaultShell{}, Some{call}, Some{result}})
+    Loader.registerTool(api, Ext.ToolDefinition{"subagent", "Subagent", toolDescription(agentDir), None{}, Nil{}, subagentParams(), None{}, None{}, execute, Ext.DefaultShell{}, Some{call}, Some{result}})
 
 def registered(located: Config.Located(), +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
   match located:
