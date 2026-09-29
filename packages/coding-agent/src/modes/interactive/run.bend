@@ -185,7 +185,7 @@ def initialSessionFooter(+session: Session.AgentSession,+agentState: Session.Age
   do IO<Footer.State>:
     +scoped : List<&2,Models.ScopedModel> <- Session.getScopedModels(session)
     models : List<&2,Models.Model()> <- Bool.pick(Unit -> IO(List<&2,Models.Model()>),List.is_empty(&2,Models.ScopedModel,scoped),
-      _ => Models.getAvailable(Session.modelRuntime(session)),
+      _ => Models.getAvailableSnapshot(Session.modelRuntime(session)),
       _ => IO.pure(List<&2,Models.Model()>,Session.scopedModels(scoped)))(Unit{})
     subscription : Bool <- modelSubscription(session,Session.stateModel(agentState))
     return footerMetadata(initialFooter(agentState,messages,cwd,home,autoCompact),Some{countProviders(models,Nil{})},subscription)
@@ -2896,7 +2896,7 @@ def startupCatalogUpdated(+runtime: Models.ModelRuntime,session: Ref.Ref<Session
     +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     same : Bool <- IO.pure(Bool,Ref.same(Models.SharedRefresh,Models.sharedRef(runtime),Models.sharedRef(Session.modelRuntime(live))))
     Bool.pick(Unit -> IO(Unit),same,_ => do IO<Unit>:
-      +available : List<&2,Models.Model()> <- Models.getAvailable(runtime)
+      +available : List<&2,Models.Model()> <- Models.getAvailableSnapshot(runtime)
       ignoredModels : Maybe<&1,Unit> <- Ref.tryModify(List<&2,Models.Model()>,Unit,models,old => Interactive.replacedModels(old,available))
       scoped : List<&2,Models.ScopedModel> <- Session.getScopedModels(live)
       ignoredFooter : Maybe<&1,Unit> <- Ref.tryModify(Footer.State,Unit,footer,state => updatedProviderCount(startupProviderCount(scoped,available),state))

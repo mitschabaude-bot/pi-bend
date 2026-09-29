@@ -155,7 +155,7 @@ def models(runtime: Models.ModelRuntime,_: Unit) -> IO(List<&2,Models.Model()>):
   do IO<List<&2,Models.Model()>>:
     +current : Models.ModelRuntime = runtime
     Models.refreshAvailability(current)
-    Models.getAvailable(current)
+    Models.getAvailableSnapshot(current)
 def requireSession(result: Sessions.Outcome(Session.Session())) -> IO(Session.Session()):
   match result:
     case Done{session}: IO.pure(Session.Session(),session)

@@ -53,6 +53,9 @@ type Catalog is Data:
 
 def emptyCatalog() -> Catalog: Catalog{Nil{}, Nil{}, Nil{}}
 
+type AvailabilityStatus is Data:
+  AvailabilityStatus{generation: Nat, error: Maybe<&2, String>}
+
 # The read state of a FileModelsStore the runtime created. Upstream shares a
 # module-level read state per path among FileModelsStore instances; Bend has
 # no module state, and the state's Serial owner is affine (Type-kinded), so
@@ -97,7 +100,7 @@ type SharedRefresh is Data:
   RefreshClosed{}
 
 type ModelRuntime is Data:
-  ModelRuntime{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>}
+  ModelRuntime{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>}
 
 # Composition (recomposeProvider/rebuildProviders)
 # -----------------------------------------------
@@ -184,9 +187,9 @@ def rebuildProviders(ids: List<&2, String>, +builtins: List<&2, AiModels.Provide
         next : Composition <- recomposeProvider(id, findProvider(builtins, id), Config.getProvider(config, id), composition)
         rebuildProviders(rest, builtins, config, next)
 
-def assembled(composition: Composition, builtins: List<&2, String>, config: Config.ModelConfig, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>) -> ModelRuntime:
+def assembled(composition: Composition, builtins: List<&2, String>, config: Config.ModelConfig, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>) -> ModelRuntime:
   match composition:
-    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), builtins, config, List.reverse(&2, String, errors), retained, models, catalog, storeState, extensions, sharedRefresh}
+    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), builtins, config, List.reverse(&2, String, errors), retained, models, catalog, storeState, extensions, sharedRefresh, availability}
 
 def unknownProvider(id: String) -> Resolve.ModelsError:
   Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ id}
@@ -196,7 +199,7 @@ def unknownProvider(id: String) -> Resolve.ModelsError:
 
 def modelsOf(runtime: ModelRuntime) -> AiModels.Models:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, models, _, _, _, _}: models
+    case ModelRuntime{_, _, _, _, _, models, _, _, _, _, _}: models
 
 def credentialsOf(runtime: ModelRuntime) -> Auth.CredentialStore: AiModels.credentialsOf(modelsOf(runtime))
 
@@ -206,7 +209,7 @@ def storeOf(runtime: ModelRuntime) -> Store.ModelsStore: AiModels.modelsStoreOf(
 
 def catalogRef(runtime: ModelRuntime) -> Ref.Ref<Catalog>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, catalog, _, _, _}: catalog
+    case ModelRuntime{_, _, _, _, _, _, catalog, _, _, _, _}: catalog
 
 def readCatalog(runtime: ModelRuntime) -> IO(Catalog):
   Ref.read(Catalog, catalogRef(runtime))
@@ -242,7 +245,7 @@ def nativesOf(catalog: Catalog) -> List<&2, AiModels.Provider>:
 
 def providersWith(runtime: ModelRuntime, +natives: List<&2, AiModels.Provider>) -> List<&2, AiModels.Provider>:
   match runtime:
-    case ModelRuntime{providers, builtins, _, _, _, _, _, _, _, _}: effectiveProviders(providers, builtins, natives)
+    case ModelRuntime{providers, builtins, _, _, _, _, _, _, _, _, _}: effectiveProviders(providers, builtins, natives)
 
 # upstream rebuildProviders on the collection after the provider of `changed`
 # was registered, replaced or removed.
@@ -273,7 +276,7 @@ def getAuth(+runtime: ModelRuntime, +id: String, overrides: Resolve.AuthResoluti
 
 def getModelConfig(runtime: ModelRuntime) -> Config.ModelConfig:
   match runtime:
-    case ModelRuntime{_, _, config, _, _, _, _, _, _, _}: config
+    case ModelRuntime{_, _, config, _, _, _, _, _, _, _, _}: config
 
 def checkFailure(result: AiModels.CheckResult()) -> Result<&2, &2, String, Maybe<&2, Auth.AuthCheck>>:
   match result:
@@ -487,7 +490,7 @@ def disposeApiStreamsOf(streams: Maybe<&2, Composer.ProviderStream()>) -> IO(Uni
 
 def extensionsRef(runtime: ModelRuntime) -> Ref.Ref<ExtensionState>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, _, extensions, _}: extensions
+    case ModelRuntime{_, _, _, _, _, _, _, _, extensions, _, _}: extensions
 
 def entryId(entry: ExtensionEntry) -> String:
   match entry:
@@ -510,9 +513,22 @@ def joinedErrors(configError: Maybe<&2, String>, errors: List<&2, String>) -> Ma
     case None{} errors: Some{String.join(errors, "\n\n")}
     case Some{error} errors: Some{String.join(error <> errors, "\n\n")}
 
-def getError(runtime: ModelRuntime) -> Maybe<&2, String>:
+def availabilityRef(runtime: ModelRuntime) -> Ref.Ref<AvailabilityStatus>:
   match runtime:
-    case ModelRuntime{_, _, config, errors, _, _, _, _, _, _}: joinedErrors(Config.getError(config), errors)
+    case ModelRuntime{_, _, _, _, _, _, _, _, _, _, availability}: availability
+
+def errorWithAvailability(base: Maybe<&2, String>, status: AvailabilityStatus) -> Maybe<&2, String>:
+  match status base:
+    case AvailabilityStatus{_, None{}} value: value
+    case AvailabilityStatus{_, Some{error}} None{}: Some{"Availability refresh: " ++ error}
+    case AvailabilityStatus{_, Some{error}} Some{previous}: Some{previous ++ "\n\nAvailability refresh: " ++ error}
+
+def getError(runtime: ModelRuntime) -> IO(Maybe<&2, String>):
+  match runtime:
+    case ModelRuntime{_, _, config, errors, _, _, _, _, _, _, availability}:
+      do IO<Maybe<&2, String>>:
+        status : AvailabilityStatus <- Ref.read(AvailabilityStatus, availability)
+        return errorWithAvailability(joinedErrors(Config.getError(config), errors), status)
 
 # Catalog
 # -------
@@ -562,7 +578,7 @@ def getModel(+runtime: ModelRuntime, +provider: String, +id: String) -> IO(Maybe
 
 def baseModels(runtime: ModelRuntime) -> List<&2, Model()>:
   match runtime:
-    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _}: allModels(providers)
+    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _, _}: allModels(providers)
 
 # Auth
 # ----
@@ -706,10 +722,81 @@ def availableOf(catalog: Catalog) -> List<&2, Model()>:
 # The available models as of the last availability refresh (upstream
 # snapshot.available): the configured providers' models, narrowed by their
 # filterModels.
-def getAvailable(+runtime: ModelRuntime) -> IO(List<&2, Model()>):
+def getAvailableSnapshot(+runtime: ModelRuntime) -> IO(List<&2, Model()>):
   do IO<List<&2, Model()>>:
     catalog : Catalog <- readCatalog(runtime)
     return availableOf(catalog)
+
+def nextAvailability(status: AvailabilityStatus) -> AvailabilityStatus & Nat:
+  match status:
+    case AvailabilityStatus{generation, error}:
+      +next = Nat.add(generation, 1n)
+      (AvailabilityStatus{next, error}, next)
+
+def availabilityAt(status: AvailabilityStatus, generation: Nat, error: Maybe<&2, String>) -> AvailabilityStatus & Unit:
+  match status:
+    case AvailabilityStatus{+current, previous}:
+      (Bool.pick(AvailabilityStatus, Nat.is_eq(current, generation), AvailabilityStatus{current, error}, AvailabilityStatus{current, previous}), Unit{})
+
+def finishAvailability(+runtime: ModelRuntime, generation: Nat, error: Maybe<&2, String>) -> IO(Unit):
+  Ref.modify(AvailabilityStatus, Unit, availabilityRef(runtime), status => availabilityAt(status, generation, error))
+
+def signalAborted(signal: Auth.Signal()) -> IO(Bool):
+  match signal:
+    case None{}: IO.pure(Bool, False{})
+    case Some{given}: Abort.aborted(Unit, given)
+
+def availableFailure(+runtime: ModelRuntime, generation: Nat, signal: Auth.Signal(), +error: Resolve.ModelsError) -> IO(AiModels.AvailableResult()):
+  do IO<AiModels.AvailableResult()>:
+    aborted : Bool <- signalAborted(signal)
+    Bool.pick(Unit -> IO(Unit), aborted,
+      _ => IO.pure(Unit, Unit{}),
+      _ => finishAvailability(runtime, generation, Some{Resolve.errorMessage(error)}))(Unit{})
+    return Fail{error}
+
+def scopedResult(+runtime: ModelRuntime, signal: Auth.Signal(), generation: Nat, result: AiModels.AvailableResult()) -> IO(AiModels.AvailableResult()):
+  match result:
+    case Done{models}:
+      do IO<AiModels.AvailableResult()>:
+        finishAvailability(runtime, generation, None{})
+        return Done{models}
+    case Fail{error}: availableFailure(runtime, generation, signal, error)
+
+def scopedAvailable(+runtime: ModelRuntime, id: String, +signal: Auth.Signal(), generation: Nat) -> IO(AiModels.AvailableResult()):
+  do IO<AiModels.AvailableResult()>:
+    result : AiModels.AvailableResult() <- AiModels.getAvailable(modelsOf(runtime), Some{id}, signal)
+    scopedResult(runtime, signal, generation, result)
+
+def refreshedEntries(+runtime: ModelRuntime, signal: Auth.Signal(), generation: Nat, entries: List<&2, AiModels.AvailabilityResult()>, result: AiModels.AvailableResult()) -> IO(AiModels.AvailableResult()):
+  match result:
+    case Fail{error}: availableFailure(runtime, generation, signal, error)
+    case Done{models}:
+      do IO<AiModels.AvailableResult()>:
+        Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (withAvailability(catalog, availabilityEntries(entries)), Unit{}))
+        finishAvailability(runtime, generation, None{})
+        return Done{models}
+
+def refreshedResult(+runtime: ModelRuntime, signal: Auth.Signal(), generation: Nat, result: AiModels.AvailabilitiesResult()) -> IO(AiModels.AvailableResult()):
+  match result:
+    case Fail{error}: availableFailure(runtime, generation, signal, error)
+    case Done{+entries}: refreshedEntries(runtime, signal, generation, entries, AiModels.availableOf(Done{entries}))
+
+def refreshedAvailable(+runtime: ModelRuntime, +signal: Auth.Signal(), generation: Nat) -> IO(AiModels.AvailableResult()):
+  do IO<AiModels.AvailableResult()>:
+    result : AiModels.AvailabilitiesResult() <- AiModels.getAvailabilities(modelsOf(runtime), None{}, signal)
+    refreshedResult(runtime, signal, generation, result)
+
+def availableFor(+runtime: ModelRuntime, id: Maybe<&2, String>, signal: Auth.Signal(), generation: Nat) -> IO(AiModels.AvailableResult()):
+  match id:
+    case Some{provider}: scopedAvailable(runtime, provider, signal, generation)
+    case None{}: refreshedAvailable(runtime, signal, generation)
+
+# A fresh availability read, optionally scoped to one provider. Scoped reads
+# leave the shared snapshot unchanged; full reads replace it on success.
+def getAvailable(+runtime: ModelRuntime, id: Maybe<&2, String>, signal: Auth.Signal()) -> IO(AiModels.AvailableResult()):
+  do IO<AiModels.AvailableResult()>:
+    generation : Nat <- Ref.modify(AvailabilityStatus, Nat, availabilityRef(runtime), nextAvailability)
+    availableFor(runtime, id, signal, generation)
 
 # Model resolution (model-resolver.ts)
 # ------------------------------------
@@ -1245,7 +1332,7 @@ def firstAvailable(+runtime: ModelRuntime, saved: Maybe<&2, Model()>) -> IO(Mayb
     case Some{model}: IO.pure(Maybe<&2, Model()>, Some{model})
     case None{}:
       do IO<Maybe<&2, Model()>>:
-        available : List<&2, Model()> <- getAvailable(runtime)
+        available : List<&2, Model()> <- getAvailableSnapshot(runtime)
         return defaultAmong(defaultModelPerProvider(), available)
 
 # Without a CLI model: the settings' saved default when its provider is
@@ -1339,7 +1426,7 @@ def admitRefresh(state: SharedRefresh, +candidate: Abort.AbortController<Unit>, 
 
 def sharedRef(runtime: ModelRuntime) -> Ref.Ref<SharedRefresh>:
   match runtime:
-    case ModelRuntime{_,_,_,_,_,_,_,_,_,sharedRefresh}: sharedRefresh
+    case ModelRuntime{_,_,_,_,_,_,_,_,_,sharedRefresh,_}: sharedRefresh
 
 type RefreshDeparture is Data:
   StillWaiting{}
@@ -1553,7 +1640,7 @@ def disposeSharedRefresh(+state: Ref.Ref<SharedRefresh>) -> IO(Unit):
 
 def dispose(runtime: ModelRuntime) -> IO(Unit):
   match runtime:
-    case ModelRuntime{providers, _, _, _, retained, models, catalog, storeState, extensions, sharedRefresh}:
+    case ModelRuntime{providers, _, _, _, retained, models, catalog, storeState, extensions, sharedRefresh, availability}:
       do IO<Unit>:
         disposeSharedRefresh(sharedRefresh)
         +registered : ExtensionState <- Ref.dispose(ExtensionState, extensions)
@@ -1565,6 +1652,7 @@ def dispose(runtime: ModelRuntime) -> IO(Unit):
         state : Maybe<&1, Files.FileModelsReadState> <- Ref.dispose(Maybe<&1, Files.FileModelsReadState>, storeState)
         retireStoreState(state)
         old : Catalog <- Ref.dispose(Catalog, catalog)
+        status : AvailabilityStatus <- Ref.dispose(AvailabilityStatus, availability)
         return Unit{}
 
 def withoutEntry(entries: List<&2, ExtensionEntry>, +id: String) -> List<&2, ExtensionEntry>:
@@ -1635,7 +1723,7 @@ def configOf(entry: Maybe<&2, ExtensionEntry>) -> Composer.ProviderConfigInput:
 
 def baseProvider(runtime: ModelRuntime, +id: String) -> Maybe<&2, AiModels.Provider>:
   match runtime:
-    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _}: findProvider(providers, id)
+    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _, _}: findProvider(providers, id)
 
 def maybeProviderAuth(provider: Maybe<&2, AiModels.Provider>) -> Auth.ProviderAuth:
   match provider:
@@ -1899,11 +1987,6 @@ def loginUnlessAborted(+runtime: ModelRuntime, +id: String, kind: Auth.Credentia
         result : Auth.LoginOutcome() <- AiModels.login(modelsOf(runtime), id, kind, interaction)
         loginDone(runtime, id, result)
 
-def signalAborted(signal: Auth.Signal()) -> IO(Bool):
-  match signal:
-    case None{}: IO.pure(Bool, False{})
-    case Some{given}: Abort.aborted(Unit, given)
-
 def login(+runtime: ModelRuntime, +id: String, kind: Auth.CredentialType, interaction: Auth.AuthInteraction) -> IO(Auth.LoginOutcome()):
   match interaction:
     case Auth.AuthInteraction{+signal, prompt, notify}:
@@ -1924,7 +2007,8 @@ def fromProvidersWithStore(+providers: List<&2, AiModels.Provider>, credentials:
     AiModels.rebuildProviders(models, providers, Nil{})
     extensions : Ref.Ref<ExtensionState> <- Ref.new(ExtensionState, emptyExtensions())
     sharedRefresh : Ref.Ref<SharedRefresh> <- Ref.new(SharedRefresh, RefreshIdle{0n})
-    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, builtinIds(providers), Config.empty(), Nil{}, Nil{}, models, catalog, storeState, extensions, sharedRefresh})
+    availability : Ref.Ref<AvailabilityStatus> <- Ref.new(AvailabilityStatus, AvailabilityStatus{0n, None{}})
+    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, builtinIds(providers), Config.empty(), Nil{}, Nil{}, models, catalog, storeState, extensions, sharedRefresh, availability})
     refreshAvailability(runtime)
     return runtime
 
@@ -1961,7 +2045,8 @@ def assembledWith(composition: Composition, builtins: List<&2, String>, credenti
         models : AiModels.Models <- AiModels.createModels(AiModels.CreateModelsOptions{Some{credentials}, Some{store}, Some{context}})
         extensions : Ref.Ref<ExtensionState> <- Ref.new(ExtensionState, emptyExtensions())
         sharedRefresh : Ref.Ref<SharedRefresh> <- Ref.new(SharedRefresh, RefreshIdle{0n})
-        +runtime : ModelRuntime <- IO.pure(ModelRuntime, assembled(composition, builtins, config, models, catalog, storeState, extensions, sharedRefresh))
+        availability : Ref.Ref<AvailabilityStatus> <- Ref.new(AvailabilityStatus, AvailabilityStatus{0n, None{}})
+        +runtime : ModelRuntime <- IO.pure(ModelRuntime, assembled(composition, builtins, config, models, catalog, storeState, extensions, sharedRefresh, availability))
         rebuildCollection(runtime, Nil{})
         return runtime
 

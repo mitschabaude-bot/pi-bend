@@ -276,7 +276,7 @@ def someUI() -> IO(Ctx.ExtensionUIContext):
     text : C.Callback<String, Unit> <- C.create(~Unit, ~String, ~Unit, ~ignoredText, Unit{})
     paste : C.Callback<String, Unit> <- C.create(~Unit, ~String, ~Unit, ~ignoredText, Unit{})
     current : C.Callback<Unit, String> <- C.create(~Unit, ~Unit, ~String, ~emptyEditor, Unit{})
-    return Ctx.ExtensionUIContext{select, confirm, input, notify, status, custom, editor, widget, title, text, paste, current, None{}}
+    return Ctx.ExtensionUIContext{select, confirm, input, notify, status, custom, editor, widget, title, text, paste, current, None{}, None{}}
 
 def exposesModeWithUI(mode: Ctx.ExtensionMode, +expected: String, +name: String) -> IO(Unit):
   do IO<Unit>:
@@ -398,7 +398,7 @@ def queuedProvidersJoinTheModelRuntimeWith(loaded: Loaded) -> IO(Unit):
         registered : Outcome() <- Loader.registerProvider(api, provider)
         +models : Models.ModelRuntime <- emptyModels()
         errors : List<&2, T.ExtensionError> <- Loader.bindProviders(runtime, models, None{})
-        available : List<&2, Models.Model()> <- Models.getAvailable(models)
+        available : List<&2, Models.Model()> <- Models.getAvailableSnapshot(models)
         resolution : Models.Resolution <- Models.resolveCliModel(models, None{}, Some{"instant-model"}, None{})
         same(Nat.show(List.length(&2, T.ExtensionError, errors)) ++ " " ++ Nat.show(List.length(&2, Models.Model(), available)) ++ " " ++ resolvedId(resolution), "0 1 instant-provider/instant-model", "queued provider registrations join the model runtime")
 def queuedProvidersJoinTheModelRuntime() -> IO(Unit): IO.bind(Loaded, Unit, loadCapturing(), queuedProvidersJoinTheModelRuntimeWith)

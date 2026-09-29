@@ -195,7 +195,7 @@ def replacedModels(_old: List<&2,Models.Model()>,next: List<&2,Models.Model()>) 
 def refreshPicker(host: ModelPicker.Host,catalog: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+runtime: Models.ModelRuntime) -> IO(Unit):
   do IO<Unit>:
     result : Models.ModelsRefreshResult <- Models.refreshShared(runtime,None{})
-    +available : List<&2,Models.Model()> <- Models.getAvailable(runtime)
+    +available : List<&2,Models.Model()> <- Models.getAvailableSnapshot(runtime)
     updated : Maybe<&1,Unit> <- Ref.tryModify(List<&2,Models.Model()>,Unit,catalog,previous => replacedModels(previous,available))
     shown : Bool <- ModelPicker.refreshed(host,available,refreshStatus(result))
     Bool.pick(Unit -> IO(Unit),shown,_ => requestRenderIfLive(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
@@ -302,7 +302,7 @@ def requestedAfterRefresh(+failure: StatusSink,+redraw: Ref.Ref<Maybe<&2,Callbac
     case (+outcome,timedOut):
       do IO<Bool>:
         modelRefreshWarning(failure,outcome,timedOut)
-        available : List<&2,Models.Model()> <- Models.getAvailable(Session.modelRuntime(session))
+        available : List<&2,Models.Model()> <- Models.getAvailableSnapshot(Session.modelRuntime(session))
         +visible : List<&2,Models.Model()> <- IO.pure(List<&2,Models.Model()>,refreshedOrCached(cached,available))
         Ref.write(List<&2,Models.Model()>,catalog,visible)
         selected : Bool <- refreshedModelResult(failure,redraw,picker,catalog,session,query,visible)
@@ -367,7 +367,7 @@ def scopedRefreshStatus(pair: Models.ModelsRefreshResult & Bool) -> String:
 def refreshScoped(host: ScopePicker.Host,models: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+runtime: Models.ModelRuntime) -> IO(Unit):
   do IO<Unit>:
     pair : Models.ModelsRefreshResult & Bool <- refreshCatalogWithDeadline(runtime)
-    +available : List<&2,Models.Model()> <- Models.getAvailable(runtime)
+    +available : List<&2,Models.Model()> <- Models.getAvailableSnapshot(runtime)
     Ref.write(List<&2,Models.Model()>,models,available)
     ScopePicker.refreshed(host,available,scopedRefreshStatus(pair))
     requestRender(redraw)
@@ -501,7 +501,7 @@ def modelCompletions(session: Ref.Ref<Session.AgentSession>,prefix: String) -> I
   do IO<AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>)>:
     +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     scoped : List<&2,Models.ScopedModel> <- Session.getScopedModels(live)
-    available : List<&2,Models.Model()> <- Models.getAvailable(Session.modelRuntime(live))
+    available : List<&2,Models.Model()> <- Models.getAvailableSnapshot(Session.modelRuntime(live))
     return modelArgumentItems(searchItems(completionModels(scoped,available)),prefix)
 
 def levelSearchables(levels: List<&2,Ai.ModelThinkingLevel>) -> List<&2,Searchable>:

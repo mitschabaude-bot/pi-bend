@@ -117,12 +117,14 @@ def withProvider(+runtime: Models.ModelRuntime, refresh: Bool, provider: Result<
   match provider:
     case Fail{message}: IO.pure(Result<&2, &2, String, AuthCheckResult>, Fail{message})
     case Done{+id}:
-      Bool.pick(Unit -> IO(Result<&2, &2, String, AuthCheckResult>), Maybe.is_some(&2, String, Models.getError(runtime)),
-        _ => IO.pure(Result<&2, &2, String, AuthCheckResult>, Done{invalid(id)}),
-        _ => do IO<Result<&2, &2, String, AuthCheckResult>>:
-          found : Maybe<&2, AiModels.Provider> <- Models.getProvider(runtime, id)
-          result : AuthCheckResult <- known(runtime, id, refresh, found)
-          return Done{result})(Unit{})
+      do IO<Result<&2, &2, String, AuthCheckResult>>:
+        error : Maybe<&2, String> <- Models.getError(runtime)
+        Bool.pick(Unit -> IO(Result<&2, &2, String, AuthCheckResult>), Maybe.is_some(&2, String, error),
+          _ => IO.pure(Result<&2, &2, String, AuthCheckResult>, Done{invalid(id)}),
+          _ => do IO<Result<&2, &2, String, AuthCheckResult>>:
+            found : Maybe<&2, AiModels.Provider> <- Models.getProvider(runtime, id)
+            result : AuthCheckResult <- known(runtime, id, refresh, found)
+            return Done{result})(Unit{})
 
 def requestedCheck(+runtime: Models.ModelRuntime, +packageDir: String, refresh: Bool, requested: Result<&2, &2, String, Command.RequestedAuth>) -> IO(Result<&2, &2, String, AuthCheckResult>):
   match requested:

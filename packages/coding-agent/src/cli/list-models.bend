@@ -1,6 +1,8 @@
 import Base
 import ../core/model-runtime.bend as Models
+import ../../../ai/src/models.bend as AiModels
 import ../../../ai/src/types.bend as Ai
+import ../../../ai/src/auth/resolve.bend as Resolve
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/number-string.bend as Numbers
 import ../../../tui/src/fuzzy.bend as Fuzzy
@@ -119,7 +121,19 @@ def display(models: List<&2,Models.Model()>,+search: Maybe<&2,String>) -> IO(Uni
     case Nil{}: IO.print("No models available. Use /login to log into a provider via OAuth or API key.")
     case values: displaySelected(selected(values,search),search)
 
-def listModels(runtime: Models.ModelRuntime,search: Maybe<&2,String>) -> IO(Unit):
+def displayResult(result: AiModels.AvailableResult(), search: Maybe<&2,String>) -> IO(Unit):
+  match result:
+    case Done{available}: display(available, search)
+    case Fail{error}: IO.print_err("Error: " ++ Resolve.errorMessage(error))
+
+def reportError(error: Maybe<&2, String>) -> IO(Unit):
+  match error:
+    case Some{message}: IO.print_err("Warning: errors loading models.json:\n" ++ message)
+    case None{}: IO.pure(Unit, Unit{})
+
+def listModels(+runtime: Models.ModelRuntime,search: Maybe<&2,String>) -> IO(Unit):
   do IO<Unit>:
-    available : List<&2,Models.Model()> <- Models.getAvailable(runtime)
-    display(available,search)
+    error : Maybe<&2, String> <- Models.getError(runtime)
+    reportError(error)
+    available : AiModels.AvailableResult() <- Models.getAvailable(runtime, None{}, None{})
+    displayResult(available,search)

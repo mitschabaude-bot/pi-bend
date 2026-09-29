@@ -4593,7 +4593,7 @@ def cycleWithin(session: AgentSession, scope: List<&2, Models.ScopedModel>, avai
 def cycleModel(+session: AgentSession, direction: CycleDirection, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
   do IO<Result<&2, &2, String, Maybe<&2, ModelCycleResult>>>:
     scope : List<&2, Models.ScopedModel> <- getScopedModels(session)
-    available : List<&2, Ai.Model<Ai.JsonValue>> <- Models.getAvailable(modelRuntime(session))
+    available : List<&2, Ai.Model<Ai.JsonValue>> <- Models.getAvailableSnapshot(modelRuntime(session))
     current : AgentState() <- state(session)
     cycleWithin(session, scope, available, direction, stateModel(current), options)
 

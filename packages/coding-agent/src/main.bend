@@ -785,7 +785,7 @@ def catalogScoped(cwd: String, session: Session(), hasExisting: Bool, hasThinkin
   match pair:
     case (runtime, models):
       do IO<Result<&1, &1, String, Created()>>:
-        available : List<&2, Models.Model()> <- Models.getAvailable(models)
+        available : List<&2, Models.Model()> <- Models.getAvailableSnapshot(models)
         scopeResolved(cwd, session, hasExisting, hasThinking, settings, seed, flags, runtime, resolveFlags(flags, available))
 
 def runtimeCreated(cwd: String, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, seed: Runtime.SessionSeed, flags: ScopeFlags, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Result<&1, &1, String, Created()>):
@@ -909,7 +909,7 @@ type Catalog is Data:
 def refreshedAvailable(+models: Models.ModelRuntime) -> IO(List<&2,Models.Model()>):
   do IO<List<&2,Models.Model()>>:
     Models.refreshAvailability(models)
-    Models.getAvailable(models)
+    Models.getAvailableSnapshot(models)
 def catalogPair(+scope: List<&2,Models.ScopedModel>, pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Services & Catalog):
   match pair:
     case (runtime, models):

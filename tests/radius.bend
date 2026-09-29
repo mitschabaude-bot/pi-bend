@@ -393,7 +393,7 @@ def radiusModels(models: List<&2, Model()>) -> List<&2, Model()>:
 def unconfigured(transport: Radius.RadiusTransport, log: Log()) -> IO(Unit):
   do IO<Unit>:
     +runtime : Models.ModelRuntime <- runtimeWith(transport, Nil{}, None{}, True{})
-    available : List<&2, Model()> <- Models.getAvailable(runtime)
+    available : List<&2, Model()> <- Models.getAvailableSnapshot(runtime)
     +sent : List<&2, String> <- requests(log)
     check(List.is_empty(&2, Model(), radiusModels(available)), "radius models are available")
     check(Bool.not(anyLine(sent, "radius.pi.dev/v1/config", False{})), String.join(sent, ";"))
@@ -418,7 +418,8 @@ def errorText(error: Maybe<&2, String>) -> String:
 def requiresBaseUrl(transport: Radius.RadiusTransport, path: String) -> IO(Unit):
   do IO<Unit>:
     +runtime : Models.ModelRuntime <- runtimeWith(transport, Nil{}, Some{path}, False{})
-    +error : String <- IO.pure(String, errorText(Models.getError(runtime)))
+    status : Maybe<&2, String> <- Models.getError(runtime)
+    +error : String <- IO.pure(String, errorText(status))
     check(String.contains(error, "\"baseUrl\" is required when \"oauth\" is set"), error)
     pass("requires baseUrl for custom Radius gateways")
 

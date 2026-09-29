@@ -128,7 +128,8 @@ def report(+runtime: Models.ModelRuntime, references: List<String>) -> IO(String
     configured : List<&2, V.Value> <- configuredValues(runtime, Config.getProviderIds(Models.getModelConfig(runtime)))
     auths : List<&2, R.Property<V.Value>> <- modelAuths(runtime, references)
     providers : List<&2, AiModels.Provider> <- Models.getProviders(runtime)
-    return line(object([R.Property{"error", optionalText(Models.getError(runtime))}, R.Property{"providers", V.ArrayValue{texts(providerIds(providers))}}, R.Property{"configured", V.ArrayValue{configured}}, R.Property{"modelAuth", object(auths)}]))
+    error : Maybe<&2, String> <- Models.getError(runtime)
+    return line(object([R.Property{"error", optionalText(error)}, R.Property{"providers", V.ArrayValue{texts(providerIds(providers))}}, R.Property{"configured", V.ArrayValue{configured}}, R.Property{"modelAuth", object(auths)}]))
 
 def unusedRefresh(unused: Unit, input: Auth.RefreshInput) -> IO(Result<&2, &2, String, Auth.Credential>):
   IO.pure(Result<&2, &2, String, Auth.Credential>, Fail{"unused"})

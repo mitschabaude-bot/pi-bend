@@ -936,7 +936,7 @@ def availableModels(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
-        available : List<&2,Models.Model()> <- Models.getAvailable(Session.modelRuntime(session))
+        available : List<&2,Models.Model()> <- Models.getAvailableSnapshot(Session.modelRuntime(session))
         output(sink,data(id,"get_available_models",MessageJson.object(MessageJson.field("models",V.ArrayValue{modelValues(available)},Nil{}))))
 def setModelResponse(sink: Sink(),id: Maybe<&2,String>,model: Models.Model(),result: Result<&2,&2,String,Unit>) -> IO(Unit):
   match result:
@@ -952,7 +952,7 @@ def setMatchedModel(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,Stri
     case Some{model}: setFoundModel(session,sink,id,model)
 def setAvailableModel(+session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,+provider: String,+modelId: String) -> IO(Unit):
   do IO<Unit>:
-    available : List<&2,Models.Model()> <- Models.getAvailable(Session.modelRuntime(session))
+    available : List<&2,Models.Model()> <- Models.getAvailableSnapshot(Session.modelRuntime(session))
     setMatchedModel(session,sink,id,provider,modelId,Models.findModel(available,provider,modelId))
 def setModelParsed(handle: Command,id: Maybe<&2,String>,provider: Result<&2,&2,String,String>,modelId: Result<&2,&2,String,String>) -> IO(Unit):
   match handle provider modelId:

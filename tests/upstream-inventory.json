@@ -3339,9 +3339,12 @@
     },
     {
       "source": "packages/coding-agent/test/model-runtime-auth-options.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "eabf6f097a74406dc4db5fe189016b38797c676b0b267f0147f510c027783f27"
+      "status": "partial",
+      "ports": [
+        "tests/model-availability.bend"
+      ],
+      "sha256": "eabf6f097a74406dc4db5fe189016b38797c676b0b267f0147f510c027783f27",
+      "notes": "The scoped availability/failure test is ported: reads stay within the requested provider, failures reach getError, and success clears it. The native test also checks that scoped reads leave the snapshot intact and full reads replace it. The other auth-option cases are pending."
     },
     {
       "source": "packages/coding-agent/test/model-runtime-cloudflare-compat.test.ts",
