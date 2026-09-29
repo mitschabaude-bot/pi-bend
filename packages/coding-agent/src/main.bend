@@ -1192,37 +1192,35 @@ def runChecked(parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage
 # upstream main: a stored session whose cwd no longer exists asks, in
 # interactive mode, whether to continue in the current cwd (Cancel exits);
 # other modes report MissingSessionCwdError.
-def continued(ids: Uuid.Generator, proceed: Bool, issue: SessionCwd.SessionCwdIssue, sessionDir: Maybe<&2, String>) -> IO(Selected()):
+def continued(proceed: Bool, issue: SessionCwd.SessionCwdIssue, session: Session()) -> IO(Selected()):
   match proceed issue:
-    case True{} SessionCwd.SessionCwdIssue{Some{file}, _, +fallback}:
-      do IO<Selected()>:
-        opened : Sessions.Outcome(Session()) <- Sessions.open(~V.Value, ~Tools.ToolDetails, ~V.Value, ~AgentSession.rawValue, ~Tools.detailsValue, ~AgentSession.rawValue, ~AgentSession.readRaw, ~AgentSession.readDetails, ~AgentSession.readRaw, ids, file, sessionDir, Some{fallback}, fallback)
-        return selected(opened)
+    case True{} SessionCwd.SessionCwdIssue{Some{_}, _, fallback}:
+      IO.pure(Selected(), Done{Sessions.withCwd(V.Value, Tools.ToolDetails, V.Value, session, fallback)})
     case _ _: IO.pure(Selected(), Fail{Aborted{""}})
 def chosen(choice: Maybe<&2, String>) -> Bool:
   match choice:
     case Some{"Continue"}: True{}
     case _: False{}
-def missingCwd(ids: Uuid.Generator, prompting: Bool, +issue: SessionCwd.SessionCwdIssue, sessionDir: Maybe<&2, String>, agentDir: String, assets: String, settings: Settings.SettingsManager) -> IO(Selected()):
+def missingCwd(prompting: Bool, +issue: SessionCwd.SessionCwdIssue, session: Session(), agentDir: String, assets: String, settings: Settings.SettingsManager) -> IO(Selected()):
   match prompting:
     case False{}: IO.pure(Selected(), Fail{Failed{SessionCwd.formatMissingSessionCwdError(issue)}})
     case True{}:
       do IO<Selected()>:
         choice : Maybe<&2, String> <- StartupSelector.select(ProjectTrust.SelectRequest{SessionCwd.formatMissingSessionCwdPrompt(issue), ["Continue", "Cancel"]}, agentDir, assets, settings)
-        continued(ids, chosen(choice), issue, sessionDir)
-def cwdResolved(mode: AppMode, +session: Session(), issue: Maybe<&2, SessionCwd.SessionCwdIssue>, sessionDir: Maybe<&2, String>, agentDir: String, assets: String, settings: Settings.SettingsManager) -> IO(Selected()):
+        continued(chosen(choice), issue, session)
+def cwdResolved(mode: AppMode, +session: Session(), issue: Maybe<&2, SessionCwd.SessionCwdIssue>, agentDir: String, assets: String, settings: Settings.SettingsManager) -> IO(Selected()):
   match issue:
     case None{}: IO.pure(Selected(), Done{session})
-    case Some{found}: missingCwd(Sessions.getIdGenerator(V.Value, Tools.ToolDetails, V.Value, session), interactive(mode), found, sessionDir, agentDir, assets, settings)
+    case Some{found}: missingCwd(interactive(mode), found, session, agentDir, assets, settings)
 
-def runSelected(parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, cwd: String, selection: Selected(), name: Maybe<&2, String>, +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, startup: Settings.SettingsManager, sessionDir: Maybe<&2, String>, startupDiagnostics: Diagnostics()) -> IO(Unit):
+def runSelected(parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, cwd: String, selection: Selected(), name: Maybe<&2, String>, +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, startup: Settings.SettingsManager, startupDiagnostics: Diagnostics()) -> IO(Unit):
   match selection:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: noted(note)
     case Done{+session}:
       do IO<Unit>:
         issue : Maybe<&2, SessionCwd.SessionCwdIssue> <- SessionCwd.getMissingSessionCwdIssue(Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, session), Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value, session), cwd)
-        checked : Selected() <- cwdResolved(mode, session, issue, sessionDir, agentDir, packageDir, startup)
+        checked : Selected() <- cwdResolved(mode, session, issue, agentDir, packageDir, startup)
         runChecked(parsed, mode, initial, checked, name, agentDir, authPath, bundlePath, packageDir, startupDiagnostics)
 
 def flagName(flags: SessionFlags) -> Maybe<&2, String>:
@@ -1264,7 +1262,7 @@ def runLoaded(+parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage
         +sessionDir : Maybe<&2, String> <- IO.pure(Maybe<&2, String>, sessionDirectory(flagSessionDir(flags), sessionEnv, home, cwd, Result.default(&2, &2, Paths.Error, Maybe<&2, String>, Settings.getSessionDir(Paths.Environment{cwd, home, url}, startup), None{})))
         +ids : Uuid.Generator <- Uuid.generator()
         selection : Selected() <- createSessionManager(ids, flags, Paths.Environment{cwd, home, url}, cwd, sessionDir, agentDir, Path.join(agentDir, "sessions"), visual)
-        runSelected(parsed, mode, initial, cwd, selection, flagName(flags), agentDir, located(authPath, Path.join(cwd, "auth.json")), envOr(bundle, "/etc/ssl/certs/ca-certificates.crt"), assets, startup, sessionDir, startupDiagnostics)
+        runSelected(parsed, mode, initial, cwd, selection, flagName(flags), agentDir, located(authPath, Path.join(cwd, "auth.json")), envOr(bundle, "/etc/ssl/certs/ca-certificates.crt"), assets, startup, startupDiagnostics)
 
 def envValue(value: Result<&1, &1, U32 & String, String>) -> Maybe<&2, String>:
   match value:

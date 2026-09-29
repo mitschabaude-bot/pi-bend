@@ -958,6 +958,10 @@ def getCwd(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> String:
   match session:
     case Session{_, place, _, _, _, _, _}: place
 
+def withCwd(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>, cwd: String) -> Session<D, T, C>:
+  match session:
+    case Session{state, _, dir, file, persist, flushed, ids}: Session{state, cwd, dir, file, persist, flushed, ids}
+
 def getSessionId(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> String:
   S.getSessionId(D, T, C, stateOf(D, T, C, session))
 
