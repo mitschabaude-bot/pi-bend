@@ -1,6 +1,7 @@
 import Base
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/posix-path.bend as Path
+import ../../../runtime/src/string.bend as Strings
 import ../../../runtime/src/schema-value.bend as V
 import ./session-manager.bend as S
 import ./session-json.bend as Json
@@ -48,5 +49,10 @@ def exportResolved(resolved: Maybe<&2,String>,content: Persistence.Outcome(Strin
     case None{}: IO.pure(Result<&2,&2,String,String>,Fail{"Could not resolve export path"})
     case Some{target}: exportContent(target,content)
 
-def exportSessionToJsonl(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, state: S.SessionManager<D,T,C>, cwd: String, path: String, timestamp: String, createTrailingEntries: Maybe<&2,String> -> String -> List<&2,V.Value>) -> IO(Result<&2,&2,String,String>):
-  exportResolved(Path.resolve(cwd,path),serializeSessionBranch(~D,~T,~C,~diagnostic,~tool,~custom,state,timestamp,createTrailingEntries))
+def outputPath(path: Maybe<&2,String>,timestamp: String) -> String:
+  match path:
+    case Some{given}: given
+    case None{}: "session-" ++ Strings.replaceAll(Strings.replaceAll(timestamp,":","-"),".","-") ++ ".jsonl"
+
+def exportSessionToJsonl(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, state: S.SessionManager<D,T,C>, cwd: String, path: Maybe<&2,String>, +timestamp: String, createTrailingEntries: Maybe<&2,String> -> String -> List<&2,V.Value>) -> IO(Result<&2,&2,String,String>):
+  exportResolved(Path.resolve(cwd,outputPath(path,timestamp)),serializeSessionBranch(~D,~T,~C,~diagnostic,~tool,~custom,state,timestamp,createTrailingEntries))

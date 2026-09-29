@@ -780,7 +780,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/footer.bend": "77bda66103ebdd73a10ed6df25d26062b562e276853e48b0c0b2deae78abe06e",
-        "packages/coding-agent/src/modes/interactive/run.bend": "4210ea08f3f5230e0309eced64111772cb13f00f4259a99675330d6289570534"
+        "packages/coding-agent/src/modes/interactive/run.bend": "005664a660ac255d2e49d72f2187fe5130d80887cc31f1bffcd23e1333d79592"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
@@ -959,7 +959,7 @@
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "8b3f7eaf599e068e0ba3079cf6c8aebd66f9c536b18cad602c3993f70776b15f",
-        "packages/coding-agent/src/modes/interactive/run.bend": "4210ea08f3f5230e0309eced64111772cb13f00f4259a99675330d6289570534",
+        "packages/coding-agent/src/modes/interactive/run.bend": "005664a660ac255d2e49d72f2187fe5130d80887cc31f1bffcd23e1333d79592",
         "packages/coding-agent/src/modes/interactive/commands.bend": "dc44029e5b58c1710514d951bf85e9ea822ab11553590fb4fae0a403effba086",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
         "packages/coding-agent/src/main.bend": "cfdd635b3e361a052244e33b5258f8e1f9ba45e6b7eb594019c6e2ebae78df3d",
@@ -1783,11 +1783,11 @@
       }
     },
     "packages/coding-agent/src/core/session-export.ts": {
-      "state": "partial",
-      "note": "Native branch serialization, export-only trailing entries, path resolution and JSONL writing are implemented. The optional output path with upstream default filename remains to be ported.",
+      "state": "ported",
+      "note": "Branch serialization and export-only trailing entries are implemented. JSONL export writes to the explicit path or to a dated session-<timestamp>.jsonl path in cwd when absent, creating parent directories. The default and explicit paths are checked against the written session on one/four threads.",
       "source_sha256": "8ec53e13bd4bc9097e4f7640e2fd2e58ffbbdcadce6df5efdf5cb5622f98d285",
       "port_sha256": {
-        "packages/coding-agent/src/core/session-export.bend": "5f68c23eece4ad7e75d9c35bc8bb2c300bb34a172ea5a5b1980e446c0bbc7036"
+        "packages/coding-agent/src/core/session-export.bend": "b4f260324707018be6c07eb89c5ea1492a451be66d19399196ec496c702b2990"
       }
     },
     "packages/coding-agent/src/modes/interactive/session-share.ts": {
@@ -1795,7 +1795,7 @@
       "note": "The pi.share export payload, native Radius-first POST and private Gist fallback are implemented. The share loader starts when upload or Gist creation begins and shows the selected route. One/four-thread loopback tests check Radius JSONL bytes, headers, success and errors; mounted Radius and Gist sharing, Escape cancellation and the next prompt match pi. Concurrent-export isolation remains open.",
       "source_sha256": "8204ea1382273641e943ca02877ca466f5642dab73f4bda29508c2337637c0cd",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/session-share.bend": "96b95ce8fee8985c6619d8fec78642b9c19886b89e22f82ebf8d21697dd12519"
+        "packages/coding-agent/src/modes/interactive/session-share.bend": "bb393b2e2e10650a5f5480f15a8aedcc7cfbc69fd92978a1657f590faac4869c"
       }
     },
     "packages/coding-agent/src/config.ts": {

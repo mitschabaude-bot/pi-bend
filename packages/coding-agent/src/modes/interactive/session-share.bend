@@ -50,7 +50,7 @@ def exported(+session: Session.AgentSession,cwd: String,path: String,timestamp: 
     state : Session.AgentState() <- Session.state(session)
     prompt : String <- Session.systemPrompt(session)
     stored : Session.Session() <- Session.sessionOf(session)
-    Export.exportSessionToJsonl(~V.Value, ~Tools.ToolDetails, ~V.Value,~Session.rawValue,~Tools.detailsValue,~Session.rawValue,Session.stateOf(stored),cwd,path,timestamp,parent => time => createShareTrailingEntries(parent,time,id,prompt,Session.toolInfos(Session.stateTools(state),Nil{})))
+    Export.exportSessionToJsonl(~V.Value, ~Tools.ToolDetails, ~V.Value,~Session.rawValue,~Tools.detailsValue,~Session.rawValue,Session.stateOf(stored),cwd,Some{path},timestamp,parent => time => createShareTrailingEntries(parent,time,id,prompt,Session.toolInfos(Session.stateTools(state),Nil{})))
 
 def withId(session: Session.AgentSession,cwd: String,path: String,time: Persistence.Outcome(String),id: Result<&2,&2,Uuid.Error,String>) -> IO(Result<&2,&2,String,String>):
   match time id:

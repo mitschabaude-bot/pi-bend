@@ -775,7 +775,7 @@ def exportJsonlAt(session: Session.AgentSession,cwd: String,path: String,time: P
     case Done{timestamp}:
       do IO<Result<&2,&2,String,String>>:
         stored : Session.Session() <- Session.sessionOf(session)
-        SessionExport.exportSessionToJsonl(~Schema.Value,~Tools.ToolDetails,~Schema.Value,~Session.rawValue,~Tools.detailsValue,~Session.rawValue,Session.stateOf(stored),cwd,path,timestamp,_ => _ => Nil{})
+        SessionExport.exportSessionToJsonl(~Schema.Value,~Tools.ToolDetails,~Schema.Value,~Session.rawValue,~Tools.detailsValue,~Session.rawValue,Session.stateOf(stored),cwd,Some{path},timestamp,_ => _ => Nil{})
 def exportJsonl(session: Session.AgentSession,cwd: String,path: String) -> IO(Result<&2,&2,String,String>):
   do IO<Result<&2,&2,String,String>>:
     timestamp : Persistence.Outcome(String) <- Persistence.isoNow()
