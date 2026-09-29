@@ -11,9 +11,14 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 FLAGS="${BEND_CFLAGS:-} -DBEND_APP_ARGV -DBEND_DEFAULT_THREADS=1"
 OUTPUT=${1:-build/pi-cli}
 SOURCE=packages/coding-agent/src/main.bend
-if [ "$#" -gt 1 ]; then
-  shift
-  GENERATED=$(python3 "$ROOT/scripts/link-extensions.py" "$@")
+if [ "$#" -gt 0 ]; then shift; fi
+PI_BEND_DEFAULT="$ROOT/build/bend-native-toolchain/bend2/main.ts"
+[ -x "$PI_BEND_DEFAULT" ] || PI_BEND_DEFAULT="$HOME/.bend/bin/bend"
+mkdir -p "$ROOT/build"
+(cd "$ROOT" && "${BEND:-$PI_BEND_DEFAULT}" scripts/extension-sources.bend -o build/extension-sources.js)
+DISCOVERED=$(bun "$ROOT/build/extension-sources.js")
+GENERATED=$(printf '%s\n' "$DISCOVERED" | python3 "$ROOT/scripts/link-extensions.py" --sources-json "$@")
+if [ -n "$GENERATED" ]; then
   SOURCE=${GENERATED%% *}
   REGISTRY=${GENERATED#* }
   trap 'rm -f "$ROOT/$SOURCE" "$ROOT/$REGISTRY"' EXIT

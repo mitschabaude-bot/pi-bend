@@ -2,6 +2,7 @@
 """Generate a Bend CLI entry point with explicitly linked native extensions."""
 
 import hashlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -21,16 +22,20 @@ def bend_path(path: Path) -> str:
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        raise SystemExit("usage: link-extensions.py EXTENSION.bend ...")
-    requested = [(Path(arg).resolve(strict=True), arg) for arg in sys.argv[1:]]
-    for path, raw in requested:
+    configured = []
+    arguments = sys.argv[1:]
+    if arguments[:1] == ["--sources-json"]:
+        configured = json.load(sys.stdin)
+        if not isinstance(configured, list) or any(not isinstance(path, str) for path in configured):
+            raise SystemExit("configured extensions must be a JSON array of paths")
+        arguments = arguments[1:]
+    paths = list(dict.fromkeys(Path(arg).resolve(strict=True) for arg in [*configured, *arguments]))
+    if not paths:
+        return
+    for path in paths:
         if not path.is_file() or path.suffix != ".bend":
             raise SystemExit(f"extension must be a .bend file: {path}")
         bend_path(path)
-        bend_path(Path(raw))
-    requested = list(dict((path, (path, raw)) for path, raw in requested).values())
-    paths = [path for path, _ in requested]
     key = hashlib.sha256("\0".join(map(str, paths)).encode()).hexdigest()[:16]
     linked = REGISTRY.parent / f".linked-{key}.bend"
     entry = MAIN.parent / f".main-linked-{key}.bend"
@@ -53,13 +58,12 @@ def main() -> None:
             "      match name:",
         ]
     )
-    for i, (path, raw) in enumerate(requested):
+    for i, path in enumerate(paths):
         name = bend_path(path)
-        for alias in dict.fromkeys((name, raw)):
-            lines.append(
-                f'        case "{alias}": '
-                f'T.InlineExtension{{"{name}", api => Extension{i}.extension(api), False{{}}}} <> linkedExtensions(rest)'
-            )
+        lines.append(
+            f'        case "{name}": '
+            f'T.InlineExtension{{"{name}", api => Extension{i}.extension(api), False{{}}}} <> linkedExtensions(rest)'
+        )
     lines.append("        case _: linkedExtensions(rest)")
     lines.extend(
         [
@@ -73,8 +77,7 @@ def main() -> None:
             "    case +name <> +rest:",
         ]
     )
-    aliases = dict.fromkeys(alias for path, raw in requested for alias in (bend_path(path), raw))
-    known = " || ".join(f'String.eq(name, "{alias}")' for alias in aliases)
+    known = " || ".join(f'String.eq(name, "{bend_path(path)}")' for path in paths)
     lines.append(f"      Bool.pick(List<&2, String>, {known}, withoutLinked(rest), name <> withoutLinked(rest))")
     lines.extend(["", "def unlinked(names: List<&2, String>) -> List<&2, T.LoadError>:", "  Standard.unlinked(withoutLinked(names))"])
     linked.write_text("\n".join(lines) + "\n")

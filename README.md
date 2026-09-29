@@ -72,7 +72,7 @@ python3 scripts/check-proofs.py
 
 Build and run the modular CLI with an OpenAI API key already configured in the environment or pi authentication storage:
 
-A cold build takes about 3.5 minutes (about 2.2 minutes of Bend emission, then Clang at `-O1`) and emission peaks at about 16 GB, because Bun sizes its heap to the machine's memory; on a smaller machine, `BUN_JSC_forceRAMSize=16000000000` lowers the peak for a few percent more emission time. `scripts/build-cli.sh` builds [incrementally](docs/incremental-build.md): it compiles only the translation units whose C changed, from an object cache shared by all worktrees, so a small edit rebuilds in about 2.5 minutes (`BEND_INCREMENTAL=0` for the ordinary build). For correctness checks, `PI_BEND_OPT=-O0` makes Clang faster still; the binary runs 3-5x slower, so measure timings on `-O1` builds. Builds go one at a time through `flock /tmp/pi-bend-build.lock`.
+`scripts/build-cli.sh` first resolves enabled native extension sources using Bend, then builds the CLI [incrementally](docs/incremental-build.md): it compiles only the translation units whose C changed, from an object cache shared by all worktrees (`BEND_INCREMENTAL=0` for the ordinary build). Bend emission uses substantial memory; `BUN_JSC_forceRAMSize=16000000000` can cap Bun's heap on a smaller machine. For correctness checks, `PI_BEND_OPT=-O0` makes Clang faster; measure runtime performance on `-O1` builds. Builds go one at a time through `flock /tmp/pi-bend-build.lock`.
 
 ```sh
 sh scripts/build-cli.sh build/pi-cli
@@ -87,7 +87,7 @@ python3 tests/export_cli_check.py
 
 The CLI owns its whole command line, as pi does; `BEND_THREADS=N` sets the native worker count. The interactive check runs on one and four native threads from a separate project directory and verifies terminal restoration.
 
-Enable a linked native extension such as `subagent` with `--extension subagent` or `{"extensions":["subagent"]}` in `~/.pi/agent/settings.json`; trusted project settings work too. To link another Bend source, run `sh scripts/build-cli.sh build/pi-cli path/to/extension.bend`; its module exports `extension(api)` as an `ExtensionFactory`. The CLI loads enabled linked sources discovered in settings, packages and extension directories, or you can select one explicitly with `--extension path/to/extension.bend`. `--no-extensions` skips discovered sources while keeping explicit selections. Rebuild after editing extension source. Package sources are not yet linked automatically during the build, and source files cannot be loaded into an existing binary at runtime.
+Enable a linked native extension such as `subagent` with `--extension subagent` or `{"extensions":["subagent"]}` in `~/.pi/agent/settings.json`; trusted project settings work too. The build links enabled `.bend` sources from the current settings, packages and extension directories; add a one-off source with `sh scripts/build-cli.sh build/pi-cli path/to/extension.bend`. A source module exports `extension(api)` as an `ExtensionFactory`. The CLI loads linked discovered sources or accepts `--extension path/to/extension.bend`; `--no-extensions` skips discovery while keeping explicit selections. Rebuild when sources or package configuration change, including when using the binary in another project. Source files cannot be loaded into an existing binary at runtime.
 
 Credentials and private sessions must stay outside the repository.
 

@@ -1,4 +1,4 @@
-"""Run after building with: sh scripts/build-cli.sh build/pi-native-extension-smoke tests/fixtures/native-extension.bend"""
+"""Exercise a native CLI built with tests/fixtures/native-extension.bend linked."""
 
 import json
 import os
@@ -13,10 +13,10 @@ EXTENSION = ROOT / "tests/fixtures/native-extension.bend"
 
 
 with tempfile.TemporaryDirectory(prefix="pi-native-extension-") as agent_dir:
-    (Path(agent_dir) / "settings.json").write_text(json.dumps({"packages": [str(EXTENSION)]}))
     env = os.environ | {"PI_CODING_AGENT_DIR": agent_dir, "PI_OFFLINE": "1"}
-    cases = [(str(EXTENSION), True), ("tests/fixtures/native-extension.bend", True), (None, False), ("tests/fixtures/native-extension.bend", False)]
-    for selection, no_extensions in cases:
+    cases = [(str(EXTENSION), True, []), ("tests/fixtures/native-extension.bend", True, []), (None, False, []), ("tests/fixtures/native-extension.bend", False, []), (str(EXTENSION), False, ["-native-extension.bend"])]
+    for selection, no_extensions, filters in cases:
+        (Path(agent_dir) / "settings.json").write_text(json.dumps({"packages": [str(EXTENSION)], "extensions": filters}))
         args = [str(BINARY), "--provider", "openai", "--model", "gpt-6-luna", "--api-key", "dummy", "--no-session", "-p"]
         if no_extensions:
             args.append("--no-extensions")

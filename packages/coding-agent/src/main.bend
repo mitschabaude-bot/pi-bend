@@ -609,7 +609,7 @@ def hasExtensionName(names: List<&2, String>, +name: String) -> Bool:
     case Nil{}: False{}
     case found <> rest: String.eq(found,name) || hasExtensionName(rest,name)
 def extensionIdentity(+name: String, cwd: String) -> String:
-  Bool.pick(String, String.ends_with(name, ".bend"), Maybe.default(&2, String, Path.resolve(cwd, name), name), name)
+  Bool.pick(String, String.ends_with(name, ".bend") && Bool.not(String.contains(name, ":")), Maybe.default(&2, String, Path.resolve(cwd, name), name), name)
 def uniqueExtensionNames(names: List<&2, String>, +seen: List<&2, String>, +cwd: String) -> List<&2, String>:
   match names:
     case Nil{}: Nil{}
@@ -617,7 +617,14 @@ def uniqueExtensionNames(names: List<&2, String>, +seen: List<&2, String>, +cwd:
       +identity = extensionIdentity(name, cwd)
       Bool.pick(Unit -> List<&2, String>,hasExtensionName(seen,identity),
         _ => uniqueExtensionNames(rest,seen,cwd),
-        _ => name <> uniqueExtensionNames(rest,identity <> seen,cwd))(Unit{})
+        _ => identity <> uniqueExtensionNames(rest,identity <> seen,cwd))(Unit{})
+def literalExtensionNames(names: List<&2, String>) -> List<&2, String>:
+  match names:
+    case Nil{}: Nil{}
+    case +name <> +rest:
+      Bool.pick(Unit -> List<&2, String>, PackageManager.isPattern(name),
+        _ => literalExtensionNames(rest),
+        _ => name <> literalExtensionNames(rest))(Unit{})
 def enabledExtensionPaths(resources: List<&2, PackageManager.ResolvedResource>) -> List<&2, String>:
   match resources:
     case Nil{}: Nil{}
@@ -633,7 +640,7 @@ def chosenExtensions(parsed: Args.Args, settings: Settings.SettingsManager, +res
   match parsed:
     case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, extensions, noExtensions, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       +explicit = Maybe.default(&2, List<&2, String>, extensions, Nil{})
-      +configured = Bool.pick(List<&2, String>, Maybe.default(&2, Bool, noExtensions, False{}), Nil{}, List.append(&2, String, Settings.getExtensionPaths(settings), discoveredExtensionPaths(resolved)))
+      +configured = Bool.pick(List<&2, String>, Maybe.default(&2, Bool, noExtensions, False{}), Nil{}, List.append(&2, String, literalExtensionNames(Settings.getExtensionPaths(settings)), discoveredExtensionPaths(resolved)))
       +names = uniqueExtensionNames(List.append(&2, String, explicit, configured), Nil{}, cwd)
       Runtime.ExtensionLoadout{List.append(&1, ExtensionTypes.InlineExtension, LinkedExtensions.builtInExtensions(), LinkedExtensions.selected(names)), LinkedExtensions.unlinked(names), resolved}
 def resolvedLoadout(parsed: Args.Args, +settings: Settings.SettingsManager, +cwd: String, +agentDir: String, environment: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Runtime.ExtensionLoadout):
