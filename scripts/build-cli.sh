@@ -9,9 +9,20 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 # shared object cache); BEND_INCREMENTAL=0 compiles the one C file as
 # BEND_TUS units instead, one per core, at most 16.
 FLAGS="${BEND_CFLAGS:-} -DBEND_APP_ARGV -DBEND_DEFAULT_THREADS=1"
+OUTPUT=${1:-build/pi-cli}
+SOURCE=packages/coding-agent/src/main.bend
+if [ "$#" -gt 1 ]; then
+  shift
+  GENERATED=$(python3 "$ROOT/scripts/link-extensions.py" "$@")
+  SOURCE=${GENERATED%% *}
+  REGISTRY=${GENERATED#* }
+  trap 'rm -f "$ROOT/$SOURCE" "$ROOT/$REGISTRY"' EXIT
+  trap 'exit 1' HUP INT TERM
+fi
 if [ "${BEND_INCREMENTAL:-1}" != 0 ]; then
-  exec env BEND_CFLAGS="$FLAGS" sh "$ROOT/scripts/build-incremental.sh" packages/coding-agent/src/main.bend "${1:-build/pi-cli}"
+  env BEND_CFLAGS="$FLAGS" sh "$ROOT/scripts/build-incremental.sh" "$SOURCE" "$OUTPUT"
+  exit
 fi
 CORES=$(nproc 2>/dev/null || echo 4)
 [ "$CORES" -gt 16 ] && CORES=16
-exec env BEND_TUS="${BEND_TUS:-$CORES}" BEND_CFLAGS="$FLAGS" sh "$ROOT/scripts/build-pure.sh" packages/coding-agent/src/main.bend "${1:-build/pi-cli}"
+env BEND_TUS="${BEND_TUS:-$CORES}" BEND_CFLAGS="$FLAGS" sh "$ROOT/scripts/build-pure.sh" "$SOURCE" "$OUTPUT"
