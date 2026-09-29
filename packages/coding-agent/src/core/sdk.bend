@@ -39,12 +39,12 @@ import ./tools/file-mutation-queue.bend as Queue
 # DefaultResourceLoader, reloaded. What the SDK created, it owns until
 # `dispose`; injected services stay their caller's.
 
-# upstream CreateAgentSessionOptions. sessionStartEvent metadata is not exposed yet.
+# upstream CreateAgentSessionOptions.
 type CreateAgentSessionOptions is Data:
-  CreateAgentSessionOptions{cwd: Maybe<&2, String>, agentDir: Maybe<&2, String>, modelRuntime: Maybe<&2, Models.ModelRuntime>, model: Maybe<&2, Models.Model()>, thinkingLevel: Maybe<&2, Ai.ModelThinkingLevel>, scopedModels: List<&2, Models.ScopedModel>, noTools: Maybe<&2, Runtime.NoTools>, tools: Maybe<&2, List<&2, String>>, excludeTools: Maybe<&2, List<&2, String>>, resourceLoader: Maybe<&2, Resources.ResourceLoader>, sessionManager: Maybe<&2, Session.Session()>, settingsManager: Maybe<&2, Settings.SettingsManager>, customTools: List<&2, ExtensionTypes.ToolDefinition>}
+  CreateAgentSessionOptions{cwd: Maybe<&2, String>, agentDir: Maybe<&2, String>, modelRuntime: Maybe<&2, Models.ModelRuntime>, model: Maybe<&2, Models.Model()>, thinkingLevel: Maybe<&2, Ai.ModelThinkingLevel>, scopedModels: List<&2, Models.ScopedModel>, noTools: Maybe<&2, Runtime.NoTools>, tools: Maybe<&2, List<&2, String>>, excludeTools: Maybe<&2, List<&2, String>>, resourceLoader: Maybe<&2, Resources.ResourceLoader>, sessionManager: Maybe<&2, Session.Session()>, settingsManager: Maybe<&2, Settings.SettingsManager>, customTools: List<&2, ExtensionTypes.ToolDefinition>, sessionStartEvent: Maybe<&2, ExtensionTypes.SessionStartEvent>}
 
 def createAgentSessionOptions() -> CreateAgentSessionOptions:
-  CreateAgentSessionOptions{None{}, None{}, None{}, None{}, None{}, Nil{}, None{}, None{}, None{}, None{}, None{}, None{}, Nil{}}
+  CreateAgentSessionOptions{None{}, None{}, None{}, None{}, None{}, Nil{}, None{}, None{}, None{}, None{}, None{}, None{}, Nil{}, None{}}
 
 # The model runtime and the credential stores behind it, when the SDK
 # created them.
@@ -138,7 +138,7 @@ def processCwd(environment: Paths.Environment) -> String:
 # upstream: options.cwd, else the session manager's cwd, else process.cwd().
 def cwdFor(+environment: Paths.Environment, options: CreateAgentSessionOptions) -> String:
   match options:
-    case CreateAgentSessionOptions{cwd, _, _, _, _, _, _, _, _, _, session, _, _}: resolvedPath(environment, Maybe.default(&2, String, Maybe.or(&2, String, cwd, sessionCwd(session)), processCwd(environment)))
+    case CreateAgentSessionOptions{cwd, _, _, _, _, _, _, _, _, _, session, _, _, _}: resolvedPath(environment, Maybe.default(&2, String, Maybe.or(&2, String, cwd, sessionCwd(session)), processCwd(environment)))
 
 def agentDirFor(+environment: Paths.Environment, requested: Maybe<&2, String>) -> IO(String):
   match requested:
@@ -279,7 +279,7 @@ def selectModel(+docsPath: String, +models: Models.ModelRuntime, +settings: Sett
 
 def selectionOf(options: CreateAgentSessionOptions) -> Runtime.ToolSelection:
   match options:
-    case CreateAgentSessionOptions{_, _, _, _, _, _, noTools, tools, exclude, _, _, _, _}: Runtime.ToolSelection{tools, noTools, exclude, None{}}
+    case CreateAgentSessionOptions{_, _, _, _, _, _, noTools, tools, exclude, _, _, _, _, _}: Runtime.ToolSelection{tools, noTools, exclude, None{}}
 
 # The CLI's create options the runtime helpers read (system prompt, tools,
 # thinking level); resources come from the loader.
@@ -332,38 +332,42 @@ def selectionMessage(selection: ModelSelection) -> Maybe<&2, String>:
 
 def requestedModel(options: CreateAgentSessionOptions) -> Maybe<&2, Models.Model()>:
   match options:
-    case CreateAgentSessionOptions{_, _, _, model, _, _, _, _, _, _, _, _, _}: model
+    case CreateAgentSessionOptions{_, _, _, model, _, _, _, _, _, _, _, _, _, _}: model
 
 def requestedThinking(options: CreateAgentSessionOptions) -> Maybe<&2, Ai.ModelThinkingLevel>:
   match options:
-    case CreateAgentSessionOptions{_, _, _, _, thinking, _, _, _, _, _, _, _, _}: thinking
+    case CreateAgentSessionOptions{_, _, _, _, thinking, _, _, _, _, _, _, _, _, _}: thinking
 
 def scopedOf(options: CreateAgentSessionOptions) -> List<&2, Models.ScopedModel>:
   match options:
-    case CreateAgentSessionOptions{_, _, _, _, _, scoped, _, _, _, _, _, _, _}: scoped
+    case CreateAgentSessionOptions{_, _, _, _, _, scoped, _, _, _, _, _, _, _, _}: scoped
 
 def loaderOption(options: CreateAgentSessionOptions) -> Maybe<&2, Resources.ResourceLoader>:
   match options:
-    case CreateAgentSessionOptions{_, _, _, _, _, _, _, _, _, loader, _, _, _}: loader
+    case CreateAgentSessionOptions{_, _, _, _, _, _, _, _, _, loader, _, _, _, _}: loader
 
 def sessionOption(options: CreateAgentSessionOptions) -> Maybe<&2, Session.Session()>:
   match options:
-    case CreateAgentSessionOptions{_, _, _, _, _, _, _, _, _, _, session, _, _}: session
+    case CreateAgentSessionOptions{_, _, _, _, _, _, _, _, _, _, session, _, _, _}: session
 
 def settingsOption(options: CreateAgentSessionOptions) -> Maybe<&2, Settings.SettingsManager>:
   match options:
-    case CreateAgentSessionOptions{_, _, _, _, _, _, _, _, _, _, _, settings, _}: settings
+    case CreateAgentSessionOptions{_, _, _, _, _, _, _, _, _, _, _, settings, _, _}: settings
 
 def modelsOption(options: CreateAgentSessionOptions) -> Maybe<&2, Models.ModelRuntime>:
   match options:
-    case CreateAgentSessionOptions{_, _, models, _, _, _, _, _, _, _, _, _, _}: models
+    case CreateAgentSessionOptions{_, _, models, _, _, _, _, _, _, _, _, _, _, _}: models
 
 def agentDirOption(options: CreateAgentSessionOptions) -> Maybe<&2, String>:
   match options:
-    case CreateAgentSessionOptions{_, agentDir, _, _, _, _, _, _, _, _, _, _, _}: agentDir
+    case CreateAgentSessionOptions{_, agentDir, _, _, _, _, _, _, _, _, _, _, _, _}: agentDir
 def customToolsOf(options: CreateAgentSessionOptions) -> List<&2, ExtensionTypes.ToolDefinition>:
   match options:
-    case CreateAgentSessionOptions{_,_,_,_,_,_,_,_,_,_,_,_,custom}: custom
+    case CreateAgentSessionOptions{_,_,_,_,_,_,_,_,_,_,_,_,custom, _}: custom
+
+def sessionStartOf(options: CreateAgentSessionOptions) -> ExtensionTypes.SessionStartEvent:
+  match options:
+    case CreateAgentSessionOptions{_,_,_,_,_,_,_,_,_,_,_,_,_,start}: Maybe.default(&2, ExtensionTypes.SessionStartEvent, start, ExtensionTypes.SessionStartEvent{ExtensionTypes.StartupStart{}, None{}})
 
 def Outcome() -> Type: Result<&2, &1, String, CreateAgentSessionResult>
 
@@ -388,7 +392,7 @@ def withAgent(+assembly: Assembly, transport: Runtime.Transport, choice: ModelsC
       do IO<Outcome()>:
         recorded : Session.Session() <- recordStartup(session, seed, selectionModel(selection), thinking)
         +loadout : Runtime.Loadout = Runtime.loadoutFrom(prepared, tools, runner, Runtime.LoadoutSource{environment, options, packageDir, Some{loader}})
-        +live : Session.AgentSession <- Session.createWithTools(agent, recorded, settings, cwd, loadout, models, scopedOf(sdkOptions), customToolsOf(sdkOptions))
+        +live : Session.AgentSession <- Session.createWithTools(agent, recorded, settings, cwd, loadout, models, scopedOf(sdkOptions), customToolsOf(sdkOptions), sessionStartOf(sdkOptions))
         dynamicConverter : Runtime.Converter() <- Runtime.installSettingsConverter(agent, converter, Session.settingsOf(live))
         return Done{CreateAgentSessionResult{live, extensions, selectionMessage(selection), Services{transport, models, owned, ownedLoader, queue, owners, stream, registry, validator, keys, dynamicConverter, runner}}}
     case _ ModelsChoice{models, owned} LoaderChoice{_, ownedLoader} Tuple{owners, _} Fail{message} Done{agent}:

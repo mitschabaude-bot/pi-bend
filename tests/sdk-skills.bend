@@ -48,7 +48,7 @@ def prepared(+tempDir: String) -> IO(Unit):
     return Unit{}
 
 def options(+tempDir: String, session: Session.Session(), loader: Maybe<&2, Resources.ResourceLoader>) -> Sdk.CreateAgentSessionOptions:
-  Sdk.CreateAgentSessionOptions{Some{tempDir}, Some{tempDir}, None{}, None{}, None{}, Nil{}, None{}, None{}, None{}, loader, Some{session}, None{}, Nil{}}
+  Sdk.CreateAgentSessionOptions{Some{tempDir}, Some{tempDir}, None{}, None{}, None{}, Nil{}, None{}, None{}, None{}, loader, Some{session}, None{}, Nil{},None{}}
 
 def skillNames(skills: List<&2, Skills.Skill>) -> List<&2, String>:
   match skills:

@@ -62,10 +62,6 @@ def emitOn(live: Session.AgentSession, event: ExtensionTypes.ExtensionEvent) -> 
     runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(live)
     emitWith(runner, event)
 
-# upstream bindExtensions' session_start: the initial session starts with
-# reason "startup".
-def startupEvent() -> ExtensionTypes.SessionStartEvent: ExtensionTypes.SessionStartEvent{ExtensionTypes.StartupStart{}, None{}}
-
 def installed(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +agentDir: String, +directory: String, result: Result<&1, &1, String, Created<S>>) -> IO(Result<&2, &2, String, AgentSessionRuntime<S>>):
   match result:
     case Fail{error}: IO.pure(Result<&2, &2, String, AgentSessionRuntime<S>>, Fail{error})
@@ -75,7 +71,7 @@ def installed(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +ag
         rebind : R.Ref<Maybe<&2, Rebind()>> <- R.new(Maybe<&2, Rebind()>, None{})
         retiring : R.Ref<Retiring<S>> <- R.new(Retiring<S>, NothingRetiring{})
         invalidate : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
-        Session.bindExtensions(live, startupEvent())
+        Session.bindExtensions(live, Session.initialStartEvent(live))
         return Done{AgentSessionRuntime{current, factory, release, agentDir, rebind, retiring, invalidate}}
 
 def createChecked(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +agentDir: String, +directory: String, live: Session.Session(), checked: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, AgentSessionRuntime<S>>):

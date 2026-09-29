@@ -275,7 +275,7 @@ type ExtensionTools is Data:
   ExtensionTools{names: List<&2, String>, executors: List<&2, Tools.Execute()>, sdk: List<&2, ExtensionTypes.ToolDefinition>}
 
 type ExtensionBinding is Data:
-  ExtensionBinding{actions: Ctx.ExtensionContextActions, providersChanged: C.Callback<Unit, Unit>, sessionActions: R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>>, shutdownHandler: R.Ref<Maybe<&2, C.Callback<Unit, Unit>>>, extensionTools: R.Ref<ExtensionTools>}
+  ExtensionBinding{actions: Ctx.ExtensionContextActions, providersChanged: C.Callback<Unit, Unit>, sessionActions: R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>>, shutdownHandler: R.Ref<Maybe<&2, C.Callback<Unit, Unit>>>, extensionTools: R.Ref<ExtensionTools>, startEvent: ExtensionTypes.SessionStartEvent}
 
 
 # The session's handles on the agent: its event subscription, the
@@ -1280,7 +1280,7 @@ def disposeExecutors(executors: List<&2, Tools.Execute()>) -> IO(Unit):
 
 def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
   match binding:
-    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager}, changed, sessionActions, handler, extensionTools}:
+    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager}, changed, sessionActions, handler, extensionTools, _}:
       do IO<Unit>:
         tools : ExtensionTools <- R.dispose(ExtensionTools, extensionTools)
         disposeExecutors(executorsOf(tools))
@@ -1302,7 +1302,7 @@ def boundWith(+runner: ExtensionRunner.ExtensionRunner, binding: Maybe<&2, Exten
       do IO<Unit>:
         ExtensionLoader.bindActions(ExtensionRunner.runtimeOf(runner), None{})
         ExtensionRunner.bindCore(runner, None{}, None{})
-    case Some{ExtensionBinding{actions, changed, _, _, _}}: ExtensionRunner.bindCore(runner, Some{actions}, Some{changed})
+    case Some{ExtensionBinding{actions, changed, _, _, _, _}}: ExtensionRunner.bindCore(runner, Some{actions}, Some{changed})
 
 def bindContext(loadout: Runtime.Loadout, binding: Maybe<&2, ExtensionBinding>) -> IO(Unit):
   match loadout:
@@ -2173,7 +2173,7 @@ def sdkOf(tools: ExtensionTools) -> List<&2, ExtensionTypes.ToolDefinition>:
   match tools: case ExtensionTools{_,_,sdk}: sdk
 def sdkFromHooks(hooks: SessionHooks) -> IO(List<&2, ExtensionTypes.ToolDefinition>):
   match hooks:
-    case SessionHooks{_,_,_,_,_,_,ExtensionBinding{_,_,_,_,tools},_,_,_}:
+    case SessionHooks{_,_,_,_,_,_,ExtensionBinding{_,_,_,_,tools,_},_,_,_}:
       do IO<List<&2, ExtensionTypes.ToolDefinition>>:
         current : ExtensionTools <- R.read(ExtensionTools,tools)
         return sdkOf(current)
@@ -3729,7 +3729,7 @@ def sendUserMessageCallback(session: AgentSession, request: ExtensionTypes.SendU
 
 def sessionActionsOf(session: AgentSession) -> R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>>:
   match session:
-    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, actions, _, _}, _, _, _}, _, _, _, _, _}: actions
+    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, actions, _, _, _}, _, _, _}, _, _, _, _, _}: actions
 
 def emitStart(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, event: ExtensionTypes.SessionStartEvent) -> IO(Unit):
   match runner:
@@ -3737,18 +3737,21 @@ def emitStart(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, event: Extensi
     case Some{found}: ExtensionRunner.emit(found, ExtensionTypes.SessionStart{event})
 
 # upstream bindExtensions' session_start: the session's extensions learn how
-# it started (the runtime passes the event; SDK sessions start with
-# "startup").
+# it started when the runtime binds them.
 def bindExtensions(session: AgentSession, event: ExtensionTypes.SessionStartEvent) -> IO(Unit):
   do IO<Unit>:
     loadout : Runtime.Loadout <- loadoutOf(session)
     emitStart(runnerIn(loadout), event)
 
+def initialStartEvent(session: AgentSession) -> ExtensionTypes.SessionStartEvent:
+  match session:
+    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, _, _, _, start}, _, _, _}, _, _, _, _, _}: start
+
 # upstream bindExtensions({ shutdownHandler }): what ctx.shutdown() does in
 # this mode. The mode keeps ownership of the callback.
 def setShutdownHandler(session: AgentSession, handler: C.Callback<Unit, Unit>) -> IO(Unit):
   match session:
-    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, _, bound, _}, _, _, _}, _, _, _, _, _}: R.write(Maybe<&2, C.Callback<Unit, Unit>>, bound, Some{handler})
+    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, _, bound, _, _}, _, _, _}, _, _, _, _, _}: R.write(Maybe<&2, C.Callback<Unit, Unit>>, bound, Some{handler})
 
 def bindActionsTo(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, actions: ExtensionTypes.ExtensionActions) -> IO(Unit):
   match runner:
@@ -4798,7 +4801,7 @@ def loadoutRefOf(session: AgentSession) -> R.Ref<Runtime.Loadout>:
 
 def extensionToolsOf(session: AgentSession) -> R.Ref<ExtensionTools>:
   match session:
-    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, _, _, tools}, _, _, _}, _, _, _, _, _}: tools
+    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, _, _, tools, _}, _, _, _}, _, _, _, _, _}: tools
 
 def withRegistry(loadout: Runtime.Loadout, registry: List<&2, Tools.Tool()>) -> Runtime.Loadout:
   match loadout:
@@ -5114,7 +5117,7 @@ def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
     manager : C.Callback<Unit, Ctx.ReadonlySessionManager()> <- C.create(~ContextEnv, ~Unit, ~Ctx.ReadonlySessionManager(), ~contextSessionManager, env)
     return Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager}
 
-def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime, sdk: List<&2, ExtensionTypes.ToolDefinition>) -> IO(ExtensionBinding):
+def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime, sdk: List<&2, ExtensionTypes.ToolDefinition>, start: ExtensionTypes.SessionStartEvent) -> IO(ExtensionBinding):
   match env:
     case ContextEnv{+agent, shared, scoped, settings, handler}:
       do IO<ExtensionBinding>:
@@ -5122,9 +5125,9 @@ def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime, sdk: 
         changed : C.Callback<Unit, Unit> <- C.create(~ModelEnv, ~Unit, ~Unit, ~refreshCurrentModel, ModelEnv{agent, models})
         sessionActions : R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>> <- R.new(Maybe<&2, ExtensionTypes.ExtensionActions>, None{})
         extensionTools : R.Ref<ExtensionTools> <- R.new(ExtensionTools, ExtensionTools{Nil{}, Nil{}, sdk})
-        return ExtensionBinding{actions, changed, sessionActions, handler, extensionTools}
+        return ExtensionBinding{actions, changed, sessionActions, handler, extensionTools, start}
 
-def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>,sdk: List<&2, ExtensionTypes.ToolDefinition>) -> IO(AgentSession):
+def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>,sdk: List<&2, ExtensionTypes.ToolDefinition>, start: ExtensionTypes.SessionStartEvent) -> IO(AgentSession):
   do IO<AgentSession>:
     +scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
     initial : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
@@ -5142,7 +5145,7 @@ def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settin
     +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
     Agent.setPrepareRequest(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
     shutdownHandler : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
-    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef, shutdownHandler}, models, sdk)
+    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef, shutdownHandler}, models, sdk, start)
     bindContext(loadout, Some{context})
     inner : Runtime.Stream() <- Agent.getStreamFunction(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     warming : Warming <- createWarming(agent, shared, settingsRef, inner)
@@ -5163,11 +5166,11 @@ def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settin
 
 # upstream AgentSession constructor: the session, its agent hooks and its
 # extension bindings.
-def createWithTools(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>,sdk: List<&2, ExtensionTypes.ToolDefinition>) -> IO(AgentSession):
+def createWithTools(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>,sdk: List<&2, ExtensionTypes.ToolDefinition>, start: ExtensionTypes.SessionStartEvent) -> IO(AgentSession):
   do IO<AgentSession>:
-    +created : AgentSession <- createUnbound(agent, session, settings, cwd, loadout, models, scopedModels, sdk)
+    +created : AgentSession <- createUnbound(agent, session, settings, cwd, loadout, models, scopedModels, sdk, start)
     bindSessionActions(created)
     refreshToolRegistry(created, True{})
     return created
 def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
-  createWithTools(agent,session,settings,cwd,loadout,models,scopedModels,Nil{})
+  createWithTools(agent,session,settings,cwd,loadout,models,scopedModels,Nil{},ExtensionTypes.SessionStartEvent{ExtensionTypes.StartupStart{},None{}})

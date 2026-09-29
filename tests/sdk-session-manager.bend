@@ -65,7 +65,7 @@ def memorySession(+cwd: String) -> IO(Session.Session()):
     requiredSession(created)
 
 def options(cwd: Maybe<&2, String>, +agentDir: String, thinking: Maybe<&2, Ai.ModelThinkingLevel>, session: Maybe<&2, Session.Session()>) -> Sdk.CreateAgentSessionOptions:
-  Sdk.CreateAgentSessionOptions{cwd, Some{agentDir}, None{}, Some{model()}, thinking, Nil{}, None{}, None{}, None{}, None{}, session, None{}, Nil{}}
+  Sdk.CreateAgentSessionOptions{cwd, Some{agentDir}, None{}, Some{model()}, thinking, Nil{}, None{}, None{}, None{}, None{}, session, None{}, Nil{},None{}}
 
 def recordOf(+session: Session.AgentSession) -> IO(Session.Session()): Session.sessionOf(session)
 
@@ -276,7 +276,7 @@ def acceptsSdkCustomTools(+base: String) -> IO(Unit):
     mkdirs(cwd)
     mkdirs(agentDir)
     +execute : Ext.ToolExecute() <- C.create(~Unit,~Ext.ToolCallInput,~Tools.Output(),~sdkTool,Unit{})
-    created : Created() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{cwd},Some{agentDir},None{},Some{model()},None{},Nil{},None{},None{},None{},None{},None{},None{},[definition("sdk_tool",execute),definition("read",execute)]})
+    created : Created() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{cwd},Some{agentDir},None{},Some{model()},None{},Nil{},None{},None{},None{},None{},None{},None{},[definition("sdk_tool",execute),definition("read",execute)],None{}})
     result : Sdk.CreateAgentSessionResult <- required(created,name)
     customChecked(name,Sdk.sessionOf(result))
     C.dispose(Ext.ToolCallInput,Tools.Output(),execute)
@@ -341,7 +341,7 @@ def customBashDefinitions(+base: String) -> IO(Unit):
     +second : Ext.ToolDefinition <- Loader.createBashToolDefinition(cwd,Bash.BashToolOptions{None{},None{},None{},Some{False{}},Some{secondHook}})
     +firstExec : Ext.ToolExecute() = definitionExecute(first)
     +secondExec : Ext.ToolExecute() = definitionExecute(second)
-    created : Created() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{cwd},Some{agentDir},None{},Some{model()},Some{Ai.Thinking{Ai.High{}}},Nil{},None{},None{},None{},None{},None{},None{},[first,renamed(second,"bash_without_session_env","bash without session env")]})
+    created : Created() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{cwd},Some{agentDir},None{},Some{model()},Some{Ai.Thinking{Ai.High{}}},Nil{},None{},None{},None{},None{},None{},None{},[first,renamed(second,"bash_without_session_env","bash without session env")],None{}})
     result : Sdk.CreateAgentSessionResult <- required(created,name)
     customBashChecked(name,Capture{firstSeen},Capture{secondSeen},Sdk.sessionOf(result))
     C.dispose(Ext.ToolCallInput,Tools.Output(),firstExec)
