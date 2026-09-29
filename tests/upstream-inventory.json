@@ -4575,10 +4575,11 @@
       "source": "packages/coding-agent/test/suite/regressions/7027-credential-refresh-hang.test.ts",
       "status": "partial",
       "ports": [
-        "tests/model-availability.bend"
+        "tests/model-availability.bend",
+        "tests/interactive_radius_login_check.py"
       ],
       "sha256": "9fa83fcef17cf5fed6f849f74193fe568a19476001678ed20835dff356ebbfbb",
-      "notes": "A gated native runtime fixture proves login saves its credential and updates local availability before an older stalled network refresh is released (Bun and native one/four). The interactive path now starts a targeted background refresh with a 15-second abort deadline and defers dynamic default-model selection until it finishes; the mounted static API-key login matches pi, but a mounted dynamic-provider login remains unverified."
+      "notes": "A gated native runtime fixture proves login saves its credential and updates local availability before an older stalled network refresh is released (Bun and native one/four). The interactive path now starts a targeted background refresh with a 15-second abort deadline and defers dynamic default-model selection until it finishes; the mounted static API-key login matches pi, and a mounted Radius API-key login selects a freshly fetched model and exits cleanly on native one/four threads. Post-login timeout and concurrent-login cases remain open."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7048-compaction-truncated-summary.test.ts",
