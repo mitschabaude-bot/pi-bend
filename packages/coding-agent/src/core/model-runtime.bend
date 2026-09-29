@@ -2152,14 +2152,20 @@ def preparedStream(+runtime: ModelRuntime, +model: Model(), context: Ai.Transcri
 # model (the request's key, env and signal override), the auth base URL
 # replaces the model's, headers are assembled and transformed, and the
 # provider streams it: an extension stream, else the built-in api stream.
-# Without resolved auth the request goes out as prepared (the native
-# runtime has no "Provider is not configured" failure here).
+# An unknown provider, failed auth lookup, or missing configured auth
+# stops before the transport is invoked.
+def authenticatedStream(+runtime: ModelRuntime, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, +transforms: RequestTransforms, options: Maybe<&2, Composer.StreamOptions()>, resolution: Resolve.Resolution()) -> IO(Composer.StreamOutput()):
+  match resolution:
+    case Fail{error}: IO.pure(Composer.StreamOutput(), failed(Resolve.errorMessage(error)))
+    case Done{None{}}: IO.pure(Composer.StreamOutput(), failed("Provider is not configured: " ++ Ai.modelProvider(model)))
+    case Done{Some{auth}}: preparedStream(runtime, model, context, transforms, Done{Some{auth}}, options)
+
 def streamSimple(+runtime: ModelRuntime, request: Composer.StreamRequest(), transforms: RequestTransforms) -> IO(Composer.StreamOutput()):
   match request:
     case AgentTypes.StreamInput{+model, context, +options}:
       do IO<Composer.StreamOutput()>:
         resolution : Resolve.Resolution() <- getModelAuth(runtime, model, requestOverrides(options))
-        preparedStream(runtime, model, context, transforms, resolution, options)
+        authenticatedStream(runtime, model, context, transforms, options, resolution)
 
 def errorReply(model: Model(), message: String, now: F64) -> Ai.AssistantMessage<V.Value, V.Value>:
   match model:

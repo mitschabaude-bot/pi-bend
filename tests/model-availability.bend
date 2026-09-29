@@ -109,6 +109,13 @@ def checkStreamOwnership(+runtime: Models.ModelRuntime) -> IO(Unit):
     require(failedWith(ordinary, "runtime"), "session stream changed ordinary runtime dispatch")
     C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), fallback)
 
+def checkAuthGate(+runtime: Models.ModelRuntime) -> IO(Unit):
+  do IO<Unit>:
+    missing : Composer.StreamOutput() <- Models.streamSimple(runtime, AgentTypes.StreamInput{model("a"), Ai.TranscriptContext{Nil{}}, None{}}, Models.noTransforms())
+    require(failedWith(missing, "Provider is not configured: a"), "unconfigured provider reached the transport")
+    unknown : Composer.StreamOutput() <- Models.streamSimple(runtime, AgentTypes.StreamInput{model("missing"), Ai.TranscriptContext{Nil{}}, None{}}, Models.noTransforms())
+    require(failedWith(unknown, "Unknown provider: missing"), "unknown provider reached the transport")
+
 def refreshCached(state: Ref.Ref<RefreshState>, context: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, Unit>):
   match context:
     case AiModels.RefreshModelsContext{_, _, _, True{}, _, _}: IO.die(Result<&2, &2, String, Unit>, 1, "credential synchronization used the network")
@@ -330,11 +337,12 @@ def main() -> IO(Unit):
     a : AiModels.Provider <- provider("a")
     b : AiModels.Provider <- provider("b")
     +runtime : Models.ModelRuntime <- Models.fromProviders([a, b], store, context)
-    check(runtime, state)
     checkStreamOwnership(runtime)
+    check(runtime, state)
+    checkAuthGate(runtime)
     Models.dispose(runtime)
     Auth.disposeStore(store)
     previous : State <- Ref.dispose(State, state)
     checkDynamicSynchronization()
     loginBesideStalledRefresh()
-    IO.print("model availability: scoped reads, credential synchronization, snapshots, and stream ownership pass")
+    IO.print("model availability: scoped reads, credential synchronization, snapshots, stream ownership, and auth gating pass")
