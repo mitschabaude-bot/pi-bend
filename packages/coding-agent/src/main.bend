@@ -595,8 +595,8 @@ def rpcInput(pair: Rpc.Owner & Rpc.Handle) -> IO(Result<&2,&2,String,Unit>):
         return result
 def modelsOf(runtime: Runtime.AgentRuntime) -> Runtime.AgentRuntime & Models.ModelRuntime:
   match runtime:
-    case Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,+models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
-      (Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},models)
+    case Runtime.AgentRuntime{transport,storage,storageStore,+models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
+      (Runtime.AgentRuntime{transport,storage,storageStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},models)
 def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
   match parsed:
     case Args.Args{provider, model, apiKey, systemPrompt, appendSystemPrompt, thinking, _, _, _, _, _, _, _, _, _, _, _, _, tools, excludeTools, noTools, noBuiltinTools, _, _, _, _, noSkills, skills, promptTemplates, noPromptTemplates, _, _, _, noContextFiles, _, _, _, _, _, _, _, _, _}:

@@ -25,7 +25,6 @@ import ./extensions/types.bend as ExtensionTypes
 import ./model-runtime.bend as Models
 import ./provider-composer.bend as Composer
 import ./resource-loader.bend as Resources
-import ./runtime-credentials.bend as Credentials
 import ./session-manager.bend as S
 import ./session-persistence.bend as Sessions
 import ./settings-manager.bend as Settings
@@ -51,7 +50,7 @@ def createAgentSessionOptions() -> CreateAgentSessionOptions:
 # created them.
 type OwnedModels is Type:
   InjectedModels{}
-  CreatedModels{storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Credentials.RuntimeCredentials, credentialStore: Auth.CredentialStore}
+  CreatedModels{storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore}
 
 type OwnedLoader is Type:
   InjectedLoader{}
@@ -72,11 +71,9 @@ def sessionOf(result: CreateAgentSessionResult) -> CreateAgentSessionResult & Se
 def disposeOwnedModels(+models: Models.ModelRuntime, owned: OwnedModels) -> IO(Unit):
   match owned:
     case InjectedModels{}: Models.setApiStreams(models, None{})
-    case CreatedModels{storage, storageStore, credentials, credentialStore}:
+    case CreatedModels{storage, storageStore}:
       do IO<Unit>:
         Models.dispose(models)
-        Auth.disposeStore(credentialStore)
-        Credentials.dispose(credentials)
         Auth.disposeStore(storageStore)
         Storage.dispose(storage)
 
@@ -151,12 +148,10 @@ def createdModels(+agentDir: String, +fetch: Fetch.Fetch(Unit), pair: Storage.Au
     case (storage, view):
       do IO<ModelsChoice>:
         +storageStore : Auth.CredentialStore <- Storage.store(view)
-        +credentials : Credentials.RuntimeCredentials <- Credentials.create(storageStore)
-        +credentialStore : Auth.CredentialStore <- Credentials.store(credentials)
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, Runtime.urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, Runtime.urlContext())
-        models : Models.ModelRuntime <- Models.createWithOptions(credentialStore, oauth, Some{anthropicOAuth}, Radius.RadiusTransport{fetch, Runtime.urlContext()}, Some{Path.join(agentDir, "models.json")}, Models.createOptions())
-        return ModelsChoice{models, CreatedModels{storage, storageStore, credentials, credentialStore}}
+        models : Models.ModelRuntime <- Models.createWithOptions(storageStore, oauth, Some{anthropicOAuth}, Radius.RadiusTransport{fetch, Runtime.urlContext()}, Some{Path.join(agentDir, "models.json")}, Models.createOptions())
+        return ModelsChoice{models, CreatedModels{storage, storageStore}}
 
 def modelsFor(injected: Maybe<&2, Models.ModelRuntime>, +agentDir: String, +fetch: Fetch.Fetch(Unit)) -> IO(ModelsChoice):
   match injected:

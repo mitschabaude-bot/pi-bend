@@ -95,10 +95,19 @@ def onlyB(state: State) -> Bool:
     case State{Nil{}, _, _, _}: False{}
     case State{reads, _, _, _}: allB(reads)
 
+def firstStored(state: State) -> Bool:
+  match state:
+    case State{_, _, _, enabled}: enabled
+
 def loggedOut(result: Result<&2, &2, Resolve.ModelsError, Unit>) -> Bool:
   match result:
     case Done{_}: True{}
     case Fail{_}: False{}
+
+def keyIs(result: Auth.StoreResult(Maybe<&2, Auth.Credential>), expected: String) -> Bool:
+  match result:
+    case Done{Some{Auth.ApiKeyCredential{Some{key}, _}}}: String.eq(key, expected)
+    case _: False{}
 
 def check(+runtime: Models.ModelRuntime, +state: Ref.Ref<State>) -> IO(Unit):
   do IO<Unit>:
@@ -125,6 +134,18 @@ def check(+runtime: Models.ModelRuntime, +state: Ref.Ref<State>) -> IO(Unit):
     require(loggedOut(logout), "runtime logout failed")
     remaining : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
     require(List.is_empty(&2, AiModels.Model(), remaining), "logout returned before availability changed")
+    override : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(runtime, "a", "session-key", None{})
+    require(loggedOut(override), "runtime key override failed")
+    visibleKey : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(Models.credentialsOf(runtime), "a", None{})
+    require(keyIs(visibleKey, "session-key"), "runtime key was not used for auth")
+    overridden : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
+    require(Nat.is_eq(List.length(&2, AiModels.Model(), overridden), 1n), "runtime key did not publish availability")
+    stored : State <- Ref.read(State, state)
+    require(Bool.not(firstStored(stored)), "runtime key modified the injected store")
+    removed : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.removeRuntimeApiKey(runtime, "a", None{})
+    require(loggedOut(removed), "runtime key removal failed")
+    afterRemoval : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
+    require(List.is_empty(&2, AiModels.Model(), afterRemoval), "runtime key removal did not publish availability")
 
 def main() -> IO(Unit):
   do IO<Unit>:

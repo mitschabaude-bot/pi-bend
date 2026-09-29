@@ -49,7 +49,6 @@ import ../../../runtime/src/text.bend as Text
 import ../../../runtime/src/collation.bend as Collation
 import ../utils/paths.bend as Paths
 import ./auth-storage.bend as Storage
-import ./runtime-credentials.bend as Runtime
 import ./model-runtime.bend as Models
 import ./system-prompt.bend as Prompt
 import ./messages.bend as Messages
@@ -483,7 +482,7 @@ type Prepared is Data:
   Prepared{sections: Prompt.SystemPromptSections(), skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, contextFiles: List<&2, Prompt.ContextFile>}
 
 type AgentRuntime is Type:
-  AgentRuntime{transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), agent: Owner(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout}
+  AgentRuntime{transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), agent: Owner(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout}
 
 def parsedNames(names: List<&2, String>) -> List<&2, Tools.ToolName>:
   match names:
@@ -898,7 +897,7 @@ def environment(paths: Paths.Environment, cwd: String, agentDir: String, package
 
 def pathsError(error: FS.Error) -> String: "Could not resolve the working directory"
 
-def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter()) -> IO(Unit):
+def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter()) -> IO(Unit):
   do IO<Unit>:
     disposeConverter(converter)
     C.dispose(String, Result<&2, &2, Error(), Maybe<&2, String>>, keys)
@@ -908,8 +907,6 @@ def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, sto
     Tools.disposeTools(tools)
     Queue.dispose(queue)
     Models.dispose(models)
-    Auth.disposeStore(credentialStore)
-    Runtime.dispose(credentials)
     Auth.disposeStore(storageStore)
     Storage.dispose(storage)
     disposeTransport(transport)
@@ -920,21 +917,19 @@ def disposeLoadout(loadout: Loadout) -> IO(Unit):
     case Loadout{_, _, _, _, Some{runner}, _, _, _}: ExtensionRunner.dispose(runner)
 
 # Assembly with cleanup on every failure path.
-def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
+def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
   match result:
-    case Done{agent}: IO.pure(Outcome(AgentRuntime), Done{AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}})
+    case Done{agent}: IO.pure(Outcome(AgentRuntime), Done{AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}})
     case Fail{error}:
       do IO<Outcome(AgentRuntime)>:
-        disposeServices(transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter)
+        disposeServices(transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter)
         disposeLoadout(loadout)
         return Fail{StreamFn.errorMessage(error)}
 
-def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, extensions: ExtensionRunner.ExtensionRunner) -> IO(Unit):
+def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, extensions: ExtensionRunner.ExtensionRunner) -> IO(Unit):
   do IO<Unit>:
     ExtensionRunner.dispose(extensions)
     Models.dispose(models)
-    Auth.disposeStore(credentialStore)
-    Runtime.dispose(credentials)
     Auth.disposeStore(storageStore)
     Storage.dispose(storage)
     disposeTransport(transport)
@@ -968,14 +963,14 @@ def loadoutFrom(prepared: Prepared, +registry: List<&2, Tools.Tool()>, extension
   match prepared source:
     case Prepared{sections, skills, templates, agentsFiles} LoadoutSource{paths, +options, packageDir, loader}: Loadout{sections, activeTools(registry, activeNamesOf(toolSetupOf(options))), skills, templates, Some{extensions}, agentsFiles, Some{LoadoutSource{paths, options, packageDir, loader}}, registry}
 
-def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
+def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
   match created:
     case Tuple{queue, Tuple{owners, tools}}:
       do IO<Outcome(AgentRuntime)>:
         result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
-        constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, extensions, source), result)
+        constructed(transport, storage, storageStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, extensions, source), result)
 
-def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, +paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
+def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, +models: Models.ModelRuntime, +paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, +fetch, +codexSessions} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
@@ -989,33 +984,33 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})
         +converter : Converter() <- createConverter(Settings.getBlockImages(settings))
-        assembled(Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings, extensions, source)
+        assembled(Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings, extensions, source)
     case transport Fail{error} _:
       do IO<Outcome(AgentRuntime)>:
-        disposeBase(transport, storage, storageStore, credentials, credentialStore, models, extensions)
+        disposeBase(transport, storage, storageStore, models, extensions)
         return Fail{error}
     case transport _ Fail{error}:
       do IO<Outcome(AgentRuntime)>:
-        disposeBase(transport, storage, storageStore, credentials, credentialStore, models, extensions)
+        disposeBase(transport, storage, storageStore, models, extensions)
         return Fail{error}
 
 def registryOf(setup: ToolSetup) -> List<&2, Tools.ToolName>:
   match setup:
     case ToolSetup{registry, _}: registry
 
-def withModel(+options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, +paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
+def withModel(+options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, +paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, +selection, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, registryOf(toolSetupOf(options)), builtinsOf(selection), transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir, None{}}, extensions)
+    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, +selection, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, registryOf(toolSetupOf(options)), builtinsOf(selection), transport, storage, storageStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir, None{}}, extensions)
 
 # A runtime API key changes the provider's availability (upstream
 # setRuntimeApiKey refreshes it).
-def applyKey(credentials: Runtime.RuntimeCredentials, +models: Models.ModelRuntime, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Unit):
+def applyKey(+models: Models.ModelRuntime, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Unit):
   match apiKey selected:
     case Some{key} Done{Some{model}}:
       +provider = Models.modelProvider(model)
       do IO<Unit>:
-        Runtime.setRuntimeApiKey(credentials, provider, key)
-        Models.refreshProviderAvailability(models, provider)
+        result : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(models, provider, key, None{})
+        return Unit{}
     case _ _: IO.pure(Unit, Unit{})
 
 # Extensions (upstream resource loader and agent-session-services)
@@ -1078,18 +1073,16 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
     case Transport{+authorizer, runtime, +fetch, +codexSessions} Tuple{storage, view}:
       do IO<Outcome(AgentRuntime)>:
         +storageStore : Auth.CredentialStore <- Storage.store(view)
-        +credentials : Runtime.RuntimeCredentials <- Runtime.create(storageStore)
-        +credentialStore : Auth.CredentialStore <- Runtime.store(credentials)
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, urlContext())
-        +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth}, Radius.RadiusTransport{fetch, urlContext()})
+        +models : Models.ModelRuntime <- Models.createWithAnthropic(storageStore, oauth, Some{anthropicOAuth}, Radius.RadiusTransport{fetch, urlContext()})
         +extensions : Extensions <- loadExtensions(cwdOf(options), models, loadout)
         +resolution : Models.ResolveCliModelResult <- cliResolution(models, options, packageDir)
         reportResolution(resolution)
         +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options, resolution)
-        applyKey(credentials, models, apiKey, selected)
+        applyKey(models, apiKey, selected)
         prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir)
-        withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, credentials, credentialStore, models, paths, failedWith(extensionFailure(extensions), prompt), selected, runnerOf(extensions))
+        withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, models, paths, failedWith(extensionFailure(extensions), prompt), selected, runnerOf(extensions))
 
 def withPathsFields(options: CreateOptions, authPath: String, packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment, loadout: ExtensionLoadout) -> IO(Outcome(AgentRuntime)):
   do IO<Outcome(AgentRuntime)>:
@@ -1125,33 +1118,33 @@ def create(options: CreateOptions) -> IO(Outcome(AgentRuntime)):
 
 def agentOf(runtime: AgentRuntime) -> AgentRuntime & Owner():
   match runtime:
-    case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, +agent, model, thinking, loadout}: (AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}, agent)
+    case AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, +agent, model, thinking, loadout}: (AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}, agent)
 def managedTools(runtime: AgentRuntime,agentDir: String) -> AgentRuntime & Manager.ToolsManager:
   match runtime:
-    case AgentRuntime{Transport{authorizer,network,+fetch,codexSessions},storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
-      (AgentRuntime{Transport{authorizer,network,fetch,codexSessions},storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},Manager.ToolsManager{Path.join(agentDir,"bin"),urlContext(),Some{fetch}})
+    case AgentRuntime{Transport{authorizer,network,+fetch,codexSessions},storage,storageStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
+      (AgentRuntime{Transport{authorizer,network,fetch,codexSessions},storage,storageStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},Manager.ToolsManager{Path.join(agentDir,"bin"),urlContext(),Some{fetch}})
 
 def selectionOf(runtime: AgentRuntime) -> AgentRuntime & Selection:
   match runtime:
-    case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, +model, +thinking, loadout}: (AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}, Selection{model, thinking})
+    case AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, +model, +thinking, loadout}: (AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}, Selection{model, thinking})
 
 def loadoutOf(runtime: AgentRuntime) -> AgentRuntime & Loadout:
   match runtime:
-    case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, +loadout}: (AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}, loadout)
+    case AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, +loadout}: (AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}, loadout)
 
 # Adjust the startup selection before any SessionManager model entry is written.
 def selectStartup(runtime: AgentRuntime,+chosen: Models.Model(),+level: Ai.ModelThinkingLevel) -> IO(AgentRuntime):
   match runtime:
-    case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, +agent, _, _, loadout}:
+    case AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, +agent, _, _, loadout}:
       do IO<AgentRuntime>:
         Agent.setModel(Unit,Details(),Custom(),Error(),Unit,agent,chosen)
         Agent.setThinkingLevel(Unit,Details(),Custom(),Error(),Unit,agent,level)
-        return AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, Some{chosen}, level, loadout}
+        return AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, Some{chosen}, level, loadout}
 
 def dispose(runtime: AgentRuntime) -> IO(Unit):
   match runtime:
-    case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, _, _, loadout}:
+    case AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, _, _, loadout}:
       do IO<Unit>:
         Agent.dispose(Unit, Details(), Custom(), Error(), Unit, agent)
-        disposeServices(transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter)
+        disposeServices(transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter)
         disposeLoadout(loadout)
