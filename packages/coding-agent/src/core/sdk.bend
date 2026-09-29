@@ -68,6 +68,11 @@ def sessionOf(result: CreateAgentSessionResult) -> CreateAgentSessionResult & Se
   match result:
     case CreateAgentSessionResult{+session, extensions, fallback, services}: (CreateAgentSessionResult{session, extensions, fallback, services}, session)
 
+def disposeApiStream(stream: Maybe<&2, Composer.ProviderStream()>) -> IO(Unit):
+  match stream:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{callback}: C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), callback)
+
 def disposeOwnedModels(+models: Models.ModelRuntime, owned: OwnedModels) -> IO(Unit):
   match owned:
     case InjectedModels{apiStream}: disposeApiStream(apiStream)
@@ -77,11 +82,6 @@ def disposeOwnedModels(+models: Models.ModelRuntime, owned: OwnedModels) -> IO(U
         Models.dispose(models)
         Auth.disposeStore(storageStore)
         Storage.dispose(storage)
-
-def disposeApiStream(stream: Maybe<&2, Composer.ProviderStream()>) -> IO(Unit):
-  match stream:
-    case None{}: IO.pure(Unit, Unit{})
-    case Some{callback}: C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), callback)
 
 def withApiStream(owned: OwnedModels, stream: Composer.ProviderStream()) -> OwnedModels:
   match owned:
@@ -418,7 +418,7 @@ def withResources(+assembly: Assembly, transport: Runtime.Transport, choice: Mod
         prepared : Result<&2, &2, String, Runtime.Prepared> <- Runtime.preparedFromLoader(loader, options, packageDir, Runtime.activeNamesOf(setup))
         queue : Queue.Owner <- Queue.create()
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- Runtime.createToolList(Runtime.registryOf(setup), Runtime.toolsOptionsFor(Runtime.builtinsOf(toolSelection), settings, environment), environment, cwd, agentDir, packageDir, fetch, ExtensionRunner.toolContext(runner), Queue.borrow(queue))
-        apiStream : Composer.ProviderStream() <- Runtime.createApiStream(codexSessions, authorizer, fetch)
+        +apiStream : Composer.ProviderStream() <- Runtime.createApiStream(codexSessions, authorizer, fetch)
         +stream : Runtime.Stream() <- Runtime.createStream(fetch, Runtime.requestDefaults(settings), Runtime.KeySource{models, None{}}, Models.RequestTransforms{None{}, Some{apiStream}})
         +registry : StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()) <- StreamFn.create(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error())
         +validator : Loop.Validator(Runtime.Error()) <- Loop.createPlain(~Runtime.Error(), ~Runtime.validationError)

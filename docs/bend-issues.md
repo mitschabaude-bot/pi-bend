@@ -1388,7 +1388,7 @@ Found while porting the RPC suites. `packages/coding-agent/test/zz.bend` contain
 
 Recurrence (2026-09-29): `tests/interactive-login-run.bend` and `tests/model-availability.bend` with an added import of `modes/interactive/run.bend` fail at the same `agent.createPrepare~0` template, while the full `packages/coding-agent/src/main.bend` entry typechecks. The smaller model-availability entry compiled before that import; removing it restored the passing Bun/native fixture. This broadens BEND-056 beyond entries under `packages/`; the import path or closure shape remains unisolated.
 
-Further recurrence (2026-09-29): `tests/sdk-session-manager.bend` also fails at `agent.createPrepare~0` while the CLI entry typechecks. This currently prevents direct execution of an SDK injected-runtime lifetime case; the model-runtime dispatch boundary is tested separately in `tests/model-availability.bend`.
+Further recurrence (2026-09-29): `tests/sdk-session-manager.bend` also fails at `agent.createPrepare~0` while the CLI entry typechecks. A package-local `packages/coding-agent/test/sdk-smoke.bend` does compile and run, so SDK assembly can be checked independently. The broader fixture remains blocked; the model-runtime dispatch boundary is tested separately in `tests/model-availability.bend`.
 
 ## BEND-057 — The runtime verified RSA signatures but could not sign (2026-09-26; missing facility, built)
 
