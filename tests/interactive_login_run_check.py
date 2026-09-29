@@ -93,11 +93,30 @@ def scenario(threads):
                                 raise
                             break
                 assert needle in output[start:], (threads, needle, process.poll(), Handler.seen[-8:], bytes(output[start:][-1800:]))
+            def submit_when_ready(command, expected):
+                # The footer can appear before startup has installed the normal
+                # submit handler. An early submit preserves the draft; Enter
+                # submits that same draft once initialization completes.
+                start = len(output)
+                os.write(master, command + b"\r")
+                for _ in range(30):
+                    deadline = time.monotonic() + 1
+                    while time.monotonic() < deadline:
+                        if expected in output[start:]:
+                            return
+                        if b"Startup is still in progress" in output[start:]:
+                            break
+                        if select.select([master], [], [], .1)[0]:
+                            output.extend(os.read(master, 65536))
+                    assert process.poll() is None, (threads, process.poll(), bytes(output[-1000:]))
+                    start = len(output)
+                    time.sleep(.1)
+                    os.write(master, b"\r")
+                assert False, (threads, expected, bytes(output[-1800:]))
             try:
                 until(b"no-model")
+                submit_when_ready(b"/login OpenAI Codex", b"Select OpenAI Codex login method:")
                 before = len(output)
-                os.write(master, b"/login OpenAI Codex\r")
-                until(b"Select OpenAI Codex login method:", before)
                 os.write(master, b"\x1b[B\r")
                 until(b"ABCD-EFGH", before)
                 os.write(master, b"\x1b")
@@ -114,7 +133,7 @@ def scenario(threads):
                 back = len(output)
                 os.write(master, b"\r")
                 until(b"Select provider to configure", back)
-                os.write(master, b"\x1b[B\r")
+                os.write(master, b"openai-codex\r")
                 until(b"Select OpenAI Codex login method:", before)
                 os.write(master, b"\x1b[B\r")
                 until(b"ABCD-EFGH", before)
