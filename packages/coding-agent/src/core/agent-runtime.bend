@@ -569,9 +569,10 @@ def contextFilesReported(result: Resources.ContextFiles) -> IO(List<&2,Prompt.Co
 # Skills
 # ------
 
-def resolvedFor(+environment: Paths.Environment, options: CreateOptions) -> IO(PackageManager.ResolvedPaths):
-  match options:
-    case CreateOptions{cwd, agentDir, _, _, _, _, _, _, _, _, _, _, _, _, settings, _}: PackageManager.resolve(environment, settings, cwd, agentDir)
+def resolvedFor(+environment: Paths.Environment, options: CreateOptions, existing: Maybe<&2, PackageManager.ResolvedPaths>) -> IO(PackageManager.ResolvedPaths):
+  match existing options:
+    case Some{paths} _: IO.pure(PackageManager.ResolvedPaths, paths)
+    case None{} CreateOptions{cwd, agentDir, _, _, _, _, _, _, _, _, _, _, _, _, settings, _}: PackageManager.resolve(environment, settings, cwd, agentDir)
 
 # upstream DefaultResourceLoader skills: the package manager's enabled skills
 # (unless --no-skills) followed by --skill paths, deduplicated by canonical
@@ -612,17 +613,17 @@ def sectionsForToolsWith(source: LoadoutSource, active: List<&2, String>, contex
   match source:
     case LoadoutSource{_, options, packageDir, _}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptionsWith(options, active, contextList, skills, prompts)))
 
-def preparedWithTools(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String, active: List<&2, String>) -> IO(Result<&2, &2, String, Prepared>):
+def preparedWithTools(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String, active: List<&2, String>, existing: Maybe<&2, PackageManager.ResolvedPaths>) -> IO(Result<&2, &2, String, Prepared>):
   do IO<Result<&2, &2, String, Prepared>>:
     loaded : Resources.ContextFiles <- contextFilesFor(environment,options)
     +contextList : List<&2,Prompt.ContextFile> <- contextFilesReported(loaded)
-    +resolved : PackageManager.ResolvedPaths <- resolvedFor(environment, options)
+    +resolved : PackageManager.ResolvedPaths <- resolvedFor(environment, options, existing)
     +skills : List<&2, Skills.Skill> <- skillsFor(environment, options, resolved)
     templates : List<&2, Templates.PromptTemplate> <- templatesFor(environment, options, resolved)
     return preparedWith(skills, templates, contextList, promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptions(options, active, contextList, skills))))
 
-def preparedFor(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, Prepared>):
-  preparedWithTools(environment, options, packageDir, activeNamesOf(toolSetupOf(options)))
+def preparedFor(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String, existing: Maybe<&2, PackageManager.ResolvedPaths>) -> IO(Result<&2, &2, String, Prepared>):
+  preparedWithTools(environment, options, packageDir, activeNamesOf(toolSetupOf(options)), existing)
 
 # The system prompt and its appended text from a resource loader.
 def withLoadedPrompt(options: CreateOptions, systemPrompt: Maybe<&2, String>, append: List<&2, String>) -> CreateOptions:
@@ -649,7 +650,7 @@ def withSettings(options: CreateOptions, settings: Settings.SettingsManager) -> 
 # reloaded settings.
 def reprepare(source: LoadoutSource, settings: Settings.SettingsManager, active: List<&2, String>) -> IO(Result<&2, &2, String, Prepared>):
   match source:
-    case LoadoutSource{environment, options, packageDir, None{}}: preparedWithTools(environment, withSettings(options, settings), packageDir, active)
+    case LoadoutSource{environment, options, packageDir, None{}}: preparedWithTools(environment, withSettings(options, settings), packageDir, active, None{})
     case LoadoutSource{_, options, packageDir, Some{+loader}}:
       do IO<Result<&2, &2, String, Prepared>>:
         Resources.reload(loader, Resources.ResourceLoaderReloadOptions{Some{settings}})
@@ -661,7 +662,7 @@ def sectionsOf(result: Result<&2, &2, String, Prepared>) -> Result<&2, &2, Strin
 
 def systemPromptFor(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, Prompt.SystemPromptSections()>):
   do IO<Result<&2, &2, String, Prompt.SystemPromptSections()>>:
-    prepared : Result<&2, &2, String, Prepared> <- preparedFor(environment, options, packageDir)
+    prepared : Result<&2, &2, String, Prepared> <- preparedFor(environment, options, packageDir, None{})
     return sectionsOf(prepared)
 
 def levelOf(result: Models.ResolveCliModelResult) -> Maybe<&2, Ai.ModelThinkingLevel>:
@@ -1075,31 +1076,29 @@ def failedWith(failure: Maybe<&2, String>, prompt: Result<&2, &2, String, Prepar
 # providers have no dynamic catalog, so it would only repeat the
 # availability check.
 type ExtensionLoadout is Type:
-  ExtensionLoadout{factories: List<&1, ExtensionTypes.InlineExtension>, errors: List<&2, ExtensionTypes.LoadError>}
-def loadExtensions(+cwd: String, +models: Models.ModelRuntime, loadout: ExtensionLoadout) -> IO(Extensions):
-  match loadout:
-    case ExtensionLoadout{factories, errors}:
-      do IO<Extensions>:
-        +runtime : ExtensionTypes.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
-        loadErrors : List<&2, ExtensionTypes.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime, factories)
-        providerErrors : List<&2, ExtensionTypes.ExtensionError> <- ExtensionLoader.bindProviders(runtime, models, None{})
-        runner : ExtensionRunner.ExtensionRunner <- ExtensionRunner.create(runtime, cwd, models)
-        return Extensions{runner, List.append(&2, ExtensionTypes.LoadError, errors, loadErrors), providerErrors}
+  ExtensionLoadout{factories: List<&1, ExtensionTypes.InlineExtension>, errors: List<&2, ExtensionTypes.LoadError>, resolved: Maybe<&2, PackageManager.ResolvedPaths>}
+def loadExtensions(+cwd: String, +models: Models.ModelRuntime, factories: List<&1, ExtensionTypes.InlineExtension>, errors: List<&2, ExtensionTypes.LoadError>) -> IO(Extensions):
+  do IO<Extensions>:
+    +runtime : ExtensionTypes.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
+    loadErrors : List<&2, ExtensionTypes.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime, factories)
+    providerErrors : List<&2, ExtensionTypes.ExtensionError> <- ExtensionLoader.bindProviders(runtime, models, None{})
+    runner : ExtensionRunner.ExtensionRunner <- ExtensionRunner.create(runtime, cwd, models)
+    return Extensions{runner, List.append(&2, ExtensionTypes.LoadError, errors, loadErrors), providerErrors}
 
 def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, +paths: Paths.Environment, borrowed: Storage.AuthStorageOwner & Storage.AuthStorage, loadout: ExtensionLoadout) -> IO(Outcome(AgentRuntime)):
-  match transport borrowed:
-    case Transport{+authorizer, runtime, +fetch, +codexSessions} Tuple{storage, view}:
+  match transport borrowed loadout:
+    case Transport{+authorizer, runtime, +fetch, +codexSessions} Tuple{storage, view} ExtensionLoadout{factories, errors, resolved}:
       do IO<Outcome(AgentRuntime)>:
         +storageStore : Auth.CredentialStore <- Storage.store(view)
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, urlContext())
         +models : Models.ModelRuntime <- Models.createWithAnthropic(storageStore, oauth, Some{anthropicOAuth}, Radius.RadiusTransport{fetch, urlContext()})
-        +extensions : Extensions <- loadExtensions(cwdOf(options), models, loadout)
+        +extensions : Extensions <- loadExtensions(cwdOf(options), models, factories, errors)
         +resolution : Models.ResolveCliModelResult <- cliResolution(models, options, packageDir)
         reportResolution(resolution)
         +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options, resolution)
         key : Result<&2, &2, Resolve.ModelsError, Unit> <- applyKey(models, apiKey, selected)
-        prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir)
+        prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir, resolved)
         withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, models, paths, failedWith(extensionFailure(extensions), failedWith(keyFailure(key), prompt)), selected, runnerOf(extensions))
 
 def withPathsFields(options: CreateOptions, authPath: String, packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment, loadout: ExtensionLoadout) -> IO(Outcome(AgentRuntime)):
@@ -1132,7 +1131,7 @@ def createWithExtensions(options: CreateOptions, loadout: ExtensionLoadout) -> I
         withTransport(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}, transport, loadout)
 
 def create(options: CreateOptions) -> IO(Outcome(AgentRuntime)):
-  createWithExtensions(options, ExtensionLoadout{Nil{}, Nil{}})
+  createWithExtensions(options, ExtensionLoadout{Nil{}, Nil{}, None{}})
 
 def agentOf(runtime: AgentRuntime) -> AgentRuntime & Owner():
   match runtime:

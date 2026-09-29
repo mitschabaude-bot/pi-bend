@@ -17,6 +17,7 @@ import ./core/extensions/types.bend as ExtensionTypes
 import ./migrations.bend as Migrations
 import ./core/keybindings.bend as AppKeys
 import ./core/agent-runtime.bend as Runtime
+import ./core/package-manager.bend as PackageManager
 import ./core/model-runtime.bend as Models
 import ./core/auth-storage.bend as AuthStorage
 import ./core/session-manager.bend as S
@@ -607,20 +608,45 @@ def hasExtensionName(names: List<&2, String>, +name: String) -> Bool:
   match names:
     case Nil{}: False{}
     case found <> rest: String.eq(found,name) || hasExtensionName(rest,name)
-def uniqueExtensionNames(names: List<&2, String>, +seen: List<&2, String>) -> List<&2, String>:
+def extensionIdentity(+name: String, cwd: String) -> String:
+  Bool.pick(String, String.ends_with(name, ".bend"), Maybe.default(&2, String, Path.resolve(cwd, name), name), name)
+def uniqueExtensionNames(names: List<&2, String>, +seen: List<&2, String>, +cwd: String) -> List<&2, String>:
   match names:
     case Nil{}: Nil{}
     case +name <> +rest:
-      Bool.pick(Unit -> List<&2, String>,hasExtensionName(seen,name),
-        _ => uniqueExtensionNames(rest,seen),
-        _ => name <> uniqueExtensionNames(rest,name <> seen))(Unit{})
-def extensionLoadout(parsed: Args.Args, settings: Settings.SettingsManager) -> Runtime.ExtensionLoadout:
+      +identity = extensionIdentity(name, cwd)
+      Bool.pick(Unit -> List<&2, String>,hasExtensionName(seen,identity),
+        _ => uniqueExtensionNames(rest,seen,cwd),
+        _ => name <> uniqueExtensionNames(rest,identity <> seen,cwd))(Unit{})
+def enabledExtensionPaths(resources: List<&2, PackageManager.ResolvedResource>) -> List<&2, String>:
+  match resources:
+    case Nil{}: Nil{}
+    case PackageManager.ResolvedResource{path, enabled, _} <> rest:
+      match enabled:
+        case True{}: path <> enabledExtensionPaths(rest)
+        case False{}: enabledExtensionPaths(rest)
+def discoveredExtensionPaths(resolved: Maybe<&2, PackageManager.ResolvedPaths>) -> List<&2, String>:
+  match resolved:
+    case None{}: Nil{}
+    case Some{PackageManager.ResolvedPaths{extensions, _, _, _}}: enabledExtensionPaths(extensions)
+def chosenExtensions(parsed: Args.Args, settings: Settings.SettingsManager, +resolved: Maybe<&2, PackageManager.ResolvedPaths>, cwd: String) -> Runtime.ExtensionLoadout:
   match parsed:
     case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, extensions, noExtensions, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       +explicit = Maybe.default(&2, List<&2, String>, extensions, Nil{})
-      +configured = Bool.pick(List<&2, String>, Maybe.default(&2, Bool, noExtensions, False{}), Nil{}, Settings.getExtensionPaths(settings))
-      +names = uniqueExtensionNames(List.append(&2, String, explicit, configured), Nil{})
-      Runtime.ExtensionLoadout{List.append(&1, ExtensionTypes.InlineExtension, LinkedExtensions.builtInExtensions(), LinkedExtensions.selected(names)), LinkedExtensions.unlinked(names)}
+      +configured = Bool.pick(List<&2, String>, Maybe.default(&2, Bool, noExtensions, False{}), Nil{}, List.append(&2, String, Settings.getExtensionPaths(settings), discoveredExtensionPaths(resolved)))
+      +names = uniqueExtensionNames(List.append(&2, String, explicit, configured), Nil{}, cwd)
+      Runtime.ExtensionLoadout{List.append(&1, ExtensionTypes.InlineExtension, LinkedExtensions.builtInExtensions(), LinkedExtensions.selected(names)), LinkedExtensions.unlinked(names), resolved}
+def resolvedLoadout(parsed: Args.Args, +settings: Settings.SettingsManager, +cwd: String, +agentDir: String, environment: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Runtime.ExtensionLoadout):
+  match environment:
+    case Fail{_}: IO.pure(Runtime.ExtensionLoadout, chosenExtensions(parsed, settings, None{}, cwd))
+    case Done{paths}:
+      do IO<Runtime.ExtensionLoadout>:
+        resolved : PackageManager.ResolvedPaths <- PackageManager.resolve(paths, settings, cwd, agentDir)
+        return chosenExtensions(parsed, settings, Some{resolved}, cwd)
+def extensionLoadout(parsed: Args.Args, settings: Settings.SettingsManager, cwd: String, agentDir: String) -> IO(Runtime.ExtensionLoadout):
+  do IO<Runtime.ExtensionLoadout>:
+    environment : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(Runtime.urlContext())
+    resolvedLoadout(parsed, settings, cwd, agentDir, environment)
 
 type ScopeFlags is Data: ScopeFlags{patterns: List<&2,String>,explicitModel: Bool,thinking: Maybe<&2,Ai.ModelThinkingLevel>}
 def scopeFlags(parsed: Args.Args,settings: Settings.SettingsManager) -> ScopeFlags:
@@ -844,9 +870,10 @@ def envHome(value: Result<&1, &1, U32 & String, String>) -> Maybe<&2, String>:
     case Fail{_}: None{}
 def runtimeWithSettings(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> IO(Result<&1, &1, String, Created()>):
   match env:
-    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir,_,_,_}:
+    case FactoryEnv{+parsed, +agentDir, authPath, bundlePath, packageDir,_,_,_}:
       do IO<Result<&1, &1, String, Created()>>:
-        created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.createWithExtensions(createOptions(parsed, cwd, agentDir, authPath, bundlePath, packageDir, value, settings), extensionLoadout(parsed,settings))
+        loadout : Runtime.ExtensionLoadout <- extensionLoadout(parsed, settings, cwd, agentDir)
+        created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.createWithExtensions(createOptions(parsed, cwd, agentDir, authPath, bundlePath, packageDir, value, settings), loadout)
         runtimeCreated(cwd, session, seedMessages(value), seedThinking(value), settings, value, scopeFlags(parsed, settings), created)
 def trustedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, startup: Settings.SettingsManager, trust: Result<&2, &2, String, Bool>) -> IO(Result<&1, &1, String, Created()>):
   match env trust:

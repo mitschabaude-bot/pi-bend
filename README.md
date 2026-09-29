@@ -87,7 +87,7 @@ python3 tests/export_cli_check.py
 
 The CLI owns its whole command line, as pi does; `BEND_THREADS=N` sets the native worker count. The interactive check runs on one and four native threads from a separate project directory and verifies terminal restoration.
 
-Enable a linked native extension such as `subagent` with `--extension subagent` or `{"extensions":["subagent"]}` in `~/.pi/agent/settings.json`; trusted project settings work too. To link another Bend source, run `sh scripts/build-cli.sh build/pi-cli path/to/extension.bend`, then select it with `--extension path/to/extension.bend`. The module exports `extension(api)` as an `ExtensionFactory` and needs a rebuild after source changes. `--no-extensions` skips settings discovery while keeping explicitly selected extensions. Discovered package sources are not yet linked automatically, and source files cannot be loaded into an existing binary at runtime.
+Enable a linked native extension such as `subagent` with `--extension subagent` or `{"extensions":["subagent"]}` in `~/.pi/agent/settings.json`; trusted project settings work too. To link another Bend source, run `sh scripts/build-cli.sh build/pi-cli path/to/extension.bend`; its module exports `extension(api)` as an `ExtensionFactory`. The CLI loads enabled linked sources discovered in settings, packages and extension directories, or you can select one explicitly with `--extension path/to/extension.bend`. `--no-extensions` skips discovered sources while keeping explicit selections. Rebuild after editing extension source. Package sources are not yet linked automatically during the build, and source files cannot be loaded into an existing binary at runtime.
 
 Credentials and private sessions must stay outside the repository.
 
