@@ -88,10 +88,10 @@ def Details() -> Data: Tools.ToolDetails
 # extension messages, branch and compaction summaries), as upstream's
 # AgentMessage union; extension payloads are JSON values.
 def Custom() -> Data: Messages.CodingMessage<V.Value>
-def LoopConfig() -> Data: T.AgentLoopConfig<Unit, Details(), Custom(), Error(), Unit>
-def Owner() -> Data: Agent.Agent<Unit, Details(), Custom(), Error(), Unit>
-def Converter() -> Data: Agent.Converter(Unit, Details(), Custom(), Error())
-def Stream() -> Data: T.StreamFn(Unit, Details(), LoopConfig(), Error())
+def LoopConfig() -> Data: T.AgentLoopConfig<V.Value, Details(), Custom(), Error(), Unit>
+def Owner() -> Data: Agent.Agent<V.Value, Details(), Custom(), Error(), Unit>
+def Converter() -> Data: Agent.Converter(V.Value, Details(), Custom(), Error())
+def Stream() -> Data: T.StreamFn(V.Value, Details(), LoopConfig(), Error())
 def Outcome(-A: Type) -> Type: Result<&2, &1, String, A>
 
 def render(error: Error()) -> String: Tools.errorMessage(error)
@@ -192,7 +192,7 @@ def disposeTransport(transport: Transport) -> IO(Unit):
 # ---------------
 
 def project(config: LoopConfig()) -> Responses.SimpleStreamOptions(Unit, Unit, Error()):
-  T.toSimpleStreamOptions(Unit, Details(), Custom(), Error(), Unit, config)
+  T.toSimpleStreamOptions(V.Value, Details(), Custom(), Error(), Unit, config)
 
 def failure(cause: Responses.Error<Unit, Error()>) -> Error():
   Tools.Failure{Responses.describe(~Unit, ~Error(), ~render, "openai", cause)}
@@ -247,7 +247,7 @@ def bedrockHandler(config: Responses.Config) -> Bedrock.Handler:
 
 # The built-in apis over the runtime's transport (upstream's api registry
 # with the global fetch).
-def selectedProvider(codexSessions: CodexSessions.Pool<Unit>, responses: Responses.Config, fetch: Fetch.Fetch(Unit), googleToolCalls: Ref.Ref<Nat>, model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, Composer.StreamOptions()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
+def selectedProvider(codexSessions: CodexSessions.Pool<Unit>, responses: Responses.Config, fetch: Fetch.Fetch(Unit), googleToolCalls: Ref.Ref<Nat>, model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>, +options: Maybe<&2, Composer.StreamOptions()>, api: Ai.ModelApi) -> IO(Providers.Output(V.Value, Error())):
   match api:
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, urlContext(), googleToolCalls, model, context, selectedOptions(options))
@@ -256,12 +256,12 @@ def selectedProvider(codexSessions: CodexSessions.Pool<Unit>, responses: Respons
     case Ai.MistralConversationsApi{}: StreamProviders.mistral(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.BedrockConverseStreamApi{}: StreamProviders.bedrock(fetch, urlContext(), bedrockHandler(responses), model, context, selectedOptions(options))
     case Ai.GoogleVertexApi{}: StreamProviders.vertex(fetch, urlContext(), model, context, selectedOptions(options))
-    case _: Providers.openResponsesWithSessions(~Composer.StreamOptions(), ~Unit, ~Unit, ~Details(), ~Error(), ~identityOptions, ~render, ~failure, Some{codexSessions}, responses, T.StreamInput{model, context, options})
+    case _: Providers.openResponsesWithSessions(~Composer.StreamOptions(), ~Unit, ~V.Value, ~Details(), ~Error(), ~identityOptions, ~render, ~failure, Some{codexSessions}, responses, T.StreamInput{model, context, options})
 
 type ApiTransport is Data:
   ApiTransport{responses: Responses.Config, fetch: Fetch.Fetch(Unit), googleToolCalls: Ref.Ref<Nat>, codexSessions: CodexSessions.Pool<Unit>}
 
-def openApi(transport: ApiTransport, request: Composer.StreamRequest()) -> IO(Providers.Output(Unit, Error())):
+def openApi(transport: ApiTransport, request: Composer.StreamRequest()) -> IO(Providers.Output(V.Value, Error())):
   match transport request:
     case ApiTransport{responses, fetch, calls, codexSessions} T.StreamInput{+model, context, options}: selectedProvider(codexSessions, responses, fetch, calls, model, context, options, modelApi(model))
 
@@ -271,7 +271,7 @@ def createApiStream(codexSessions: CodexSessions.Pool<Unit>, authorizer: C.Callb
   do IO<Composer.ProviderStream()>:
     agent : String <- IO.try(String, UserAgent.get())
     calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
-    C.create(~ApiTransport, ~Composer.StreamRequest(), ~Providers.Output(Unit, Error()), ~openApi, ApiTransport{providerConfig(authorizer, agent), fetch, calls, codexSessions})
+    C.create(~ApiTransport, ~Composer.StreamRequest(), ~Providers.Output(V.Value, Error()), ~openApi, ApiTransport{providerConfig(authorizer, agent), fetch, calls, codexSessions})
 
 # --api-key: the request carries the runtime key unless it has its own.
 def withKey(apiKey: Maybe<&2, String>, options: Composer.StreamOptions()) -> Composer.StreamOptions():
@@ -279,13 +279,13 @@ def withKey(apiKey: Maybe<&2, String>, options: Composer.StreamOptions()) -> Com
     case Ai.SimpleStreamOptions{signal, telemetry, key, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
       Ai.SimpleStreamOptions{signal, telemetry, Maybe.or(&2, String, key, apiKey), shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}
 
-def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), Unit, Details())) -> IO(Providers.Output(Unit, Error())):
+def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), V.Value, Details())) -> IO(Providers.Output(V.Value, Error())):
   match config input:
     case ProviderStreams{+fetch, defaults, KeySource{+models, apiKey}, headers} T.StreamInput{model, context, options}:
       Models.streamSimple(models, T.StreamInput{model, context, Maybe.map(&2, LoopConfig(), Composer.StreamOptions(), value => withKey(apiKey, withRequest(fetch, defaults, project(value))), options)}, headers)
 
 def createStream(fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, headers: Models.RequestTransforms) -> IO(Stream()):
-  C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{fetch, defaults, keys, headers})
+  C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), V.Value, Details()), ~Providers.Output(V.Value, Error()), ~openProvider, ProviderStreams{fetch, defaults, keys, headers})
 
 # Request auth
 # ------------
@@ -313,7 +313,7 @@ def resolveKey(source: KeySource, providerId: String) -> IO(Result<&2, &2, Error
 # What a resumed session contributes: its context messages, the model and
 # thinking level it recorded (None when no thinking_level_change exists).
 type SessionSeed is Data:
-  SessionSeed{sessionId: String, messages: List<&2, T.AgentMessage<Unit, Details(), Custom()>>, model: Maybe<&2, S.SessionModel>, thinking: Maybe<&2, String>}
+  SessionSeed{sessionId: String, messages: List<&2, T.AgentMessage<V.Value, Details(), Custom()>>, model: Maybe<&2, S.SessionModel>, thinking: Maybe<&2, String>}
 
 def emptySeed() -> SessionSeed: SessionSeed{"", Nil{}, None{}, None{}}
 
@@ -482,7 +482,7 @@ type Prepared is Data:
   Prepared{sections: Prompt.SystemPromptSections(), skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, contextFiles: List<&2, Prompt.ContextFile>}
 
 type AgentRuntime is Type:
-  AgentRuntime{transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), agent: Owner(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout}
+  AgentRuntime{transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(V.Value, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), agent: Owner(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout}
 
 def parsedNames(names: List<&2, String>) -> List<&2, Tools.ToolName>:
   match names:
@@ -810,7 +810,7 @@ def thinkingForSelection(+requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: Se
     case None{}: Ai.Off{}
     case Some{model}: thinkingLevel(requested, seed, model, settings)
 
-def seededMessages(seed: SessionSeed) -> Maybe<&2, List<&2, T.AgentMessage<Unit, Details(), Custom()>>>:
+def seededMessages(seed: SessionSeed) -> Maybe<&2, List<&2, T.AgentMessage<V.Value, Details(), Custom()>>>:
   match seed:
     case SessionSeed{_, Nil{}, _, _}: None{}
     case SessionSeed{_, messages, _, _}: Some{messages}
@@ -843,32 +843,32 @@ def hasImage(blocks: List<&2, Ai.TextImageContent>) -> Bool:
 def blockedContent(+blocks: List<&2, Ai.TextImageContent>) -> List<&2, Ai.TextImageContent>:
   Bool.pick(List<&2, Ai.TextImageContent>, hasImage(blocks), withoutImages(blocks, False{}), blocks)
 
-def blockedMessage(message: Ai.Message<V.Value, V.Value, Unit, Details()>) -> Ai.Message<V.Value, V.Value, Unit, Details()>:
+def blockedMessage(message: Ai.Message<V.Value, V.Value, V.Value, Details()>) -> Ai.Message<V.Value, V.Value, V.Value, Details()>:
   match message:
     case Ai.User{Ai.UserMessage{Ai.UserBlocks{blocks}, timestamp}}: Ai.User{Ai.UserMessage{Ai.UserBlocks{blockedContent(blocks)}, timestamp}}
     case Ai.ToolResult{Ai.ToolResultMessage{id, name, blocks, details, usage, isError, timestamp}}: Ai.ToolResult{Ai.ToolResultMessage{id, name, blockedContent(blocks), details, usage, isError, timestamp}}
     case other: other
 
-def blockedMessages(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>:
+def blockedMessages(messages: List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>) -> List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>:
   match messages:
     case Nil{}: Nil{}
     case message <> rest: blockedMessage(message) <> blockedMessages(rest)
 
-def converted(blockImages: Bool, +messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>:
+def converted(blockImages: Bool, +messages: List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>) -> List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>:
   match blockImages:
     case False{}: messages
     case True{}: blockedMessages(messages)
 
 # Coding messages convert to LLM messages as upstream's convertToLlm does;
 # with the blockImages setting, images are replaced by a placeholder text.
-def convertMessages(blockImages: Bool, messages: T.AgentMessageArray(Unit, Details(), Custom())) -> IO(Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>):
-  IO.pure(Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>, Done{converted(blockImages, Messages.convertToLlm(Unit, Details(), V.Value, messages))})
+def convertMessages(blockImages: Bool, messages: T.AgentMessageArray(V.Value, Details(), Custom())) -> IO(Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>):
+  IO.pure(Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>, Done{converted(blockImages, Messages.convertToLlm(V.Value, Details(), V.Value, messages))})
 
 def createConverter(blockImages: Bool) -> IO(Converter()):
-  C.create(~Bool, ~T.AgentMessageArray(Unit, Details(), Custom()), ~Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>, ~convertMessages, blockImages)
+  C.create(~Bool, ~T.AgentMessageArray(V.Value, Details(), Custom()), ~Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>, ~convertMessages, blockImages)
 
 def disposeConverter(converter: Converter()) -> IO(Unit):
-  C.dispose(T.AgentMessageArray(Unit, Details(), Custom()), Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>, converter)
+  C.dispose(T.AgentMessageArray(V.Value, Details(), Custom()), Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>, converter)
 
 def budget(value: Maybe<&2, W.U64>) -> Maybe<&2, F64>: Maybe.map(&2, W.U64, F64, F.fromU64, value)
 
@@ -888,7 +888,7 @@ def seedSessionId(seed: SessionSeed) -> String:
 # upstream createAgentSession's Agent options: no prompt or tools yet (the
 # session declares its loadout with each prompt), the session id, the settings'
 # steering/follow-up modes, transport, thinking budgets and retry delay.
-def agentOptions(model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, stream: Stream(), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), +seed: SessionSeed, +settings: Settings.SettingsManager) -> Agent.AgentOptions<Unit, Details(), Custom(), Error(), Unit>:
+def agentOptions(model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, stream: Stream(), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), +seed: SessionSeed, +settings: Settings.SettingsManager) -> Agent.AgentOptions<V.Value, Details(), Custom(), Error(), Unit>:
   Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, model, Some{thinking}, Some{Nil{}}, seededMessages(seed)}}, Some{converter}, None{}, Some{stream}, Some{keys}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Settings.getSteeringMode(settings)}, Some{Settings.getFollowUpMode(settings)}, Some{seedSessionId(seed)}, thinkingBudgets(Settings.getThinkingBudgets(settings)), Some{Settings.getTransport(settings)}, Some{maxRetryDelay(Settings.getProviderRetrySettings(settings))}, None{}}
 
 # The tools download fd and rg through the agent's own fetch.
@@ -897,13 +897,13 @@ def environment(paths: Paths.Environment, cwd: String, agentDir: String, package
 
 def pathsError(error: FS.Error) -> String: "Could not resolve the working directory"
 
-def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter()) -> IO(Unit):
+def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(V.Value, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter()) -> IO(Unit):
   do IO<Unit>:
     disposeConverter(converter)
     C.dispose(String, Result<&2, &2, Error(), Maybe<&2, String>>, keys)
     Loop.disposeValidation(Error(), validator)
-    StreamFn.dispose(Unit, Details(), LoopConfig(), Error(), registry)
-    C.dispose(Providers.Input(LoopConfig(), Unit, Details()), Providers.Output(Unit, Error()), stream)
+    StreamFn.dispose(V.Value, Details(), LoopConfig(), Error(), registry)
+    C.dispose(Providers.Input(LoopConfig(), V.Value, Details()), Providers.Output(V.Value, Error()), stream)
     Tools.disposeTools(tools)
     Queue.dispose(queue)
     Models.dispose(models)
@@ -917,7 +917,7 @@ def disposeLoadout(loadout: Loadout) -> IO(Unit):
     case Loadout{_, _, _, _, Some{runner}, _, _, _}: ExtensionRunner.dispose(runner)
 
 # Assembly with cleanup on every failure path.
-def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
+def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(V.Value, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
   match result:
     case Done{agent}: IO.pure(Outcome(AgentRuntime), Done{AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}})
     case Fail{error}:
@@ -963,11 +963,11 @@ def loadoutFrom(prepared: Prepared, +registry: List<&2, Tools.Tool()>, extension
   match prepared source:
     case Prepared{sections, skills, templates, agentsFiles} LoadoutSource{paths, +options, packageDir, loader}: Loadout{sections, activeTools(registry, activeNamesOf(toolSetupOf(options))), skills, templates, Some{extensions}, agentsFiles, Some{LoadoutSource{paths, options, packageDir, loader}}, registry}
 
-def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
+def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(V.Value, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
   match created:
     case Tuple{queue, Tuple{owners, tools}}:
       do IO<Outcome(AgentRuntime)>:
-        result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
+        result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~V.Value, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
         constructed(transport, storage, storageStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, extensions, source), result)
 
 def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, +models: Models.ModelRuntime, +paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
@@ -980,7 +980,7 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey
         apiStream : Composer.ProviderStream() <- createApiStream(codexSessions, authorizer, fetch)
         Models.setApiStreams(models, Some{apiStream})
         +stream : Stream() <- createStream(fetch, requestDefaults(settings), KeySource{models, apiKey}, Models.noTransforms())
-        +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())
+        +registry : StreamFn.Registry(V.Value, Details(), LoopConfig(), Error()) <- StreamFn.create(V.Value, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})
         +converter : Converter() <- createConverter(Settings.getBlockImages(settings))
@@ -1140,14 +1140,14 @@ def selectStartup(runtime: AgentRuntime,+chosen: Models.Model(),+level: Ai.Model
   match runtime:
     case AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, +agent, _, _, loadout}:
       do IO<AgentRuntime>:
-        Agent.setModel(Unit,Details(),Custom(),Error(),Unit,agent,chosen)
-        Agent.setThinkingLevel(Unit,Details(),Custom(),Error(),Unit,agent,level)
+        Agent.setModel(V.Value,Details(),Custom(),Error(),Unit,agent,chosen)
+        Agent.setThinkingLevel(V.Value,Details(),Custom(),Error(),Unit,agent,level)
         return AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, Some{chosen}, level, loadout}
 
 def dispose(runtime: AgentRuntime) -> IO(Unit):
   match runtime:
     case AgentRuntime{transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter, agent, _, _, loadout}:
       do IO<Unit>:
-        Agent.dispose(Unit, Details(), Custom(), Error(), Unit, agent)
+        Agent.dispose(V.Value, Details(), Custom(), Error(), Unit, agent)
         disposeServices(transport, storage, storageStore, models, queue, tools, stream, registry, validator, keys, converter)
         disposeLoadout(loadout)

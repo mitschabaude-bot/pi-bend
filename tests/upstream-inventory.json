@@ -994,7 +994,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "3c02bec11a56c48b1ab1bba98b5ea79f5452ceb074f61528da77973bfdb15d85",
-      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex/Mistral/Bedrock/Vertex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 31 of 35 pass on native (multi-megabyte prompts; not run on Bun); replies use each provider's documented overflow error (upstream utils/overflow.ts examples, including Bedrock's 'Input is too long for requested model' and Mistral's) and isContextOverflow is compared. 1 KNOWN: Bedrock's error message carries diagnostics details (status, errorCode, requestId) in pinned pi-mono but details null in the port, because the CLI's assistant messages carry no diagnostic details (agent-session.bend's Unit details; tests/bedrock_check.py compares the details at the API module). Pending: local servers (3)."
+      "notes": "tests/live_replay_check.py replays each upstream case against pinned pi-mono and native provider streams, comparing assertions, requests, events and final messages. Multi-megabyte prompts run natively; each provider uses its documented overflow error. The Bedrock row now compares structured diagnostic details without an exception and passes on native one and four threads. Local-server cases remain pending."
     },
     {
       "source": "packages/ai/test/cross-provider-handoff.test.ts",
@@ -1209,7 +1209,7 @@
     },
     {
       "source": "packages/ai/test/google-thinking-disable.test.ts",
-      "status": "ported",
+      "status": "partial",
       "ports": [
         "packages/coding-agent/test/live-replay.bend",
         "tests/live_replay_check.py",
@@ -1217,7 +1217,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "dc899136ae7d5c367b846aa68fc693cbe20fe12a85dfd8b41ff97fb8e6f22b10",
-      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 9 rows pass. The 2 Google Vertex rows run with both options the suite picks from its environment (the API key, and project/location with ADC from an authorized_user file). tests/google_generative_ai_check.py also compares the request shapes."
+      "notes": "The live loopback replay compares thinking-disable requests and messages with pinned pi-mono on Bun and native one/four threads. Google Vertex ADC and the other provider rows match. Two native Vertex API-key rows currently issue /token before the expected model request; the Bun rows pass. tests/google_generative_ai_check.py separately compares request shapes."
     },
     {
       "source": "packages/ai/test/google-thinking-level-map.test.ts",
@@ -1931,7 +1931,7 @@
     },
     {
       "source": "packages/ai/test/responseid.test.ts",
-      "status": "ported",
+      "status": "partial",
       "ports": [
         "packages/coding-agent/test/live-replay.bend",
         "tests/live_replay_check.py",
@@ -1939,7 +1939,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "86ee611befd27221de3183c568b0534603efdfd378d4783e940e93ff6b55f8e4",
-      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 11 rows pass, including Google Vertex with ADC (an authorized_user credentials file whose token refresh the server answers; both executors' refresh requests are compared) and with an API key, and Mistral."
+      "notes": "The live loopback replay compares responseId and requests with pinned pi-mono on Bun and native one/four threads. The Google Vertex API-key row fails natively because /token precedes the expected model request; its Bun and ADC rows, and the other provider rows, pass."
     },
     {
       "source": "packages/ai/test/retry.test.ts",
@@ -1976,7 +1976,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "9b0f81e7aa6433bee0589345bf327d8c93c71e6c0ab1d901c9f6dc3aaa68bc42",
-      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex/Mistral/Bedrock/Vertex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 221 of 233 tests pass. 1 fails against pinned pi-mono itself and is reported as UPSTREAM (both executors agree): Bedrock 'should use adaptive thinking without anthropic_beta' expects output_config.effort 'max' for reasoning 'xhigh', but the pinned catalog maps only 'max' for claude-opus-4-6, so upstream sends 'high'. Its sibling Bedrock payload tests (requestMetadata passed/omitted) read the payload from the request the server received. Pending: Codex WebSocket transport (6), local servers (5)."
+      "notes": "tests/live_replay_check.py compares upstream stream cases against pinned pi-mono on Bun and native one/four threads, including requests, event order and final messages. The native Google Vertex API-key basic-text row currently issues /token before the expected model request. The Bedrock adaptive-thinking assertion fails against pinned pi-mono itself because its catalog maps xhigh to high for that model. Codex WebSocket and local-server cases remain pending."
     },
     {
       "source": "packages/ai/test/supports-xhigh.test.ts",
@@ -3167,9 +3167,12 @@
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-assistant-diagnostics.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a7903ba4e536f809ed4bc7fa30a11d52841cf64dc1d4ec0a3a7c137b18128b94"
+      "status": "ported",
+      "ports": [
+        "tests/interactive_assistant_diagnostics_check.py"
+      ],
+      "sha256": "a7903ba4e536f809ed4bc7fa30a11d52841cf64dc1d4ec0a3a7c137b18128b94",
+      "notes": "Both upstream behaviors pass in the mounted native terminal on one and four threads: the warning appears only with cache notices enabled and is not repeated when the next assistant response has the same dropped-thinking count. The same loopback fixture verifies structured diagnostics in JSON events and persisted sessions."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-bug-report-hint.test.ts",

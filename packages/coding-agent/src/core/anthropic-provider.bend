@@ -18,14 +18,13 @@ import ./tools/index.bend as Tools
 # upstream anthropic-messages streamSimple for the agent: the simple options
 # become AnthropicOptions and one worker runs the request lifecycle
 # (anthropic-messages-client.bend); release joins it before disposing the
-# stream. The app's diagnostic details are Unit, so input transformation
-# diagnostics keep their type and timestamp without details.
+# stream. Input transformation diagnostics retain their structured details.
 def Details() -> Data: Tools.ToolDetails
 def Error() -> Data: Tools.ToolError
 def Options() -> Data: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>
-def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>
-def Stream() -> Data: Events.AssistantMessageEventStream(V.Value, Unit)
-def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<Unit, Error()>>
+def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>
+def Stream() -> Data: Events.AssistantMessageEventStream(V.Value, V.Value)
+def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<V.Value, Error()>>
 def Anthropic() -> Data: Client.Options(Unit, Unit, Error())
 
 def signalOf(options: Anthropic()) -> Maybe<&2, Abort.AbortSignal<Unit>>:
@@ -37,12 +36,25 @@ def resolvedOptions(value: Maybe<&2, Options()>) -> Options():
     case None{}: Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error())
     case Some{selected}: selected
 
-def noDetails(values: List<&2, Fold.InputTransformation>) -> Unit: Unit{}
+def optionalText(key: String, value: Maybe<&2,String>, rest: List<&2,R.Property<V.Value>>) -> List<&2,R.Property<V.Value>>:
+  match value:
+    case None{}: rest
+    case Some{text}: R.Property{key,V.Text{text}} <> rest
+def transformationValue(value: Fold.InputTransformation) -> V.Value:
+  match value:
+    case Fold.InputTransformation{kind,path,reason}:
+      V.ObjectValue{R.Record{optionalText("type",kind,optionalText("path",path,optionalText("reason",reason,Nil{})))}}
+def transformationValues(values: List<&2,Fold.InputTransformation>) -> List<&2,V.Value>:
+  match values:
+    case Nil{}: Nil{}
+    case value <> rest: transformationValue(value) <> transformationValues(rest)
+def transformationDetails(values: List<&2,Fold.InputTransformation>) -> V.Value:
+  V.ObjectValue{R.Record{[R.Property{"transformations",V.ArrayValue{transformationValues(values)}}]}}
 
 def produced(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Anthropic(), timestamp: F64, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   do IO<Unit>:
     +agent : String <- IO.try(String, UserAgent.get())
-    Client.stream(~Unit, ~Unit, ~Error(), ~Unit, ~noDetails, ~Details(), ~Tools.errorMessage, stream, signal, Client.Setup{urlContext, SDK.Defaults{Client.sdkUserAgent(), R.new(String), None{}, None{}}, agent, fetch}, model, context, options, timestamp)
+    Client.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~transformationDetails, ~Details(), ~Tools.errorMessage, stream, signal, Client.Setup{urlContext, SDK.Defaults{Client.sdkUserAgent(), R.new(String), None{}, None{}}, agent, fetch}, model, context, options, timestamp)
 
 def disposeLocal(local: Maybe<&2, Abort.AbortController<Unit>>) -> IO(Unit):
   match local:
@@ -64,13 +76,13 @@ def producer(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context
 def release(stream: Stream(), task: Chan(Unit)) -> IO(Result<&2, &2, Error(), Unit>):
   do IO<Result<&2, &2, Error(), Unit>>:
     finished : Unit <- IO.join(Unit, task)
-    Events.disposeAssistantMessageEventStream(V.Value, Unit, stream)
+    Events.disposeAssistantMessageEventStream(V.Value, V.Value, stream)
     return Done{Unit{}}
 
 # upstream stream.
 def openStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Anthropic()) -> IO(Output()):
   do IO<Output()>:
-    +events : Stream() <- Events.createAssistantMessageEventStream(~V.Value, ~Unit)
+    +events : Stream() <- Events.createAssistantMessageEventStream(~V.Value, ~V.Value)
     timestamp : F64 <- Date.now()
     task : Chan(Unit) <- IO.fork(Unit, producer(events, fetch, urlContext, model, context, options, timestamp))
     return Done{Agent.StreamLease{events, release(events, task)}}
@@ -83,4 +95,4 @@ def selectedStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.
 # upstream streamSimple, whose missing-auth error is thrown before a stream
 # exists.
 def open(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), options: Maybe<&2, Options()>) -> IO(Output()):
-  selectedStream(fetch, urlContext, model, context, Messages.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), ~Client.AnthropicClient(), model, context, Some{resolvedOptions(options)}))
+  selectedStream(fetch, urlContext, model, context, Messages.streamSimpleOptions(~V.Value, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), ~Client.AnthropicClient(), model, context, Some{resolvedOptions(options)}))

@@ -107,10 +107,10 @@ def J() -> Data: Ai.JsonValue
 def Details() -> Data: Tools.ToolDetails
 def Error() -> Data: Tools.ToolError
 def Model() -> Data: Ai.Model<J()>
-def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>
-def StreamEvent() -> Data: Ai.AssistantMessageEvent<V.Value, Unit>
-def Message() -> Data: Ai.AssistantMessage<V.Value, Unit>
-def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<Unit, Error()>>
+def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>
+def StreamEvent() -> Data: Ai.AssistantMessageEvent<V.Value, V.Value>
+def Message() -> Data: Ai.AssistantMessage<V.Value, V.Value>
+def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<V.Value, Error()>>
 def Base() -> Data: Ai.StreamOptions<J(), Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>
 def Simple() -> Data: Ai.SimpleStreamOptions<J(), Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>
 
@@ -141,22 +141,21 @@ def list(value: Maybe<&2, V.Value>) -> List<&2, V.Value>:
     case Some{V.ArrayValue{values}}: values
     case _: Nil{}
 
-def noDiagnostics(value: V.Value) -> MessageJson.Decoded(Unit):
-  Fail{Decode.WrongType{Nil{}, "no diagnostic details"}}
+def decodeDiagnostics(value: V.Value) -> MessageJson.Decoded(V.Value): Done{value}
 
 def noDetails(value: V.Value) -> MessageJson.Decoded(Details()):
   Fail{Decode.WrongType{Nil{}, "no tool details"}}
 
-def prependedMessage(value: MessageJson.Decoded(Ai.Message<V.Value, V.Value, Unit, Details()>), rest: Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>) -> Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>:
+def prependedMessage(value: MessageJson.Decoded(Ai.Message<V.Value, V.Value, V.Value, Details()>), rest: Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>) -> Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>:
   match value rest:
     case Done{message} Done{messages}: Done{message <> messages}
     case Fail{_} _: Fail{"invalid message"}
     case _ Fail{error}: Fail{error}
 
-def decodedMessages(values: List<&2, V.Value>) -> Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>:
+def decodedMessages(values: List<&2, V.Value>) -> Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>:
   match values:
     case Nil{}: Done{Nil{}}
-    case +first <> rest: prependedMessage(MessageJson.decodeMessage(~Unit, ~Details(), ~noDiagnostics, ~noDetails, first), decodedMessages(rest))
+    case +first <> rest: prependedMessage(MessageJson.decodeMessage(~V.Value, ~Details(), ~decodeDiagnostics, ~noDetails, first), decodedMessages(rest))
 
 def prependedTool(value: MessageJson.Decoded(Ai.Tool<V.Value>), rest: Result<&2, &2, String, List<&2, Ai.Tool<V.Value>>>) -> Result<&2, &2, String, List<&2, Ai.Tool<V.Value>>>:
   match value rest:
@@ -179,9 +178,9 @@ def toolsOf(value: Maybe<&2, V.Value>) -> Result<&2, &2, String, Maybe<&2, List<
     case Some{V.ArrayValue{values}}: someTools(decodedTools(values))
     case _: Done{None{}}
 
-def contextWith(system: Maybe<&2, String>, messages: Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>, tools: Result<&2, &2, String, Maybe<&2, List<&2, Ai.Tool<V.Value>>>>) -> Result<&2, &2, String, Context()>:
+def contextWith(system: Maybe<&2, String>, messages: Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>>, tools: Result<&2, &2, String, Maybe<&2, List<&2, Ai.Tool<V.Value>>>>) -> Result<&2, &2, String, Context()>:
   match messages tools:
-    case Done{items} Done{declared}: Done{Transcript.normalizeContext(V.Value, V.Value, Unit, Details(), Ai.Context{system, items, declared})}
+    case Done{items} Done{declared}: Done{Transcript.normalizeContext(V.Value, V.Value, V.Value, Details(), Ai.Context{system, items, declared})}
     case Fail{error} _: Fail{error}
     case _ Fail{error}: Fail{error}
 
@@ -532,7 +531,7 @@ def generateOverflowContent(contextWindow: F64) -> String:
   repeated(LOREM_IPSUM(), Nat.div(targetChars + Nat.sub(length, 1n), length), "")
 
 def overflowContext(model: Model()) -> Context():
-  Transcript.normalizeContext(V.Value, V.Value, Unit, Details(), Ai.Context{Some{"You are a helpful assistant."}, Ai.User{Ai.UserMessage{Ai.UserText{generateOverflowContent(windowOf(model))}, F.fromU32(1)}} <> Nil{}, None{}})
+  Transcript.normalizeContext(V.Value, V.Value, V.Value, Details(), Ai.Context{Some{"You are a helpful assistant."}, Ai.User{Ai.UserMessage{Ai.UserText{generateOverflowContent(windowOf(model))}, F.fromU32(1)}} <> Nil{}, None{}})
 
 # Options
 # -------
@@ -653,7 +652,7 @@ def bedrockHandler(config: Responses.Config) -> Bedrock.Handler:
 
 # upstream bedrock-converse-stream stream() with the case's options.
 def bedrockStream(+fetch: Fetch.Fetch(Unit), handler: Bedrock.Handler, +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
-  StreamProviders.lease(events => inner => Bedrock.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~render, ~StreamProviders.noDetails, events, fetch, TestClient.urlContext(), handler, inner, model, context, bedrockOptions(options, signal, fetch)), Some{signal})
+  StreamProviders.lease(events => inner => Bedrock.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~render, ~StreamProviders.jsonDetails, events, fetch, TestClient.urlContext(), handler, inner, model, context, bedrockOptions(options, signal, fetch)), Some{signal})
 
 # upstream stream(): the provider's own options.
 def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
@@ -666,16 +665,16 @@ def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api
     case Ai.OpenAICompletionsApi{}: Completions.openStream(fetch, TestClient.urlContext(), model, context, Chat.OpenAICompletionsOptions{baseOptions(options, signal, Some{fetch}), None{}, levelOf(text(field(options, "reasoningEffort"))), None{}})
     case Ai.AzureOpenAIResponsesApi{}:
       do IO<Output()>:
-        owner : Responses.Run<Unit, Unit, Error()> <- Azure.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, configFor(agent), model, context, Azure.AzureOpenAIResponsesOptions{baseOptions(options, signal, Some{fetch}), levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}, None{}, None{}, None{}})
-        return Providers.lease(~Unit, ~Error(), ~failure, Responses.borrow(Unit, Unit, Error(), owner))
+        owner : Responses.Run<Unit, V.Value, Error()> <- Azure.stream(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, configFor(agent), model, context, Azure.AzureOpenAIResponsesOptions{baseOptions(options, signal, Some{fetch}), levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}, None{}, None{}, None{}})
+        return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), owner))
     case Ai.OpenAICodexResponsesApi{}:
       do IO<Output()>:
-        owner : Responses.Run<Unit, Unit, Error()> <- Codex.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, configFor(agent), model, context, responsesOptions(options, signal, fetch))
-        return Providers.lease(~Unit, ~Error(), ~failure, Responses.borrow(Unit, Unit, Error(), owner))
+        owner : Responses.Run<Unit, V.Value, Error()> <- Codex.stream(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, configFor(agent), model, context, responsesOptions(options, signal, fetch))
+        return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), owner))
     case _:
       do IO<Output()>:
-        owner : Responses.Run<Unit, Unit, Error()> <- Responses.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, configFor(agent), model, context, responsesOptions(options, signal, fetch))
-        return Providers.lease(~Unit, ~Error(), ~failure, Responses.borrow(Unit, Unit, Error(), owner))
+        owner : Responses.Run<Unit, V.Value, Error()> <- Responses.stream(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, configFor(agent), model, context, responsesOptions(options, signal, fetch))
+        return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), owner))
 
 # upstream streamSimple(), as the agent runtime dispatches it.
 def openedSimple(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
@@ -686,7 +685,7 @@ def openedSimple(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, Some{fetch})})
     case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, TestClient.urlContext(), counter, model, context, Some{simpleOptions(options, signal, Some{fetch})})
     case Ai.OpenAICompletionsApi{}: Completions.open(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, Some{fetch})})
-    case _: Providers.openResponses(~Simple(), ~Unit, ~Unit, ~Details(), ~Error(), ~selected(Simple()), ~render, ~failure, configFor(agent), Agent.StreamInput{model, context, Some{simpleOptions(options, signal, Some{fetch})}})
+    case _: Providers.openResponses(~Simple(), ~Unit, ~V.Value, ~Details(), ~Error(), ~selected(Simple()), ~render, ~failure, configFor(agent), Agent.StreamInput{model, context, Some{simpleOptions(options, signal, Some{fetch})}})
 
 def entered(+agent: String, +entry: String, fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match entry:
@@ -740,7 +739,7 @@ def abortWhen(hit: Bool, controller: Abort.AbortController<Unit>) -> IO(Unit):
         drain(following, cursor, controller, limit, total, fired || hit)
     case Events.End{}: Events.disposeIterator(StreamEvent(), Message(), cursor)
 
-def unitDetails(value: Unit) -> V.Value: V.Null{}
+def rawDetails(value: V.Value) -> V.Value: value
 
 def jsonText(value: J()) -> String: Maybe.default(&2, String, Wire.stringify(value), "null")
 
@@ -748,7 +747,7 @@ def jsonText(value: J()) -> String: Maybe.default(&2, String, Wire.stringify(val
 def overflowLine(overflow: Bool, message: Message(), window: F64) -> IO(Unit):
   match overflow:
     case False{}: IO.pure(Unit, Unit{})
-    case True{}: IO.print("O " ++ Bool.pick(String, Overflow.isContextOverflow(V.Value, Unit, message, window), "true", "false"))
+    case True{}: IO.print("O " ++ Bool.pick(String, Overflow.isContextOverflow(V.Value, V.Value, message, window), "true", "false"))
 
 def observed(result: Output(), +controller: Abort.AbortController<Unit>, limit: Maybe<&2, Nat>, overflow: Bool, window: F64) -> IO(Unit):
   match result:
@@ -760,7 +759,7 @@ def observed(result: Output(), +controller: Abort.AbortController<Unit>, limit: 
         drain(first, cursor, controller, limit, 0n, False{})
         +message : Message() <- Events.resultValue(StreamEvent(), Message(), events)
         released : Result<&2, &2, Error(), Unit> <- release
-        IO.print("R " ++ Text.showText(jsonText(Convert.toJson(MessageJson.assistantMessage(~Unit, ~unitDetails, message)))))
+        IO.print("R " ++ Text.showText(jsonText(Convert.toJson(MessageJson.assistantMessage(~V.Value, ~rawDetails, message)))))
         overflowLine(overflow, message, window)
 
 def abortFirst(before: Bool, controller: Abort.AbortController<Unit>) -> IO(Unit): abortWhen(before, controller)

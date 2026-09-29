@@ -773,7 +773,7 @@ def withoutSystem(messages: List<&2, T.AgentMessage()>) -> List<&2, T.AgentMessa
       +tail = withoutSystem(rest)
       Bool.pick(List<&2, T.AgentMessage()>, isSystemMessage(message), tail, message <> tail)
 
-def llmOf(messages: List<&2, T.AgentMessage()>) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>:
+def llmOf(messages: List<&2, T.AgentMessage()>) -> List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>>:
   match messages:
     case Nil{}: Nil{}
     case Agent.LlmMessage{value} <> rest: value <> llmOf(rest)
@@ -783,11 +783,10 @@ def llmOf(messages: List<&2, T.AgentMessage()>) -> List<&2, Ai.Message<V.Value, 
 # system message in place; a changed one gets the replayed prompt and tool
 # state as one leading system message. Unchanged is structural equality
 # (upstream compares the message objects).
-def unitJson(value: Unit) -> V.Value: V.Null{}
 def rawJson(value: V.Value) -> V.Value: value
 
 def messageText(+message: T.AgentMessage()) -> String:
-  SessionJson.line(SessionJson.agentMessage(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitJson, ~Tools.detailsValue, ~rawJson, message))
+  SessionJson.line(SessionJson.agentMessage(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawJson, ~Tools.detailsValue, ~rawJson, message))
 
 def sameMessages(left: List<&2, T.AgentMessage()>, right: List<&2, T.AgentMessage()>) -> Bool:
   match left right:
@@ -803,7 +802,7 @@ def withHead(head: Maybe<&2, Ai.SystemMessage<V.Value>>, +returned: List<&2, T.A
 def restoreSystem(+current: List<&2, T.AgentMessage()>, same: Bool, +returned: List<&2, T.AgentMessage()>) -> List<&2, T.AgentMessage()>:
   match same:
     case True{}: current
-    case False{}: withHead(Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Tools.ToolDetails, llmOf(current)), returned)
+    case False{}: withHead(Transcript.getCurrentSystemMessage(V.Value, V.Value, V.Value, Tools.ToolDetails, llmOf(current)), returned)
 
 def contextStep(+runner: ExtensionRunner, path: String, +current: List<&2, T.AgentMessage()>, +visible: List<&2, T.AgentMessage()>, result: Result<&2, &2, String, Maybe<&2, T.ContextEventResult>>) -> IO(List<&2, T.AgentMessage()>):
   match result:

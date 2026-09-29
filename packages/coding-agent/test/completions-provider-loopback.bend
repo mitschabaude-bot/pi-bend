@@ -73,10 +73,10 @@ def system() -> Ai.SystemMessage<V.Value>:
 def toolContext() -> Completions.Context():
   Ai.TranscriptContext{Ai.System{system()} <> Ai.User{Ai.UserMessage{Ai.UserText{"lookup 42"}, F.fromU32(2)}} <> Nil{}}
 
-def continued(first: Ai.AssistantMessage<V.Value, Unit>) -> Completions.Context():
+def continued(first: Ai.AssistantMessage<V.Value, V.Value>) -> Completions.Context():
   Ai.TranscriptContext{Ai.System{system()} <> Ai.User{Ai.UserMessage{Ai.UserText{"lookup 42"}, F.fromU32(2)}} <> Ai.Assistant{first} <> Ai.ToolResult{Ai.ToolResultMessage{"call-1", "lookup", Ai.TextImageText{Ai.TextContent{"found 42", None{}}} <> Nil{}, None{}, None{}, False{}, F.fromU32(3)}} <> Nil{}}
 
-def continuedImage(first: Ai.AssistantMessage<V.Value, Unit>) -> Completions.Context():
+def continuedImage(first: Ai.AssistantMessage<V.Value, V.Value>) -> Completions.Context():
   Ai.TranscriptContext{Ai.System{system()} <> Ai.User{Ai.UserMessage{Ai.UserText{"lookup 42"}, F.fromU32(2)}} <> Ai.Assistant{first} <> Ai.ToolResult{Ai.ToolResultMessage{"call-1", "lookup", Ai.TextImageText{Ai.TextContent{"found 42", None{}}} <> Ai.TextImageImage{Ai.ImageContent{"ZmFrZQ==", "image/png"}} <> Nil{}, None{}, None{}, False{}, F.fromU32(3)}} <> Nil{}}
 
 def options() -> Completions.Options():
@@ -108,7 +108,7 @@ def configuredHeaders(value: Completions.Options()) -> Completions.Options():
 
 def headerOptions() -> Completions.Options(): configuredHeaders(options())
 
-def eventName(event: Ai.AssistantMessageEvent<V.Value, Unit>) -> String:
+def eventName(event: Ai.AssistantMessageEvent<V.Value, V.Value>) -> String:
   match event:
     case Ai.Start{_}: "start"
     case Ai.TextStart{_, _}: "text_start"
@@ -124,70 +124,70 @@ def eventName(event: Ai.AssistantMessageEvent<V.Value, Unit>) -> String:
     case Ai.StreamError{_, _}: "error"
     case _: "other"
 
-@unsafe def drain(next: Events.Iteration<Ai.AssistantMessageEvent<V.Value, Unit>>, +cursor: Events.Iterator<Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>>) -> IO(Unit):
+@unsafe def drain(next: Events.Iteration<Ai.AssistantMessageEvent<V.Value, V.Value>>, +cursor: Events.Iterator<Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>>) -> IO(Unit):
   match next:
     case Events.Yield{event}:
       do IO<Unit>:
         IO.print(eventName(event))
-        following : Events.Iteration<Ai.AssistantMessageEvent<V.Value, Unit>> <- Events.nextValue(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, cursor)
+        following : Events.Iteration<Ai.AssistantMessageEvent<V.Value, V.Value>> <- Events.nextValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, cursor)
         drain(following, cursor)
-    case Events.End{}: Events.disposeIterator(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, cursor)
+    case Events.End{}: Events.disposeIterator(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, cursor)
 
-def opened(result: Completions.Output()) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+def opened(result: Completions.Output()) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
   match result:
-    case Fail{_}: IO.die(Ai.AssistantMessage<V.Value, Unit>, 1, "provider failed to open")
+    case Fail{_}: IO.die(Ai.AssistantMessage<V.Value, V.Value>, 1, "provider failed to open")
     case Done{Agent.StreamLease{+events, release}}:
-      do IO<Ai.AssistantMessage<V.Value, Unit>>:
-        +cursor : Events.Iterator<Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>> <- Events.iterator(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, events)
-        first : Events.Iteration<Ai.AssistantMessageEvent<V.Value, Unit>> <- Events.nextValue(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, cursor)
+      do IO<Ai.AssistantMessage<V.Value, V.Value>>:
+        +cursor : Events.Iterator<Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>> <- Events.iterator(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events)
+        first : Events.Iteration<Ai.AssistantMessageEvent<V.Value, V.Value>> <- Events.nextValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, cursor)
         drain(first, cursor)
-        message : Ai.AssistantMessage<V.Value, Unit> <- Events.resultValue(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, events)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- Events.resultValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events)
         result : Result<&2, &2, Completions.Error(), Unit> <- release
         return message
 
-def request(fetch: Fetch.Fetch(Unit), base: String, context: Completions.Context()) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def request(fetch: Fetch.Fetch(Unit), base: String, context: Completions.Context()) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), model(base), context, Some{options()})
     opened(result)
 
-def imageRequest(fetch: Fetch.Fetch(Unit), base: String, context: Completions.Context()) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def imageRequest(fetch: Fetch.Fetch(Unit), base: String, context: Completions.Context()) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), imageModel(base), context, Some{options()})
     opened(result)
 
-def retryRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def retryRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), model(base), context(), Some{retryOptions()})
     opened(result)
 
-def reasoningRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def reasoningRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), reasoningModel(base), context(), Some{reasoningOptions(options())})
     opened(result)
 
-def samplingRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def samplingRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), samplingModel(base), context(), Some{samplingOptions(options())})
     opened(result)
 
 def providerOptions(enabled: Bool) -> Completions.Options():
   Bool.pick(Completions.Options(), enabled, reasoningOptions(options()), options())
 
-def providerRequest(fetch: Fetch.Fetch(Unit), base: String, named: String, enabled: Bool) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def providerRequest(fetch: Fetch.Fetch(Unit), base: String, named: String, enabled: Bool) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), providerModel(base, named), context(), Some{providerOptions(enabled)})
     opened(result)
 
-def headerRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def headerRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), model(base), context(), Some{headerOptions()})
     opened(result)
 
 def selectedModel(+base: String, unsupported: Bool) -> Ai.Model<Ai.JsonValue>:
   Bool.pick(Ai.Model<Ai.JsonValue>, unsupported, unsupportedModel(base), overrideModel(base))
 
-def compatRequest(fetch: Fetch.Fetch(Unit), base: String, unsupported: Bool) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def compatRequest(fetch: Fetch.Fetch(Unit), base: String, unsupported: Bool) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), selectedModel(base, unsupported), context(), Some{options()})
     opened(result)
 
@@ -195,65 +195,65 @@ def scenario(+fetch: Fetch.Fetch(Unit), +base: String, mode: String) -> IO(Unit)
   match mode:
     case "sampling":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- samplingRequest(fetch, base)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- samplingRequest(fetch, base)
         return Unit{}
     case "deepseek":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "deepseek", True{})
+        message : Ai.AssistantMessage<V.Value, V.Value> <- providerRequest(fetch, base, "deepseek", True{})
         return Unit{}
     case "reasoning_off":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "openai", False{})
+        message : Ai.AssistantMessage<V.Value, V.Value> <- providerRequest(fetch, base, "openai", False{})
         return Unit{}
     case "openrouter":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "openrouter", True{})
+        message : Ai.AssistantMessage<V.Value, V.Value> <- providerRequest(fetch, base, "openrouter", True{})
         return Unit{}
     case "openrouter_off":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "openrouter", False{})
+        message : Ai.AssistantMessage<V.Value, V.Value> <- providerRequest(fetch, base, "openrouter", False{})
         return Unit{}
     case "together":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "together", True{})
+        message : Ai.AssistantMessage<V.Value, V.Value> <- providerRequest(fetch, base, "together", True{})
         return Unit{}
     case "together_off":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "together", False{})
+        message : Ai.AssistantMessage<V.Value, V.Value> <- providerRequest(fetch, base, "together", False{})
         return Unit{}
     case "tool_image":
       do IO<Unit>:
-        first : Ai.AssistantMessage<V.Value, Unit> <- imageRequest(fetch, base, toolContext())
-        second : Ai.AssistantMessage<V.Value, Unit> <- imageRequest(fetch, base, continuedImage(first))
+        first : Ai.AssistantMessage<V.Value, V.Value> <- imageRequest(fetch, base, toolContext())
+        second : Ai.AssistantMessage<V.Value, V.Value> <- imageRequest(fetch, base, continuedImage(first))
         return Unit{}
     case "reasoning":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- reasoningRequest(fetch, base)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- reasoningRequest(fetch, base)
         return Unit{}
     case "unsupported":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- compatRequest(fetch, base, True{})
+        message : Ai.AssistantMessage<V.Value, V.Value> <- compatRequest(fetch, base, True{})
         return Unit{}
     case "compat":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- compatRequest(fetch, base, False{})
+        message : Ai.AssistantMessage<V.Value, V.Value> <- compatRequest(fetch, base, False{})
         return Unit{}
     case "headers":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- headerRequest(fetch, base)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- headerRequest(fetch, base)
         return Unit{}
     case "retry":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- retryRequest(fetch, base)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- retryRequest(fetch, base)
         return Unit{}
     case "tool":
       do IO<Unit>:
-        first : Ai.AssistantMessage<V.Value, Unit> <- request(fetch, base, toolContext())
-        second : Ai.AssistantMessage<V.Value, Unit> <- request(fetch, base, continued(first))
+        first : Ai.AssistantMessage<V.Value, V.Value> <- request(fetch, base, toolContext())
+        second : Ai.AssistantMessage<V.Value, V.Value> <- request(fetch, base, continued(first))
         return Unit{}
     case _:
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- request(fetch, base, context())
+        message : Ai.AssistantMessage<V.Value, V.Value> <- request(fetch, base, context())
         return Unit{}
 
 def borrowed(base: String, mode: String, pair: Fetch.Runtime & Fetch.Fetch(Unit)) -> IO(Unit):

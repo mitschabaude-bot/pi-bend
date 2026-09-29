@@ -23,9 +23,9 @@ import ./tools/index.bend as Tools
 def Details() -> Data: Tools.ToolDetails
 def Error() -> Data: Tools.ToolError
 def Options() -> Data: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>
-def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>
-def Stream() -> Data: Events.AssistantMessageEventStream(V.Value, Unit)
-def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<Unit, Error()>>
+def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>
+def Stream() -> Data: Events.AssistantMessageEventStream(V.Value, V.Value)
+def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<V.Value, Error()>>
 
 def modelId(model: Ai.Model<Ai.JsonValue>) -> String:
   match model:
@@ -91,7 +91,7 @@ def resolvedOptions(value: Maybe<&2, Options()>) -> Options():
     case None{}: Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error())
     case Some{selected}: selected
 
-def contextMessages(context: Context()) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>:
+def contextMessages(context: Context()) -> List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>:
   match context:
     case Ai.TranscriptContext{messages}: messages
 
@@ -110,11 +110,11 @@ def built(+model: Ai.Model<Ai.JsonValue>, +normalized: Context(), options: Compl
     case Fail{error}: IO.pure(Result<&2, &2, String, Ai.JsonValue>, Fail{Sampling.errorMessage(error)})
     case Done{selected}:
       do IO<Result<&2, &2, String, Ai.JsonValue>>:
-        params : Request.ParamsResult() <- Request.buildParams(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, normalized, options, compat, retention, selected)
+        params : Request.ParamsResult() <- Request.buildParams(~V.Value, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, normalized, options, compat, retention, selected)
         return paramsText(params)
 
 def grammarOf(+normalized: Context(), +compat: Request.Compat()) -> Result<&2, &2, Sampling.Error, R.Record<String>>:
-  Sampling.createGrammarToolInputProperties(Some{Transcript.getDeclaredTools(V.Value, V.Value, Unit, Details(), contextMessages(normalized))}, Request.supportsOpenAIGrammarTools(compat))
+  Sampling.createGrammarToolInputProperties(Some{Transcript.getDeclaredTools(V.Value, V.Value, V.Value, Details(), contextMessages(normalized))}, Request.supportsOpenAIGrammarTools(compat))
 
 def propertiesOrEmpty(value: Result<&2, &2, Sampling.Error, R.Record<String>>) -> R.Record<String>:
   match value:
@@ -125,21 +125,21 @@ def launched(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Contex
   +headers = Client.defaultHeaders(agent, modelHeaders(model), copilot, Request.clientHeaders(compat, Request.cacheSessionId(retention, sessionOf(shared)), headersOf(shared)))
   +settings = {Fold.Settings{model, Request.supportsFinishReason(compat), propertiesOrEmpty(grammar)} : Fold.Settings}
   +plan = {Client.Prepared{Client.getClientApiKey(Ai.modelProvider(model), keyOf(shared), headersOf(shared)), headers, timeoutOf(shared), retriesOf(shared), delayOf(shared), params, payloadHookOf(shared), responseHookOf(shared)} : Client.Prepared<Error()>}
-  Client.stream(~Unit, ~Error(), ~Unit, ~Tools.errorMessage, stream, settings, signal, Client.Context{urlContext, SDK.Defaults{agent, R.new(String), None{}, None{}}, Maybe.default(&2, Fetch.Fetch(Unit), fetchOf(shared), fetch)}, timestamp, plan)
+  Client.stream(~Unit, ~Error(), ~V.Value, ~Tools.errorMessage, stream, settings, signal, Client.Context{urlContext, SDK.Defaults{agent, R.new(String), None{}, None{}}, Maybe.default(&2, Fetch.Fetch(Unit), fetchOf(shared), fetch)}, timestamp, plan)
 
 # upstream stream: the transcript resolved for the model's mid-conversation
 # support, the client key, grammar tool input properties, cache retention,
 # the client's headers and buildParams; then the request lifecycle.
 def produced(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Completions(), timestamp: F64, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   +compat = Request.getCompat(model)
-  +normalized = Transcript.resolveTranscript(V.Value, V.Value, Unit, Details(), context, Some{Request.supportsMidConvoSystemMessages(compat)})
+  +normalized = Transcript.resolveTranscript(V.Value, V.Value, V.Value, Details(), context, Some{Request.supportsMidConvoSystemMessages(compat)})
   +shared = base(options)
   +grammar = grammarOf(normalized, compat)
   do IO<Unit>:
     +agent : String <- IO.try(String, UserAgent.get())
     +retention : Ai.CacheRetention <- Request.resolveCacheRetention(retentionOf(shared), envOf(shared))
     params : Result<&2, &2, String, Ai.JsonValue> <- built(model, normalized, options, compat, retention, grammar)
-    launched(stream, fetch, urlContext, model, timestamp, signal, compat, shared, grammar, agent, retention, params, Copilot.forProvider(V.Value, V.Value, Unit, Details(), Ai.modelProvider(model), contextMessages(normalized)))
+    launched(stream, fetch, urlContext, model, timestamp, signal, compat, shared, grammar, agent, retention, params, Copilot.forProvider(V.Value, V.Value, V.Value, Details(), Ai.modelProvider(model), contextMessages(normalized)))
 
 def disposeLocal(local: Maybe<&2, Abort.AbortController<Unit>>) -> IO(Unit):
   match local:
@@ -161,13 +161,13 @@ def producer(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context
 def release(stream: Stream(), task: Chan(Unit)) -> IO(Result<&2, &2, Error(), Unit>):
   do IO<Result<&2, &2, Error(), Unit>>:
     finished : Unit <- IO.join(Unit, task)
-    Events.disposeAssistantMessageEventStream(V.Value, Unit, stream)
+    Events.disposeAssistantMessageEventStream(V.Value, V.Value, stream)
     return Done{Unit{}}
 
 # upstream stream.
 def openStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Completions()) -> IO(Output()):
   do IO<Output()>:
-    +events : Stream() <- Events.createAssistantMessageEventStream(~V.Value, ~Unit)
+    +events : Stream() <- Events.createAssistantMessageEventStream(~V.Value, ~V.Value)
     timestamp : F64 <- Date.now()
     task : Chan(Unit) <- IO.fork(Unit, producer(events, fetch, urlContext, model, context, options, timestamp))
     return Done{Agent.StreamLease{events, release(events, task)}}
@@ -180,4 +180,4 @@ def selectedStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.
 # upstream streamSimple, whose missing-auth error is thrown before a stream
 # exists.
 def open(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), options: Maybe<&2, Options()>) -> IO(Output()):
-  selectedStream(fetch, urlContext, model, context, Request.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, Some{resolvedOptions(options)}))
+  selectedStream(fetch, urlContext, model, context, Request.streamSimpleOptions(~V.Value, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, Some{resolvedOptions(options)}))

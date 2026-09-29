@@ -25,8 +25,8 @@ import ../../../../../ai/src/utils/schema-json.bend as SchemaJson
 # The selector keeps the session graph, rather than flattening it to an
 # unrelated menu. Its visible rows retain branch connectors and the active
 # path; the filter changes which entries are visible, not their IDs.
-def Entry() -> Data: Tree.SessionEntry<Unit,Tools.ToolDetails,V.Value>
-def Node() -> Data: Tree.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>
+def Entry() -> Data: Tree.SessionEntry<V.Value,Tools.ToolDetails,V.Value>
+def Node() -> Data: Tree.SessionTreeNode<V.Value, Tools.ToolDetails, V.Value>
 
 type Filter is Data: Default{} NoTools{} UserOnly{} LabeledOnly{} All{}
 type Action is Data: Continue{} Cancel{} Chosen{id: String} Copied{text: Maybe<&2,String>} EditLabel{id: String,label: Maybe<&2,String>} LabelChanged{id: String,label: Maybe<&2,String>} InputError{cause: Word.Error}
@@ -41,9 +41,9 @@ type TreeList is Data:
 def rowEntry(row: Row) -> Entry():
   match row: case Row{Tree.SessionTreeNode{entry,_,_,_},_,_,_}: entry
 def rowId(row: Row) -> String:
-  Tree.baseId(Tree.entryBase(Unit,Tools.ToolDetails,V.Value,rowEntry(row)))
+  Tree.baseId(Tree.entryBase(V.Value, Tools.ToolDetails, V.Value,rowEntry(row)))
 def rowParent(row: Row) -> Maybe<&2,String>:
-  Tree.baseParent(Tree.entryBase(Unit,Tools.ToolDetails,V.Value,rowEntry(row)))
+  Tree.baseParent(Tree.entryBase(V.Value, Tools.ToolDetails, V.Value,rowEntry(row)))
 def blockText(blocks: List<&2,Ai.TextImageContent>) -> String:
   match blocks:
     case Nil{}: ""
@@ -66,11 +66,11 @@ def systemText(content: Ai.SystemContent) -> String:
   match content:
     case Ai.SystemText{text}: text
     case Ai.SystemBlocks{blocks}: systemBlocks(blocks)
-def messageText(message: Agent.AgentMessage<Unit,Tools.ToolDetails,Messages.CodingMessage<V.Value>>) -> String:
+def messageText(message: Agent.AgentMessage<V.Value,Tools.ToolDetails,Messages.CodingMessage<V.Value>>) -> String:
   match message:
     case Agent.LlmMessage{Ai.System{Ai.SystemMessage{content,_,_,_,_}}}: "system " ++ systemText(content)
     case Agent.LlmMessage{Ai.User{Ai.UserMessage{content,_}}}: "user " ++ contentText(content)
-    case Agent.LlmMessage{Ai.Assistant{assistant}}: "assistant " ++ assistantText(Ai.assistantContent(V.Value,Unit,assistant))
+    case Agent.LlmMessage{Ai.Assistant{assistant}}: "assistant " ++ assistantText(Ai.assistantContent(V.Value,V.Value,assistant))
     case Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{_,_,content,_,_,_,_}}}: "toolResult " ++ blockText(content)
     case Agent.CustomMessage{Messages.BashExecution{Messages.BashExecutionMessage{command,_,_,_,_,_,_,_}}}: "bashExecution " ++ command
     case Agent.CustomMessage{Messages.Custom{Messages.CustomMessage{kind,content,_,_,_}}}: kind ++ " " ++ contentText(content)
@@ -128,7 +128,7 @@ def indexedParent(entries: Map<&2,Maybe<&2,Row>>,id: String) -> Maybe<&2,String>
 def nodeChildren(node: Node()) -> List<&2,Node()>:
   match node: case Tree.SessionTreeNode{_,children,_,_}: children
 def nodeId(node: Node()) -> String:
-  match node: case Tree.SessionTreeNode{entry,_,_,_}: Tree.baseId(Tree.entryBase(Unit,Tools.ToolDetails,V.Value,entry))
+  match node: case Tree.SessionTreeNode{entry,_,_,_}: Tree.baseId(Tree.entryBase(V.Value, Tools.ToolDetails, V.Value,entry))
 @unsafe def unorderedRows(nodes: List<&2,Node()>,reversed: List<&2,Row>) -> List<&2,Row>:
   match nodes:
     case Nil{}: reversed
@@ -201,7 +201,7 @@ def successfulReason(reason: Ai.StopReason) -> Bool:
 def assistantVisible(entry: Entry(),current: Bool) -> Bool:
   match entry:
     case Tree.SessionMessageEntry{_,Agent.LlmMessage{Ai.Assistant{+assistant}}}:
-      current || Bool.not(String.is_empty(Text.trim(assistantText(Ai.assistantContent(V.Value,Unit,assistant))))) || Bool.not(successfulReason(Ai.assistantStopReason(V.Value,Unit,assistant)))
+      current || Bool.not(String.is_empty(Text.trim(assistantText(Ai.assistantContent(V.Value,V.Value,assistant))))) || Bool.not(successfulReason(Ai.assistantStopReason(V.Value,V.Value,assistant)))
     case _: True{}
 def currentLeaf(id: String,leaf: Maybe<&2,String>) -> Bool:
   match leaf:
@@ -266,7 +266,7 @@ def indexedCalls(blocks: List<&2,Ai.AssistantContent<V.Value>>,index: Map<&2,May
     case _ <> rest: indexedCalls(rest,index)
 def callsIn(entry: Entry(),index: Map<&2,Maybe<&2,ToolCallInfo>>) -> Map<&2,Maybe<&2,ToolCallInfo>>:
   match entry:
-    case Tree.SessionMessageEntry{_,Agent.LlmMessage{Ai.Assistant{message}}}: indexedCalls(Ai.assistantContent(V.Value,Unit,message),index)
+    case Tree.SessionMessageEntry{_,Agent.LlmMessage{Ai.Assistant{message}}}: indexedCalls(Ai.assistantContent(V.Value,V.Value,message),index)
     case _: index
 def toolCalls(rows: List<&2,Row>,index: Map<&2,Maybe<&2,ToolCallInfo>>) -> Map<&2,Maybe<&2,ToolCallInfo>>:
   match rows:
@@ -498,8 +498,8 @@ def entryCopyText(entry: Entry()) -> Maybe<&2,String>:
   match entry:
     case Tree.SessionMessageEntry{_,Agent.LlmMessage{Ai.User{Ai.UserMessage{content,_}}}}: Some{contentText(content)}
     case Tree.SessionMessageEntry{_,Agent.LlmMessage{Ai.Assistant{+assistant}}}:
-      +text = assistantText(Ai.assistantContent(V.Value,Unit,assistant))
-      Bool.pick(Maybe<&2,String>,String.is_empty(text),Ai.assistantErrorMessage(V.Value,Unit,assistant),Some{text})
+      +text = assistantText(Ai.assistantContent(V.Value,V.Value,assistant))
+      Bool.pick(Maybe<&2,String>,String.is_empty(text),Ai.assistantErrorMessage(V.Value,V.Value,assistant),Some{text})
     case Tree.SessionMessageEntry{_,Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{_,_,content,_,_,_,_}}}}: Some{blockText(content)}
     case Tree.SessionMessageEntry{_,Agent.LlmMessage{Ai.System{Ai.SystemMessage{content,_,_,_,_}}}}: Some{systemText(content)}
     case Tree.SessionMessageEntry{_,Agent.CustomMessage{Messages.BashExecution{Messages.BashExecutionMessage{command,_,_,_,_,_,_,_}}}}: Some{command}
@@ -583,10 +583,10 @@ def firstChars(text: String,count: Nat) -> String:
     case _ _: ""
 def abortedReason(reason: Ai.StopReason) -> Bool:
   match reason: case Ai.Aborted{}: True{} case _: False{}
-def assistantDisplay(+assistant: Ai.AssistantMessage<V.Value,Unit>,+theme: Theme.Theme) -> String:
-  +text = singleLine(firstChars(assistantText(Ai.assistantContent(V.Value,Unit,assistant)),200n))
-  +error = Ai.assistantErrorMessage(V.Value,Unit,assistant)
-  +aborted = abortedReason(Ai.assistantStopReason(V.Value,Unit,assistant))
+def assistantDisplay(+assistant: Ai.AssistantMessage<V.Value,V.Value>,+theme: Theme.Theme) -> String:
+  +text = singleLine(firstChars(assistantText(Ai.assistantContent(V.Value,V.Value,assistant)),200n))
+  +error = Ai.assistantErrorMessage(V.Value,V.Value,assistant)
+  +aborted = abortedReason(Ai.assistantStopReason(V.Value,V.Value,assistant))
   paint(theme,"success","assistant: ") ++ Bool.pick(Unit -> String,String.is_empty(text),
     _ => Bool.pick(Unit -> String,aborted,_ => paint(theme,"muted","(aborted)"),
       _ => Bool.pick(Unit -> String,Maybe.is_some(&2,String,error),_ => paint(theme,"error",firstChars(singleLine(Maybe.default(&2,String,error,"")),80n)),_ => paint(theme,"muted","(no content)"))(Unit{}))(Unit{}),
@@ -625,7 +625,7 @@ def toolFound(call: Maybe<&2,ToolCallInfo>,name: String,home: String) -> String:
 def toolDescription(graph: Graph,id: String,name: String,home: String) -> String:
   match graph:
     case Graph{_,_,_,_,_,calls}: toolFound(lookupValue(Maybe<&2,ToolCallInfo>,Map.get(Maybe<&2,ToolCallInfo>,None{},calls,id)),name,home)
-def messageDisplay(message: Agent.AgentMessage<Unit,Tools.ToolDetails,Messages.CodingMessage<V.Value>>,+theme: Theme.Theme,graph: Graph,home: String) -> String:
+def messageDisplay(message: Agent.AgentMessage<V.Value,Tools.ToolDetails,Messages.CodingMessage<V.Value>>,+theme: Theme.Theme,graph: Graph,home: String) -> String:
   match message:
     case Agent.LlmMessage{Ai.User{Ai.UserMessage{content,_}}}: paint(theme,"accent","user: ") ++ singleLine(firstChars(contentText(content),200n))
     case Agent.LlmMessage{Ai.Assistant{assistant}}: assistantDisplay(assistant,theme)
@@ -820,7 +820,7 @@ def rootNodes(rows: List<&2,Row>) -> List<&2,Node()>:
   match nodes:
     case Nil{}: Nil{}
     case Tree.SessionTreeNode{+entry,children,current,time} <> rest:
-      +changed = String.eq(Tree.baseId(Tree.entryBase(Unit,Tools.ToolDetails,V.Value,entry)),id)
+      +changed = String.eq(Tree.baseId(Tree.entryBase(V.Value, Tools.ToolDetails, V.Value,entry)),id)
       Tree.SessionTreeNode{entry,labelledNodes(children,id,label,stamp),Bool.pick(Maybe<&2,String>,changed,label,current),Bool.pick(Maybe<&2,String>,changed,stamp,time)} <> labelledNodes(rest,id,label,stamp)
 def labelledView(rows: List<&2,Row>,+entries: Map<&2,Maybe<&2,Row>>) -> List<&2,Row>:
   match rows:

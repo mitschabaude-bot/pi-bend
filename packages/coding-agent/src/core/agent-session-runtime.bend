@@ -90,7 +90,7 @@ def createChecked(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>,
 # stored cwd exists; release disposes the services of a replaced runtime.
 def create(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +agentDir: String, +directory: String, +live: Session.Session()) -> IO(Result<&2, &2, String, AgentSessionRuntime<S>>):
   do IO<Result<&2, &2, String, AgentSessionRuntime<S>>>:
-    checked : Result<&2, &2, String, Unit> <- SessionCwd.assertSessionCwdExists(Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, live), Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, live), directory)
+    checked : Result<&2, &2, String, Unit> <- SessionCwd.assertSessionCwdExists(Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, live), Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value, live), directory)
     createChecked(S, factory, release, agentDir, directory, live, checked)
 
 def sessionIn(-S: Type, current: Current<S>) -> Current<S> & Maybe<&2, Session.AgentSession>:
@@ -225,7 +225,7 @@ def shutdownReason(start: ExtensionTypes.SessionStartEvent) -> ExtensionTypes.Se
 # runtime for the next session and rebind.
 def replaced(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, +next: Session.Session(), +start: ExtensionTypes.SessionStartEvent) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
-    outgoing : Maybe<&2, Session.Session()> <- teardownCurrent(S, runtime, ExtensionTypes.SessionShutdownEvent{shutdownReason(start), Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, next)})
+    outgoing : Maybe<&2, Session.Session()> <- teardownCurrent(S, runtime, ExtensionTypes.SessionShutdownEvent{shutdownReason(start), Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, next)})
     createNext(S, runtime, directory, next, start)
 
 type Snapshot is Data:
@@ -248,7 +248,7 @@ def snapshot(-S: Type, +runtime: AgentSessionRuntime<S>) -> IO(Maybe<&2, Snapsho
 def noSession() -> String: "No active live"
 
 # New and reopened sessions keep drawing ids from the process generator.
-def idsOf(stored: Session.Session()) -> Uuid.Generator: Sessions.getIdGenerator(Unit, Tools.ToolDetails, V.Value, stored)
+def idsOf(stored: Session.Session()) -> Uuid.Generator: Sessions.getIdGenerator(V.Value, Tools.ToolDetails, V.Value, stored)
 
 def createdNext(ids: Uuid.Generator, +directory: String, persisted: Bool, sessionDir: String, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session.Session())):
   match persisted:
@@ -265,8 +265,8 @@ def newFrom(-S: Type, +runtime: AgentSessionRuntime<S>, parentSession: Maybe<&2,
     case _ None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{noSession()})
     case AgentSessionRuntime{_, _, _, agentDir, _, _, _} Some{Snapshot{+directory, +stored}}:
       do IO<Result<&2, &2, String, Unit>>:
-        next : Sessions.Outcome(Session.Session()) <- createdNext(idsOf(stored), directory, Sessions.isPersisted(Unit, Tools.ToolDetails, V.Value, stored), Sessions.getSessionDir(Unit, Tools.ToolDetails, V.Value, stored), agentDir, Sessions.NewSessionOptions{None{}, parentSession})
-        replacedWith(S, runtime, directory, ExtensionTypes.SessionStartEvent{ExtensionTypes.NewStart{}, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)}, next)
+        next : Sessions.Outcome(Session.Session()) <- createdNext(idsOf(stored), directory, Sessions.isPersisted(V.Value, Tools.ToolDetails, V.Value, stored), Sessions.getSessionDir(V.Value, Tools.ToolDetails, V.Value, stored), agentDir, Sessions.NewSessionOptions{None{}, parentSession})
+        replacedWith(S, runtime, directory, ExtensionTypes.SessionStartEvent{ExtensionTypes.NewStart{}, Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, stored)}, next)
 
 # upstream newSession: a new session in the current cwd, persisted in the
 # current session cwd unless the current session is in memory.
@@ -278,14 +278,14 @@ def newSession(-S: Type, +runtime: AgentSessionRuntime<S>, parentSession: Maybe<
 def switchChecked(-S: Type, runtime: AgentSessionRuntime<S>, previous: Maybe<&2, String>, +next: Session.Session(), checked: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, Unit>):
   match checked:
     case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
-    case Done{_}: replaced(S, runtime, Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, next), next, ExtensionTypes.SessionStartEvent{ExtensionTypes.ResumeStart{}, previous})
+    case Done{_}: replaced(S, runtime, Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value, next), next, ExtensionTypes.SessionStartEvent{ExtensionTypes.ResumeStart{}, previous})
 
 def switchOpened(-S: Type, +runtime: AgentSessionRuntime<S>, previous: Maybe<&2, String>, fallbackCwd: String, opened: Sessions.Outcome(Session.Session())) -> IO(Result<&2, &2, String, Unit>):
   match opened:
     case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{Sessions.message(error)})
     case Done{+next}:
       do IO<Result<&2, &2, String, Unit>>:
-        checked : Result<&2, &2, String, Unit> <- SessionCwd.assertSessionCwdExists(Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, next), Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, next), fallbackCwd)
+        checked : Result<&2, &2, String, Unit> <- SessionCwd.assertSessionCwdExists(Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, next), Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value, next), fallbackCwd)
         switchChecked(S, runtime, previous, next, checked)
 
 def switchFrom(-S: Type, +runtime: AgentSessionRuntime<S>, +sessionPath: String, cwdOverride: Maybe<&2, String>, found: Maybe<&2, Snapshot>) -> IO(Result<&2, &2, String, Unit>):
@@ -293,8 +293,8 @@ def switchFrom(-S: Type, +runtime: AgentSessionRuntime<S>, +sessionPath: String,
     case None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{noSession()})
     case Some{Snapshot{+directory, +stored}}:
       do IO<Result<&2, &2, String, Unit>>:
-        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.unitValue, ~Tools.detailsValue, ~Session.rawValue, ~Session.readUnit, ~Session.readDetails, ~Session.readRaw, idsOf(stored), sessionPath, None{}, cwdOverride, directory)
-        switchOpened(S, runtime, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored), directory, opened)
+        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~V.Value, ~Tools.ToolDetails, ~V.Value, ~Session.rawValue, ~Tools.detailsValue, ~Session.rawValue, ~Session.readRaw, ~Session.readDetails, ~Session.readRaw, idsOf(stored), sessionPath, None{}, cwdOverride, directory)
+        switchOpened(S, runtime, Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, stored), directory, opened)
 
 # upstream switchSession: resume a stored session in its own cwd.
 def switchSession(-S: Type, +runtime: AgentSessionRuntime<S>, sessionPath: String, cwdOverride: Maybe<&2, String>) -> IO(Result<&2, &2, String, Unit>):
@@ -367,22 +367,22 @@ def resumeChecked(-S: Type,runtime: AgentSessionRuntime<S>,previous: Maybe<&2,St
     case Some{found}: IO.pure(ResumeOutcome,ResumeNeedsCwd{found})
     case None{}:
       do IO<ResumeOutcome>:
-        result : Result<&2,&2,String,Unit> <- replaced(S,runtime,Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,next),next,ExtensionTypes.SessionStartEvent{ExtensionTypes.ResumeStart{},previous})
+        result : Result<&2,&2,String,Unit> <- replaced(S,runtime,Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value,next),next,ExtensionTypes.SessionStartEvent{ExtensionTypes.ResumeStart{},previous})
         matchResumeResult(result)
 def resumeOpened(-S: Type,runtime: AgentSessionRuntime<S>,previous: Maybe<&2,String>,fallbackCwd: String,opened: Sessions.Outcome(Session.Session())) -> IO(ResumeOutcome):
   match opened:
     case Fail{error}: IO.pure(ResumeOutcome,ResumeFailed{Sessions.message(error)})
     case Done{+next}:
       do IO<ResumeOutcome>:
-        issue : Maybe<&2,SessionCwd.SessionCwdIssue> <- SessionCwd.getMissingSessionCwdIssue(Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,next),Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,next),fallbackCwd)
+        issue : Maybe<&2,SessionCwd.SessionCwdIssue> <- SessionCwd.getMissingSessionCwdIssue(Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value,next),Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value,next),fallbackCwd)
         resumeChecked(S,runtime,previous,next,issue)
 def resumeFrom(-S: Type,runtime: AgentSessionRuntime<S>,sessionPath: String,cwdOverride: Maybe<&2,String>,found: Maybe<&2,Snapshot>) -> IO(ResumeOutcome):
   match found:
     case None{}: IO.pure(ResumeOutcome,ResumeFailed{noSession()})
     case Some{Snapshot{+directory,+stored}}:
       do IO<ResumeOutcome>:
-        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,~Session.readUnit,~Session.readDetails,~Session.readRaw,idsOf(stored),sessionPath,None{},cwdOverride,directory)
-        resumeOpened(S,runtime,Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),directory,opened)
+        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~V.Value, ~Tools.ToolDetails, ~V.Value,~Session.rawValue,~Tools.detailsValue,~Session.rawValue,~Session.readRaw,~Session.readDetails,~Session.readRaw,idsOf(stored),sessionPath,None{},cwdOverride,directory)
+        resumeOpened(S,runtime,Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value,stored),directory,opened)
 def resumeSession(-S: Type,+runtime: AgentSessionRuntime<S>,sessionPath: String,cwdOverride: Maybe<&2,String>) -> IO(ResumeOutcome):
   do IO<ResumeOutcome>:
     found : Maybe<&2,Snapshot> <- snapshot(S,runtime)
@@ -461,15 +461,15 @@ def importOpened(-S: Type,runtime: AgentSessionRuntime<S>,+source: String,direct
     case Fail{error}: IO.pure(ImportOutcome,ImportFailed{Sessions.message(error)})
     case Done{stored}:
       do IO<ImportOutcome>:
-        issue : Maybe<&2,SessionCwd.SessionCwdIssue> <- SessionCwd.getMissingSessionCwdIssue(Some{source},Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,stored),fallbackCwd)
+        issue : Maybe<&2,SessionCwd.SessionCwdIssue> <- SessionCwd.getMissingSessionCwdIssue(Some{source},Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value,stored),fallbackCwd)
         importCwdChecked(S,runtime,source,directory,cwdOverride,issue)
 def importFromSnapshot(-S: Type,runtime: AgentSessionRuntime<S>,+source: String,+cwdOverride: Maybe<&2,String>,found: Maybe<&2,Snapshot>) -> IO(ImportOutcome):
   match found:
     case None{}: IO.pure(ImportOutcome,ImportFailed{noSession()})
     case Some{Snapshot{+directory,+stored}}:
       do IO<ImportOutcome>:
-        +sessionDir : String <- IO.pure(String,Sessions.getSessionDir(Unit,Tools.ToolDetails,V.Value,stored))
-        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,~Session.readUnit,~Session.readDetails,~Session.readRaw,idsOf(stored),source,Some{sessionDir},cwdOverride,directory)
+        +sessionDir : String <- IO.pure(String,Sessions.getSessionDir(V.Value, Tools.ToolDetails, V.Value,stored))
+        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~V.Value, ~Tools.ToolDetails, ~V.Value,~Session.rawValue,~Tools.detailsValue,~Session.rawValue,~Session.readRaw,~Session.readDetails,~Session.readRaw,idsOf(stored),source,Some{sessionDir},cwdOverride,directory)
         importOpened(S,runtime,source,sessionDir,directory,cwdOverride,opened)
 def importSourceError(path: String,error: FS.Error) -> String:
   match error:
@@ -542,15 +542,15 @@ def branchSaved(-S: Type, +runtime: AgentSessionRuntime<S>, +stored: Session.Ses
     case False{}: IO.pure(Result<&2, &2, String, Maybe<&2, String>>, Fail{"This session has not been saved yet. Wait for the first assistant response before cloning or forking it."})
     case True{}:
       do IO<Result<&2, &2, String, Maybe<&2, String>>>:
-        next : Sessions.Outcome(Session.Session()) <- Sessions.createBranchedSession(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.unitValue, ~Tools.detailsValue, ~Session.rawValue, stored, leaf)
-        forked(S, runtime, Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, stored), Some{file}, text, next)
+        next : Sessions.Outcome(Session.Session()) <- Sessions.createBranchedSession(~V.Value, ~Tools.ToolDetails, ~V.Value, ~Session.rawValue, ~Tools.detailsValue, ~Session.rawValue, stored, leaf)
+        forked(S, runtime, Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value, stored), Some{file}, text, next)
 
 def forkPersistedFile(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, +stored: Session.Session(), leaf: Maybe<&2, String>, text: Maybe<&2, String>, file: Maybe<&2, String>) -> IO(Result<&2, &2, String, Maybe<&2, String>>):
   match leaf file:
     case _ None{}: IO.pure(Result<&2, &2, String, Maybe<&2, String>>, Fail{"Persisted session is missing a session file"})
     case None{} Some{+path}:
       do IO<Result<&2, &2, String, Maybe<&2, String>>>:
-        next : Sessions.Outcome(Session.Session()) <- Session.createSession(idsOf(stored), directory, Some{Sessions.getSessionDir(Unit, Tools.ToolDetails, V.Value, stored)}, agentDirOf(S, runtime), Sessions.NewSessionOptions{None{}, Some{path}})
+        next : Sessions.Outcome(Session.Session()) <- Session.createSession(idsOf(stored), directory, Some{Sessions.getSessionDir(V.Value, Tools.ToolDetails, V.Value, stored)}, agentDirOf(S, runtime), Sessions.NewSessionOptions{None{}, Some{path}})
         forked(S, runtime, directory, Some{path}, text, next)
     case Some{id} Some{+path}:
       do IO<Result<&2, &2, String, Maybe<&2, String>>>:
@@ -559,8 +559,8 @@ def forkPersistedFile(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: St
 
 def outgoingNext(+stored: Session.Session(), leaf: Maybe<&2, String>) -> IO(Sessions.Outcome(Session.Session())):
   match leaf:
-    case None{}: Sessions.newSession(Unit, Tools.ToolDetails, V.Value, stored, Sessions.NewSessionOptions{None{}, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)})
-    case Some{id}: Sessions.createBranchedSession(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.unitValue, ~Tools.detailsValue, ~Session.rawValue, stored, id)
+    case None{}: Sessions.newSession(V.Value, Tools.ToolDetails, V.Value, stored, Sessions.NewSessionOptions{None{}, Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, stored)})
+    case Some{id}: Sessions.createBranchedSession(~V.Value, ~Tools.ToolDetails, ~V.Value, ~Session.rawValue, ~Tools.detailsValue, ~Session.rawValue, stored, id)
 
 def forkedAfterTeardown(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, previous: Maybe<&2, String>, text: Maybe<&2, String>, next: Sessions.Outcome(Session.Session())) -> IO(Result<&2, &2, String, Maybe<&2, String>>):
   match next:
@@ -576,7 +576,7 @@ def forkOutgoing(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String,
     case Some{+stored}:
       do IO<Result<&2, &2, String, Maybe<&2, String>>>:
         next : Sessions.Outcome(Session.Session()) <- outgoingNext(stored, leaf)
-        forkedAfterTeardown(S, runtime, directory, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored), text, next)
+        forkedAfterTeardown(S, runtime, directory, Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, stored), text, next)
 
 # An in-memory session forks from its state after teardown.
 def forkInMemory(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, leaf: Maybe<&2, String>, text: Maybe<&2, String>) -> IO(Result<&2, &2, String, Maybe<&2, String>>):
@@ -588,14 +588,14 @@ def forkTargeted(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String,
   match target:
     case Fail{error}: IO.pure(Result<&2, &2, String, Maybe<&2, String>>, Fail{error})
     case Done{ForkTarget{+leaf, +text}}:
-      Bool.pick(Unit -> IO(Result<&2, &2, String, Maybe<&2, String>>), Sessions.isPersisted(Unit, Tools.ToolDetails, V.Value, stored),
-        _ => forkPersistedFile(S, runtime, directory, stored, leaf, text, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)),
+      Bool.pick(Unit -> IO(Result<&2, &2, String, Maybe<&2, String>>), Sessions.isPersisted(V.Value, Tools.ToolDetails, V.Value, stored),
+        _ => forkPersistedFile(S, runtime, directory, stored, leaf, text, Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, stored)),
         _ => forkInMemory(S, runtime, directory, leaf, text))(Unit{})
 
 def forkFrom(-S: Type, +runtime: AgentSessionRuntime<S>, +entryId: String, position: ForkPosition, found: Maybe<&2, Snapshot>) -> IO(Result<&2, &2, String, Maybe<&2, String>>):
   match found:
     case None{}: IO.pure(Result<&2, &2, String, Maybe<&2, String>>, Fail{noSession()})
-    case Some{Snapshot{+directory, +stored}}: forkTargeted(S, runtime, directory, stored, forkTargetOf(entryId, position, SM.getEntry(Unit, Tools.ToolDetails, V.Value, Session.stateOf(stored), entryId)))
+    case Some{Snapshot{+directory, +stored}}: forkTargeted(S, runtime, directory, stored, forkTargetOf(entryId, position, SM.getEntry(V.Value, Tools.ToolDetails, V.Value, Session.stateOf(stored), entryId)))
 
 # upstream fork: before a user message (its text returned for the editor) or
 # at any entry (clone), into a new session; a persisted session branches into

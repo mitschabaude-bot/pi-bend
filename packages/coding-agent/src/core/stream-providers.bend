@@ -7,6 +7,7 @@ import ../../../ai/src/api/google-vertex.bend as Vertex
 import ../../../runtime/src/date.bend as Date
 import ../../../runtime/src/pi-user-agent.bend as UserAgent
 import ../../../ai/src/utils/event-stream.bend as Events
+import ../../../ai/src/utils/message-json.bend as MessageJson
 import ../../../agent/src/types.bend as Agent
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/fetch.bend as Fetch
@@ -22,14 +23,14 @@ import ./tools/index.bend as Tools
 def Details() -> Data: Tools.ToolDetails
 def Error() -> Data: Tools.ToolError
 def Options() -> Data: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>
-def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>
-def Stream() -> Data: Events.AssistantMessageEventStream(V.Value, Unit)
-def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<Unit, Error()>>
+def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>
+def Stream() -> Data: Events.AssistantMessageEventStream(V.Value, V.Value)
+def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<V.Value, Error()>>
 def Producer() -> Type: Stream() -> Abort.AbortSignal<Unit> -> IO(Unit)
 
-# The CLI's assistant messages carry no diagnostic details.
-def noDetails(value: Ai.JsonValue) -> Unit: Unit{}
-def unitDetails(value: Unit) -> V.Value: V.Null{}
+# Provider diagnostics retain their JSON details through the agent and session.
+def jsonDetails(value: Ai.JsonValue) -> V.Value: MessageJson.jsonValue(value)
+def diagnosticDetails(value: V.Value) -> V.Value: value
 
 def parentSignal(options: Maybe<&2, Options()>) -> Maybe<&2, Abort.AbortSignal<Unit>>:
   match options:
@@ -48,23 +49,23 @@ def signalled(+events: Stream(), produce: Producer(), parent: Maybe<&2, Abort.Ab
 def worker(+events: Stream(), produce: Producer(), parent: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Unit):
   do IO<Unit>:
     signalled(events, produce, parent)
-    Events.end(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, events, None{})
+    Events.end(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, None{})
 
 def release(stream: Stream(), task: Chan(Unit)) -> IO(Result<&2, &2, Error(), Unit>):
   do IO<Result<&2, &2, Error(), Unit>>:
     finished : Unit <- IO.join(Unit, task)
-    Events.disposeAssistantMessageEventStream(V.Value, Unit, stream)
+    Events.disposeAssistantMessageEventStream(V.Value, V.Value, stream)
     return Done{Unit{}}
 
 def lease(produce: Producer(), parent: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Output()):
   do IO<Output()>:
-    +events : Stream() <- Events.createAssistantMessageEventStream(~V.Value, ~Unit)
+    +events : Stream() <- Events.createAssistantMessageEventStream(~V.Value, ~V.Value)
     task : Chan(Unit) <- IO.fork(Unit, worker(events, produce, parent))
     return Done{Agent.StreamLease{events, release(events, task)}}
 
 # upstream pi-messages streamSimple.
 def piMessages(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
-  lease(events => signal => PiMessages.streamSimple(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, ~noDetails, ~unitDetails, ~Tools.detailsValue, events, fetch, urlContext, signal, model, context, options, None{}), parentSignal(options))
+  lease(events => signal => PiMessages.streamSimple(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, ~jsonDetails, ~diagnosticDetails, ~Tools.detailsValue, events, fetch, urlContext, signal, model, context, options, None{}), parentSignal(options))
 
 def MistralOptions() -> Data: Mistral.Options(Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error())
 
@@ -73,15 +74,15 @@ def MistralOptions() -> Data: Mistral.Options(Abort.AbortSignal<Unit>, Unit, Fet
 def mistralSelected(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), parent: Maybe<&2, Abort.AbortSignal<Unit>>, selected: Result<&2, &2, String, MistralOptions()>) -> IO(Output()):
   match selected:
     case Fail{message}: IO.pure(Output(), Fail{Tools.Failure{message}})
-    case Done{options}: lease(events => signal => Mistral.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, events, fetch, urlContext, signal, model, context, options), parent)
+    case Done{options}: lease(events => signal => Mistral.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, events, fetch, urlContext, signal, model, context, options), parent)
 
 def mistral(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
-  mistralSelected(fetch, urlContext, model, context, parentSignal(options), Mistral.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, options))
+  mistralSelected(fetch, urlContext, model, context, parentSignal(options), Mistral.streamSimpleOptions(~V.Value, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, options))
 
 # upstream bedrock-converse-stream streamSimple; a proxied request runs on
 # `handler`'s network.
 def bedrock(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, handler: Bedrock.Handler, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
-  lease(events => signal => Bedrock.streamSimple(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, ~noDetails, events, fetch, urlContext, handler, signal, model, context, options), parentSignal(options))
+  lease(events => signal => Bedrock.streamSimple(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, ~jsonDetails, events, fetch, urlContext, handler, signal, model, context, options), parentSignal(options))
 
 def VertexOptions() -> Data: Vertex.Options(Unit, Unit, Error())
 
@@ -89,7 +90,7 @@ def vertexProduced(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.
   do IO<Unit>:
     +agent : String <- IO.try(String, UserAgent.get())
     timestamp : F64 <- Date.now()
-    Vertex.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, events, signal, Vertex.Setup{urlContext, agent, fetch}, model, context, options, timestamp)
+    Vertex.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, events, signal, Vertex.Setup{urlContext, agent, fetch}, model, context, options, timestamp)
 
 # upstream google-vertex streamSimple, whose unsupported level mappings are
 # thrown before a stream exists.
@@ -99,4 +100,4 @@ def vertexSelected(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.
     case Done{options}: lease(events => signal => vertexProduced(fetch, urlContext, model, context, options, events, signal), parent)
 
 def vertex(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
-  vertexSelected(fetch, urlContext, model, context, parentSignal(options), Vertex.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, options))
+  vertexSelected(fetch, urlContext, model, context, parentSignal(options), Vertex.streamSimpleOptions(~V.Value, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, options))

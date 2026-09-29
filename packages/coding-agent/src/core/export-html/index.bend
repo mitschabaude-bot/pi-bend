@@ -29,9 +29,9 @@ import ../../modes/interactive/theme/detection.bend as Detection
 type Assets is Data:
   Assets{template: String, css: String, javascript: String, marked: String, highlight: String, themeVars: String}
 
-def State() -> Data: S.SessionManager<Unit, Tools.ToolDetails, V.Value>
-def AgentState() -> Data: Agent.AgentState<Unit, Tools.ToolDetails, Messages.CodingMessage<V.Value>, Tools.ToolError>
-def Session() -> Data: Persistence.Session<Unit, Tools.ToolDetails, V.Value>
+def State() -> Data: S.SessionManager<V.Value, Tools.ToolDetails, V.Value>
+def AgentState() -> Data: Agent.AgentState<V.Value, Tools.ToolDetails, Messages.CodingMessage<V.Value>, Tools.ToolError>
+def Session() -> Data: Persistence.Session<V.Value, Tools.ToolDetails, V.Value>
 def Outcome(-A: Data) -> Data: Result<&2, &2, String, A>
 
 def fileError(value: FS.Error) -> String:
@@ -248,7 +248,7 @@ def nullableText(value: Maybe<&2, String>) -> V.Value:
 def field(key: String, value: V.Value, rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
   R.Property{key, value} <> rest
 
-def llmMessages(messages: List<&2, Agent.AgentMessage<Unit, Tools.ToolDetails, Messages.CodingMessage<V.Value>>>) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>:
+def llmMessages(messages: List<&2, Agent.AgentMessage<V.Value, Tools.ToolDetails, Messages.CodingMessage<V.Value>>>) -> List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>>:
   match messages:
     case Nil{}: Nil{}
     case Agent.LlmMessage{message} <> rest: message <> llmMessages(rest)
@@ -267,12 +267,12 @@ def tools(values: List<&2, Agent.AgentTool<Tools.ToolDetails, Tools.ToolError>>)
 def stateInfo(value: AgentState()) -> V.Value & V.Value:
   match value:
     case Agent.AgentState{_, _, definitions, messages, _, _, _, _}:
-      (V.Text{Transcript.getCurrentSystemPrompt(V.Value, V.Value, Unit, Tools.ToolDetails, llmMessages(messages))}, V.ArrayValue{tools(definitions)})
+      (V.Text{Transcript.getCurrentSystemPrompt(V.Value, V.Value, V.Value, Tools.ToolDetails, llmMessages(messages))}, V.ArrayValue{tools(definitions)})
 
-def entryValues(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
+def entryValues(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
   match entries:
     case Nil{}: Nil{}
-    case entry <> rest: SessionJson.entry(~Unit, ~Tools.ToolDetails, ~V.Value, ~(_ => V.Null{}), ~Tools.detailsValue, ~(value => value), entry) <> entryValues(rest)
+    case entry <> rest: SessionJson.entry(~V.Value, ~Tools.ToolDetails, ~V.Value, ~(_ => V.Null{}), ~Tools.detailsValue, ~(value => value), entry) <> entryValues(rest)
 
 def sessionDataOf(+manager: State(), info: V.Value & V.Value) -> V.Value:
   match info:
@@ -280,9 +280,9 @@ def sessionDataOf(+manager: State(), info: V.Value & V.Value) -> V.Value:
       f0 = {Nil{} : List<&2, R.Property<V.Value>>}
       f1 = field("tools", toolList, f0)
       f2 = field("systemPrompt", prompt, f1)
-      f3 = field("leafId", nullableText(S.getLeafId(Unit, Tools.ToolDetails, V.Value, manager)), f2)
-      f4 = field("entries", V.ArrayValue{entryValues(S.getEntries(Unit, Tools.ToolDetails, V.Value, manager))}, f3)
-      f5 = field("header", SessionJson.header(S.getHeader(Unit, Tools.ToolDetails, V.Value, manager)), f4)
+      f3 = field("leafId", nullableText(S.getLeafId(V.Value, Tools.ToolDetails, V.Value, manager)), f2)
+      f4 = field("entries", V.ArrayValue{entryValues(S.getEntries(V.Value, Tools.ToolDetails, V.Value, manager))}, f3)
+      f5 = field("header", SessionJson.header(S.getHeader(V.Value, Tools.ToolDetails, V.Value, manager)), f4)
       V.ObjectValue{R.Record{f5}}
 
 def sessionData(manager: State(), agentState: AgentState()) -> V.Value:
@@ -290,9 +290,9 @@ def sessionData(manager: State(), agentState: AgentState()) -> V.Value:
 
 def fileData(+manager: State()) -> V.Value:
   f0 = {Nil{} : List<&2, R.Property<V.Value>>}
-  f1 = field("leafId", nullableText(S.getLeafId(Unit, Tools.ToolDetails, V.Value, manager)), f0)
-  f2 = field("entries", V.ArrayValue{entryValues(S.getEntries(Unit, Tools.ToolDetails, V.Value, manager))}, f1)
-  f3 = field("header", SessionJson.header(S.getHeader(Unit, Tools.ToolDetails, V.Value, manager)), f2)
+  f1 = field("leafId", nullableText(S.getLeafId(V.Value, Tools.ToolDetails, V.Value, manager)), f0)
+  f2 = field("entries", V.ArrayValue{entryValues(S.getEntries(V.Value, Tools.ToolDetails, V.Value, manager))}, f1)
+  f3 = field("header", SessionJson.header(S.getHeader(V.Value, Tools.ToolDetails, V.Value, manager)), f2)
   V.ObjectValue{R.Record{f3}}
 
 def render(assets: Assets, data: V.Value) -> String:
@@ -351,7 +351,7 @@ def writeHtml(+path: String, html: String) -> IO(Outcome(String)):
 def writeChosen(assets: Assets, session: Session(), agentState: AgentState(), chosen: Outcome(String)) -> IO(Outcome(String)):
   match chosen:
     case Fail{error}: IO.pure(Outcome(String), Fail{error})
-    case Done{path}: writeHtml(path, generate(assets, Persistence.stateOf(Unit, Tools.ToolDetails, V.Value, session), agentState))
+    case Done{path}: writeHtml(path, generate(assets, Persistence.stateOf(V.Value, Tools.ToolDetails, V.Value, session), agentState))
 
 def writeResolved(assets: Assets, session: Session(), agentState: AgentState(), source: String, cwd: String, outputPath: Maybe<&2, String>) -> IO(Outcome(String)):
   writeChosen(assets, session, agentState, chosenPath(source, cwd, outputPath))
@@ -374,20 +374,18 @@ def writeWithFile(assets: Assets, session: Session(), agentState: AgentState(), 
     case Some{source}: writeSource(assets, session, agentState, source, outputPath)
 
 def write(assets: Assets, +session: Session(), agentState: AgentState(), outputPath: Maybe<&2, String>) -> IO(Outcome(String)):
-  writeWithFile(assets, session, agentState, outputPath, Persistence.getSessionFile(Unit, Tools.ToolDetails, V.Value, session))
+  writeWithFile(assets, session, agentState, outputPath, Persistence.getSessionFile(V.Value, Tools.ToolDetails, V.Value, session))
 
 # Standalone export of an existing JSONL file uses the same session migration
 # and typed decoder as normal session opening, without adding AgentState data.
-def unitValue(value: Unit) -> V.Value: V.Null{}
 def rawValue(value: V.Value) -> V.Value: value
-def readUnit(value: V.Value) -> Result<&2, &2, Decode.Error, Unit>: Done{Unit{}}
 def readRaw(value: V.Value) -> Result<&2, &2, Decode.Error, V.Value>: Done{value}
 def readDetails(value: V.Value) -> Result<&2, &2, Decode.Error, Tools.ToolDetails>: Done{Tools.RawDetails{value}}
 
 def fromFileChosen(assets: Assets, session: Session(), chosen: Outcome(String)) -> IO(Outcome(String)):
   match chosen:
     case Fail{error}: IO.pure(Outcome(String), Fail{error})
-    case Done{path}: writeHtml(path, generateFromFile(assets, Persistence.stateOf(Unit, Tools.ToolDetails, V.Value, session)))
+    case Done{path}: writeHtml(path, generateFromFile(assets, Persistence.stateOf(V.Value, Tools.ToolDetails, V.Value, session)))
 
 def fromOpened(assets: Assets, source: String, cwd: String, outputPath: Maybe<&2, String>, result: Persistence.Outcome(Session())) -> IO(Outcome(String)):
   match result:
@@ -396,7 +394,7 @@ def fromOpened(assets: Assets, source: String, cwd: String, outputPath: Maybe<&2
 
 def fromResolved(ids: Uuid.Generator, assets: Assets, +source: String, +cwd: String, outputPath: Maybe<&2, String>) -> IO(Outcome(String)):
   do IO<Outcome(String)>:
-    opened : Persistence.Outcome(Session()) <- Persistence.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, source, None{}, None{}, cwd)
+    opened : Persistence.Outcome(Session()) <- Persistence.open(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, ~readRaw, ~readDetails, ~readRaw, ids, source, None{}, None{}, cwd)
     fromOpened(assets, source, cwd, outputPath, opened)
 
 def fromFound(ids: Uuid.Generator, assets: Assets, cwd: String, outputPath: Maybe<&2, String>, found: Result<&2, &2, FS.Error, String>) -> IO(Outcome(String)):

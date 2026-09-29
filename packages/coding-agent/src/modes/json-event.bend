@@ -21,13 +21,12 @@ import ../core/compaction/compaction.bend as Compaction
 # their size is constant.
 
 def Custom() -> Data: Messages.CodingMessage<V.Value>
-def SessionEvent() -> Data: Runner.RunEvent(Unit, Tools.ToolDetails, Custom())
-def Message() -> Data: Agent.AgentMessage<Unit, Tools.ToolDetails, Custom()>
+def SessionEvent() -> Data: Runner.RunEvent(V.Value, Tools.ToolDetails, Custom())
+def Message() -> Data: Agent.AgentMessage<V.Value, Tools.ToolDetails, Custom()>
 def ToolResult() -> Data: Agent.AgentToolResult<Tools.ToolDetails>
 
 
 
-def unitDetails(value: Unit) -> V.Value: V.Null{}
 def rawValue(value: V.Value) -> V.Value: value
 
 # Messages
@@ -35,12 +34,12 @@ def rawValue(value: V.Value) -> V.Value: value
 
 def message(value: Message()) -> V.Value:
   match value:
-    case Agent.LlmMessage{value}: Json.message(~Unit, ~Tools.ToolDetails, ~unitDetails, ~Tools.detailsValue, value)
+    case Agent.LlmMessage{value}: Json.message(~V.Value, ~Tools.ToolDetails, ~rawValue, ~Tools.detailsValue, value)
     case Agent.CustomMessage{value}: SessionJson.codingMessage(~V.Value, ~rawValue, value)
 
 # The inverse of message, reading details as a loaded session does.
 def decodeMessage(value: V.Value) -> Result<&2, &2, Decode.Error, Message()>:
-  SessionJson.decodeAgentMessage(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.readUnit, ~Session.readDetails, ~Session.readRaw, value)
+  SessionJson.decodeAgentMessage(~V.Value, ~Tools.ToolDetails, ~V.Value, ~Session.readRaw, ~Session.readDetails, ~Session.readRaw, value)
 
 def messages(values: List<&2, Message()>) -> List<&2, V.Value>:
   match values:
@@ -80,7 +79,7 @@ def toolcallStart(index: F64, call: Maybe<&2, Ai.ToolCall<V.Value>>) -> Result<&
     case None{}: Fail{"toolcall_start content at index " ++ Nat.show(indexOf(index)) ++ " is not a tool call"}
     case Some{Ai.ToolCall{id, name, _, _, _}}: Done{Json.object(Json.field("type", Json.text("toolcall_start"), Json.field("contentIndex", V.Number{index}, Json.field("id", Json.text(id), Json.field("toolName", Json.text(name), Nil{})))))}
 
-def assistantMessageEvent(event: Ai.AssistantMessageEvent<V.Value, Unit>) -> Result<&2, &2, String, V.Value>:
+def assistantMessageEvent(event: Ai.AssistantMessageEvent<V.Value, V.Value>) -> Result<&2, &2, String, V.Value>:
   match event:
     case Ai.Start{_}: Done{Json.object(Json.field("type", Json.text("start"), Nil{}))}
     case Ai.TextStart{index, _}: Done{Json.object(Json.field("type", Json.text("text_start"), Json.field("contentIndex", V.Number{index}, Nil{})))}
@@ -89,11 +88,11 @@ def assistantMessageEvent(event: Ai.AssistantMessageEvent<V.Value, Unit>) -> Res
     case Ai.ThinkingStart{index, _}: Done{Json.object(Json.field("type", Json.text("thinking_start"), Json.field("contentIndex", V.Number{index}, Nil{})))}
     case Ai.ThinkingDelta{index, delta, _}: Done{Json.object(Json.field("type", Json.text("thinking_delta"), Json.field("contentIndex", V.Number{index}, Json.field("delta", Json.text(delta), Nil{}))))}
     case Ai.ThinkingEnd{index, content, _}: Done{Json.object(Json.field("type", Json.text("thinking_end"), Json.field("contentIndex", V.Number{index}, Json.field("content", Json.text(content), Nil{}))))}
-    case Ai.ToolcallStart{+index, partial}: toolcallStart(index, toolCallAt(Ai.assistantContent(V.Value, Unit, partial), indexOf(index)))
+    case Ai.ToolcallStart{+index, partial}: toolcallStart(index, toolCallAt(Ai.assistantContent(V.Value, V.Value, partial), indexOf(index)))
     case Ai.ToolcallDelta{index, delta, _}: Done{Json.object(Json.field("type", Json.text("toolcall_delta"), Json.field("contentIndex", V.Number{index}, Json.field("delta", Json.text(delta), Nil{}))))}
     case Ai.ToolcallEnd{index, call, _}: Done{Json.object(Json.field("type", Json.text("toolcall_end"), Json.field("contentIndex", V.Number{index}, Json.field("toolCall", Json.toolCall(call), Nil{}))))}
-    case Ai.StreamDone{reason, final}: Done{Json.object(Json.field("type", Json.text("done"), Json.field("reason", Json.text(Json.doneReason(reason)), Json.field("message", Json.assistantMessage(~Unit, ~unitDetails, final), Nil{}))))}
-    case Ai.StreamError{reason, failed}: Done{Json.object(Json.field("type", Json.text("error"), Json.field("reason", Json.text(Json.errorReason(reason)), Json.field("error", Json.assistantMessage(~Unit, ~unitDetails, failed), Nil{}))))}
+    case Ai.StreamDone{reason, final}: Done{Json.object(Json.field("type", Json.text("done"), Json.field("reason", Json.text(Json.doneReason(reason)), Json.field("message", Json.assistantMessage(~V.Value, ~rawValue, final), Nil{}))))}
+    case Ai.StreamError{reason, failed}: Done{Json.object(Json.field("type", Json.text("error"), Json.field("reason", Json.text(Json.errorReason(reason)), Json.field("error", Json.assistantMessage(~V.Value, ~rawValue, failed), Nil{}))))}
 
 def messageUpdate(message: Message(), event: Result<&2, &2, String, V.Value>) -> Result<&2, &2, String, V.Value>:
   match message event:
@@ -185,4 +184,4 @@ def toSessionJsonEvent(event: Session.AgentSessionEvent) -> Result<&2, &2, Strin
     case Session.SummarizationRetryAttemptStart{source}: Done{Json.object(Json.field("type", Json.text("summarization_retry_attempt_start"), retrySource(source)))}
     case Session.SummarizationRetryFinished{}: Done{Json.object(Json.field("type", Json.text("summarization_retry_finished"), Nil{}))}
     case Session.BashExecutionUpdate{id, delta}: Done{Json.object(Json.field("type", Json.text("bash_execution_update"), Json.optionalText("id", id, Json.field("delta", Json.text(delta), Nil{}))))}
-    case Session.EntryAppended{entry}: Done{Json.object(Json.field("type", Json.text("entry_appended"), Json.field("entry", SessionJson.entry(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitDetails, ~Tools.detailsValue, ~rawValue, entry), Nil{})))}
+    case Session.EntryAppended{entry}: Done{Json.object(Json.field("type", Json.text("entry_appended"), Json.field("entry", SessionJson.entry(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, entry), Nil{})))}

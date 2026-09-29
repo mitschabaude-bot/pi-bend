@@ -60,7 +60,7 @@ def sendInitial(+session: Session.AgentSession, initial: Maybe<&2, String>, imag
     case None{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
     case Some{text}: Session.prompt(session, text, images, None{})
 
-def lastAssistant(last: Maybe<&2, Session.Message()>) -> Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>:
+def lastAssistant(last: Maybe<&2, Session.Message()>) -> Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>:
   match last:
     case Some{T.LlmMessage{Ai.Assistant{message}}}: Some{message}
     case _: None{}
@@ -81,7 +81,7 @@ def requestFailed(reason: String, message: Maybe<&2, String>) -> IO(U32):
 
 # Text mode prints the final assistant text; an error or abort goes to
 # stderr with exit code 1.
-def textOutput(message: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>) -> IO(U32):
+def textOutput(message: Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>) -> IO(U32):
   match message:
     case Some{Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, Ai.Error{}, _, error, _, _, _}}: requestFailed("error", error)
     case Some{Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, Ai.Aborted{}, _, error, _, _, _}}: requestFailed("aborted", error)
@@ -111,7 +111,7 @@ def writeHeader(mode: Args.Mode, value: S.SessionHeader) -> IO(Unit):
 def headerOf(+session: Session.AgentSession) -> IO(S.SessionHeader):
   do IO<S.SessionHeader>:
     stored : Session.Session() <- Session.sessionOf(session)
-    return S.getHeader(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))
+    return S.getHeader(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored))
 
 def observe(mode: Args.Mode, event: Session.AgentSessionEvent) -> IO(Unit): emit(mode, event)
 

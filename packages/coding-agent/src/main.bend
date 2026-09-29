@@ -446,13 +446,13 @@ def named(+session: Session(), name: Maybe<&2, String>) -> IO(Selected()):
     case None{}: IO.pure(Selected(), Done{session})
     case Some{value}: namedWith(session, Args.normalizeSessionName(value))
 
-def hasThinkingEntry(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> Bool:
+def hasThinkingEntry(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> Bool:
   match entries:
     case Nil{}: False{}
     case S.ThinkingLevelChangeEntry{_, _} <> _: True{}
     case _ <> rest: hasThinkingEntry(rest)
 
-def seedOf(id: String, context: Result<&2, &2, S.Error, S.SessionContext<Unit, Tools.ToolDetails, V.Value>>, branch: Result<&2, &2, S.Error, List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>>) -> Result<&2, &2, Stop, Runtime.SessionSeed>:
+def seedOf(id: String, context: Result<&2, &2, S.Error, S.SessionContext<V.Value, Tools.ToolDetails, V.Value>>, branch: Result<&2, &2, S.Error, List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>>) -> Result<&2, &2, Stop, Runtime.SessionSeed>:
   match context branch:
     case Fail{error} _: Fail{Failed{"Error: " ++ Sessions.message(Sessions.State{error})}}
     case _ Fail{error}: Fail{Failed{"Error: " ++ Sessions.message(Sessions.State{error})}}
@@ -460,8 +460,8 @@ def seedOf(id: String, context: Result<&2, &2, S.Error, S.SessionContext<Unit, T
 
 # The session context seeds the agent: its messages, model and thinking level.
 def sessionSeed(+session: Session()) -> Result<&2, &2, Stop, Runtime.SessionSeed>:
-  +state = Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, session)
-  seedOf(S.getSessionId(Unit, Tools.ToolDetails, V.Value, state), S.sessionContext(Unit, Tools.ToolDetails, V.Value, state), S.getBranch(Unit, Tools.ToolDetails, V.Value, state, S.Latest{}))
+  +state = Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, session)
+  seedOf(S.getSessionId(V.Value, Tools.ToolDetails, V.Value, state), S.sessionContext(V.Value, Tools.ToolDetails, V.Value, state), S.getBranch(V.Value, Tools.ToolDetails, V.Value, state, S.Latest{}))
 
 def seedMessages(seed: Runtime.SessionSeed) -> Bool:
   match seed:
@@ -964,9 +964,9 @@ def listInteractive(source: InteractiveSessionSource,_: Unit) -> IO(InteractiveR
         current : Maybe<&2,AgentSession.AgentSession> <- SessionRuntime.session(Services,host)
         +live : AgentSession.AgentSession <- activeSession(current)
         +stored : AgentSession.Session() <- AgentSession.sessionOf(live)
-        +cwd : String <- IO.pure(String,Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,stored))
-        +directory : String <- IO.pure(String,Sessions.getSessionDir(Unit,Tools.ToolDetails,V.Value,stored))
-        +override : Maybe<&2,String> <- IO.pure(Maybe<&2,String>,sessionOverride(Sessions.usesDefaultSessionDir(Unit,Tools.ToolDetails,V.Value,stored,agentDir),directory))
+        +cwd : String <- IO.pure(String,Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value,stored))
+        +directory : String <- IO.pure(String,Sessions.getSessionDir(V.Value, Tools.ToolDetails, V.Value,stored))
+        +override : Maybe<&2,String> <- IO.pure(Maybe<&2,String>,sessionOverride(Sessions.usesDefaultSessionDir(V.Value, Tools.ToolDetails, V.Value,stored,agentDir),directory))
         return InteractiveRun.SessionLoading{Picker.LoadContext{cwd,override,agentDir,Path.join(agentDir,"sessions"),packageDir}}
 
 def resumeInteractive(host: Host(),request: InteractiveRun.ResumeRequest) -> IO(SessionRuntime.CancellableResume):
@@ -998,13 +998,13 @@ def resumeTextFound(file: Maybe<&2,String>,+stored: AgentSession.Session(),agent
   match file:
     case None{}: None{}
     case Some{path}:
-      +directory = Sessions.getSessionDir(Unit,Tools.ToolDetails,V.Value,stored)
-      +custom = Bool.not(Sessions.usesDefaultSessionDir(Unit,Tools.ToolDetails,V.Value,stored,agentDir))
+      +directory = Sessions.getSessionDir(V.Value, Tools.ToolDetails, V.Value,stored)
+      +custom = Bool.not(Sessions.usesDefaultSessionDir(V.Value, Tools.ToolDetails, V.Value,stored,agentDir))
       +option = Bool.pick(String,custom," --session-dir " ++ quotedResumeArg(directory),"")
-      +command = Config.appName() ++ option ++ " --session " ++ Sessions.getSessionId(Unit,Tools.ToolDetails,V.Value,stored)
-      Bool.pick(Maybe<&2,ResumeCommand>,Sessions.isPersisted(Unit,Tools.ToolDetails,V.Value,stored),Some{ResumeCommand{path,command}},None{})
+      +command = Config.appName() ++ option ++ " --session " ++ Sessions.getSessionId(V.Value, Tools.ToolDetails, V.Value,stored)
+      Bool.pick(Maybe<&2,ResumeCommand>,Sessions.isPersisted(V.Value, Tools.ToolDetails, V.Value,stored),Some{ResumeCommand{path,command}},None{})
 def resumeText(+stored: AgentSession.Session(),agentDir: String) -> Maybe<&2,ResumeCommand>:
-  resumeTextFound(Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),stored,agentDir)
+  resumeTextFound(Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value,stored),stored,agentDir)
 def printResumeFound(found: Maybe<&2,ResumeCommand>) -> IO(Unit):
   match found:
     case None{}: IO.pure(Unit,Unit{})
@@ -1152,7 +1152,7 @@ def resolvedTuiMode(value: Maybe<&2,Args.TuiMode>) -> Maybe<&2,Settings.TuiMode>
     case Some{Args.Regular{}}: Some{Settings.Regular{}}
     case Some{Args.Fullscreen{}}: Some{Settings.Fullscreen{}}
 def runSeeded(+parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, startupDiagnostics: Diagnostics()) -> IO(Unit):
-  +sessionCwd = Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session)
+  +sessionCwd = Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value, session)
   do IO<Unit>:
     home : Result<&2,&2,FS.Error,String> <- FS.homedir()
     resources : Bool <- Trust.hasTrustRequiringProjectResources(sessionCwd,optionalHome(home))
@@ -1196,7 +1196,7 @@ def continued(ids: Uuid.Generator, proceed: Bool, issue: SessionCwd.SessionCwdIs
   match proceed issue:
     case True{} SessionCwd.SessionCwdIssue{Some{file}, _, +fallback}:
       do IO<Selected()>:
-        opened : Sessions.Outcome(Session()) <- Sessions.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~AgentSession.unitValue, ~Tools.detailsValue, ~AgentSession.rawValue, ~AgentSession.readUnit, ~AgentSession.readDetails, ~AgentSession.readRaw, ids, file, sessionDir, Some{fallback}, fallback)
+        opened : Sessions.Outcome(Session()) <- Sessions.open(~V.Value, ~Tools.ToolDetails, ~V.Value, ~AgentSession.rawValue, ~Tools.detailsValue, ~AgentSession.rawValue, ~AgentSession.readRaw, ~AgentSession.readDetails, ~AgentSession.readRaw, ids, file, sessionDir, Some{fallback}, fallback)
         return selected(opened)
     case _ _: IO.pure(Selected(), Fail{Aborted{""}})
 def chosen(choice: Maybe<&2, String>) -> Bool:
@@ -1213,7 +1213,7 @@ def missingCwd(ids: Uuid.Generator, prompting: Bool, +issue: SessionCwd.SessionC
 def cwdResolved(mode: AppMode, +session: Session(), issue: Maybe<&2, SessionCwd.SessionCwdIssue>, sessionDir: Maybe<&2, String>, agentDir: String, assets: String, settings: Settings.SettingsManager) -> IO(Selected()):
   match issue:
     case None{}: IO.pure(Selected(), Done{session})
-    case Some{found}: missingCwd(Sessions.getIdGenerator(Unit, Tools.ToolDetails, V.Value, session), interactive(mode), found, sessionDir, agentDir, assets, settings)
+    case Some{found}: missingCwd(Sessions.getIdGenerator(V.Value, Tools.ToolDetails, V.Value, session), interactive(mode), found, sessionDir, agentDir, assets, settings)
 
 def runSelected(parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, cwd: String, selection: Selected(), name: Maybe<&2, String>, +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, startup: Settings.SettingsManager, sessionDir: Maybe<&2, String>, startupDiagnostics: Diagnostics()) -> IO(Unit):
   match selection:
@@ -1221,7 +1221,7 @@ def runSelected(parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessa
     case Fail{Aborted{note}}: noted(note)
     case Done{+session}:
       do IO<Unit>:
-        issue : Maybe<&2, SessionCwd.SessionCwdIssue> <- SessionCwd.getMissingSessionCwdIssue(Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, session), Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session), cwd)
+        issue : Maybe<&2, SessionCwd.SessionCwdIssue> <- SessionCwd.getMissingSessionCwdIssue(Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, session), Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value, session), cwd)
         checked : Selected() <- cwdResolved(mode, session, issue, sessionDir, agentDir, packageDir, startup)
         runChecked(parsed, mode, initial, checked, name, agentDir, authPath, bundlePath, packageDir, startupDiagnostics)
 

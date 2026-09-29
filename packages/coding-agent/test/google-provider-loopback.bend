@@ -13,6 +13,22 @@ import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/ref.bend as Ref
 
+def eventName(event: Ai.AssistantMessageEvent<V.Value, V.Value>) -> String:
+  match event:
+    case Ai.Start{_}: "start"
+    case Ai.TextStart{_, _}: "text_start"
+    case Ai.TextDelta{_, _, _}: "text_delta"
+    case Ai.TextEnd{_, _, _}: "text_end"
+    case Ai.ThinkingStart{_, _}: "thinking_start"
+    case Ai.ThinkingDelta{_, _, _}: "thinking_delta"
+    case Ai.ThinkingEnd{_, _, _}: "thinking_end"
+    case Ai.ToolcallStart{_, _}: "toolcall_start"
+    case Ai.ToolcallDelta{_, _, _}: "toolcall_delta"
+    case Ai.ToolcallEnd{_, _, _}: "toolcall_end"
+    case Ai.StreamDone{_, _}: "done"
+    case Ai.StreamError{_, _}: "error"
+    case _: "other"
+
 def context() -> Google.Context():
   Ai.TranscriptContext{Ai.User{Ai.UserMessage{Ai.UserText{"ping"}, F.fromU32(1)}} <> Nil{}}
 
@@ -25,7 +41,7 @@ def system() -> Ai.SystemMessage<V.Value>:
 def toolContext() -> Google.Context():
   Ai.TranscriptContext{Ai.System{system()} <> Ai.User{Ai.UserMessage{Ai.UserText{"lookup 42"}, F.fromU32(2)}} <> Nil{}}
 
-def continued(first: Ai.AssistantMessage<V.Value, Unit>) -> Google.Context():
+def continued(first: Ai.AssistantMessage<V.Value, V.Value>) -> Google.Context():
   Ai.TranscriptContext{Ai.System{system()} <> Ai.User{Ai.UserMessage{Ai.UserText{"lookup 42"}, F.fromU32(2)}} <> Ai.Assistant{first} <> Ai.ToolResult{Ai.ToolResultMessage{"call-1", "lookup", Ai.TextImageText{Ai.TextContent{"found 42", None{}}} <> Nil{}, None{}, None{}, False{}, F.fromU32(3)}} <> Nil{}}
 
 def options() -> Google.Options():
@@ -61,50 +77,50 @@ def payloadHook(unused: Unit, input: Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.J
       IO.pure(Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>, Done{Some{updatedPayload(fields)}})
     case _: IO.pure(Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>, Done{None{}})
 
-@unsafe def drain(next: Events.Iteration<Ai.AssistantMessageEvent<V.Value, Unit>>, +cursor: Events.Iterator<Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>>) -> IO(Unit):
+@unsafe def drain(next: Events.Iteration<Ai.AssistantMessageEvent<V.Value, V.Value>>, +cursor: Events.Iterator<Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>>) -> IO(Unit):
   match next:
     case Events.Yield{event}:
       do IO<Unit>:
-        IO.print(TestClient.eventName(event))
-        following : Events.Iteration<Ai.AssistantMessageEvent<V.Value, Unit>> <- Events.nextValue(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, cursor)
+        IO.print(eventName(event))
+        following : Events.Iteration<Ai.AssistantMessageEvent<V.Value, V.Value>> <- Events.nextValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, cursor)
         drain(following, cursor)
-    case Events.End{}: Events.disposeIterator(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, cursor)
+    case Events.End{}: Events.disposeIterator(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, cursor)
 
-def opened(result: Google.Output()) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+def opened(result: Google.Output()) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
   match result:
-    case Fail{_}: IO.die(Ai.AssistantMessage<V.Value, Unit>, 1, "provider failed to open")
+    case Fail{_}: IO.die(Ai.AssistantMessage<V.Value, V.Value>, 1, "provider failed to open")
     case Done{Agent.StreamLease{+events, release}}:
-      do IO<Ai.AssistantMessage<V.Value, Unit>>:
-        +cursor : Events.Iterator<Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>> <- Events.iterator(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, events)
-        first : Events.Iteration<Ai.AssistantMessageEvent<V.Value, Unit>> <- Events.nextValue(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, cursor)
+      do IO<Ai.AssistantMessage<V.Value, V.Value>>:
+        +cursor : Events.Iterator<Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>> <- Events.iterator(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events)
+        first : Events.Iteration<Ai.AssistantMessageEvent<V.Value, V.Value>> <- Events.nextValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, cursor)
         drain(first, cursor)
-        message : Ai.AssistantMessage<V.Value, Unit> <- Events.resultValue(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, events)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- Events.resultValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events)
         result : Result<&2, &2, Google.Error(), Unit> <- release
         return message
 
-def request(fetch: Fetch.Fetch(Unit), base: String, context: Google.Context()) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def request(fetch: Fetch.Fetch(Unit), base: String, context: Google.Context()) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
     result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), calls, TestClient.model(base), context, Some{options()})
     opened(result)
 
-def retryRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def retryRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
     result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), calls, TestClient.model(base), context(), Some{retryOptions()})
     opened(result)
 
-def hookRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def hookRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     +hook : Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, Google.Error()) <- C.create(~Unit, ~Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.JsonValue>>, ~Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>, ~payloadHook, Unit{})
     calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
     result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), calls, TestClient.model(base), context(), Some{Ai.withOnPayload(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Google.Error(), options(), Some{hook})})
-    message : Ai.AssistantMessage<V.Value, Unit> <- opened(result)
+    message : Ai.AssistantMessage<V.Value, V.Value> <- opened(result)
     C.dispose(Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.JsonValue>>, Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>, hook)
     return message
 
-def headerRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
-  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+def headerRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
     result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), calls, TestClient.model(base), context(), Some{headerOptions()})
     opened(result)
@@ -113,24 +129,24 @@ def scenario(+fetch: Fetch.Fetch(Unit), +base: String, mode: String) -> IO(Unit)
   match mode:
     case "headers":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- headerRequest(fetch, base)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- headerRequest(fetch, base)
         return Unit{}
     case "hook":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- hookRequest(fetch, base)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- hookRequest(fetch, base)
         return Unit{}
     case "retry":
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- retryRequest(fetch, base)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- retryRequest(fetch, base)
         return Unit{}
     case "tool":
       do IO<Unit>:
-        first : Ai.AssistantMessage<V.Value, Unit> <- request(fetch, base, toolContext())
-        second : Ai.AssistantMessage<V.Value, Unit> <- request(fetch, base, continued(first))
+        first : Ai.AssistantMessage<V.Value, V.Value> <- request(fetch, base, toolContext())
+        second : Ai.AssistantMessage<V.Value, V.Value> <- request(fetch, base, continued(first))
         return Unit{}
     case _:
       do IO<Unit>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- request(fetch, base, context())
+        message : Ai.AssistantMessage<V.Value, V.Value> <- request(fetch, base, context())
         return Unit{}
 
 def borrowed(base: String, mode: String, pair: Fetch.Runtime & Fetch.Fetch(Unit)) -> IO(Unit):

@@ -226,9 +226,9 @@ def sameAction(left: CacheWarmingAction, right: CacheWarmingAction) -> Bool:
 # agent sent it: the model, the provider context and the request's loop
 # configuration (its stream options and hooks).
 type CacheWarmRequest is Data:
-  CacheWarmRequest{model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, Unit, Runtime.Details()>, options: Runtime.LoopConfig()}
+  CacheWarmRequest{model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Runtime.Details()>, options: Runtime.LoopConfig()}
 
-def Message() -> Data: Agent.AgentMessage<Unit, Runtime.Details(), Runtime.Custom()>
+def Message() -> Data: Agent.AgentMessage<V.Value, Runtime.Details(), Runtime.Custom()>
 
 # The conversation a request was sent from: its model and the agent's
 # transcript. Upstream's closure compares message identity; values have none,
@@ -236,10 +236,9 @@ def Message() -> Data: Agent.AgentMessage<Unit, Runtime.Details(), Runtime.Custo
 type CacheContext is Data:
   CacheContext{provider: String, modelId: String, messages: List<&2, Message()>}
 
-def unitValue(value: Unit) -> V.Value: V.Null{}
 def rawValue(value: V.Value) -> V.Value: value
 def encoded(+message: Message()) -> V.Value:
-  SessionJson.agentMessage(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, message)
+  SessionJson.agentMessage(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, message)
 
 def extendsPrefix(prefix: List<&2, Message()>, messages: List<&2, Message()>) -> Bool:
   match prefix messages:
@@ -503,17 +502,17 @@ def overrideNote(extensionOverride: Bool) -> Maybe<&2, String>:
     case True{}: Some{"extension override"}
     case False{}: None{}
 
-def warmRecord(message: Ai.AssistantMessage<V.Value, Unit>, extensionOverride: Bool) -> Maybe<&2, UsageRecord>:
+def warmRecord(message: Ai.AssistantMessage<V.Value, V.Value>, extensionOverride: Bool) -> Maybe<&2, UsageRecord>:
   match message:
     case Ai.AssistantMessage{_, _, provider, model, responseModel, _, _, _, usage, outcome, _, _, _, _, _}:
       Bool.pick(Maybe<&2, UsageRecord>, succeeded(outcome), Some{UsageRecord{"cache_warm", provider, Maybe.default(&2, String, responseModel, model), usage, overrideNote(extensionOverride)}}, None{})
 
 # The replay finished: a successful refresh is recorded (failures are not)
 # and the next refresh is armed while the run is still valid.
-def rescheduled(+run: ActiveRun, now: F64, message: Ai.AssistantMessage<V.Value, Unit>) -> RunOutcome:
+def rescheduled(+run: ActiveRun, now: F64, message: Ai.AssistantMessage<V.Value, V.Value>) -> RunOutcome:
   schedule(run, now, warmRecord(message, overrideOf(run)))
 
-def replayedRun(run: ActiveRun, message: Ai.AssistantMessage<V.Value, Unit>, +observation: Observation) -> RunOutcome:
+def replayedRun(run: ActiveRun, message: Ai.AssistantMessage<V.Value, V.Value>, +observation: Observation) -> RunOutcome:
   checkedRun(run, observation, valid => rescheduled(valid, nowOf(observation), message))
 
 def exitStep() -> Step: Step{None{}, None{}, Exit{}}
@@ -539,7 +538,7 @@ def fired(state: Warmer, generation: Nat, observation: Observation) -> Warmer & 
 def decided(state: Warmer, generation: Nat, action: CacheWarmingAction, observation: Observation) -> Warmer & Step:
   onRun(state, generation, run => decidedRun(run, action, observation))
 
-def replayed(state: Warmer, generation: Nat, message: Ai.AssistantMessage<V.Value, Unit>, observation: Observation) -> Warmer & Step:
+def replayed(state: Warmer, generation: Nat, message: Ai.AssistantMessage<V.Value, V.Value>, observation: Observation) -> Warmer & Step:
   onRun(state, generation, run => replayedRun(run, message, observation))
 
 # The outcome of `start`: the replaced run's controller (abort it) and the
@@ -777,7 +776,7 @@ def formatCacheWarmingUsage(note: Maybe<&2, String>, usage: Ai.Usage) -> String:
 # I/O shell
 # ---------
 
-def Entry() -> Data: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>
+def Entry() -> Data: S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>
 
 # upstream's Pick<SessionManager, "appendUsage" | "getBranch">: appending
 # returns the persisted entry, None when it could not be persisted.
@@ -789,9 +788,9 @@ type CacheWarmerSession is Data:
 # `context` reads the session's current model and transcript; `decide` lets
 # a hook override pi's action; `onWarmed` receives each persisted entry.
 type CacheWarmer is Data:
-  CacheWarmer{state: R.Ref<Warmer>, streamSimple: C.Callback<CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>>, session: CacheWarmerSession, getMode: C.Callback<Unit, Settings.CacheWarmingMode>, context: C.Callback<Unit, CacheContext>, decide: C.Callback<CacheWarmingDecisionEvent, CacheWarmingAction>, onWarmed: C.Callback<Entry(), Unit>}
+  CacheWarmer{state: R.Ref<Warmer>, streamSimple: C.Callback<CacheWarmRequest, Ai.AssistantMessage<V.Value, V.Value>>, session: CacheWarmerSession, getMode: C.Callback<Unit, Settings.CacheWarmingMode>, context: C.Callback<Unit, CacheContext>, decide: C.Callback<CacheWarmingDecisionEvent, CacheWarmingAction>, onWarmed: C.Callback<Entry(), Unit>}
 
-def create(streamSimple: C.Callback<CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>>, session: CacheWarmerSession, getMode: C.Callback<Unit, Settings.CacheWarmingMode>, context: C.Callback<Unit, CacheContext>, decide: C.Callback<CacheWarmingDecisionEvent, CacheWarmingAction>, onWarmed: C.Callback<Entry(), Unit>) -> IO(CacheWarmer):
+def create(streamSimple: C.Callback<CacheWarmRequest, Ai.AssistantMessage<V.Value, V.Value>>, session: CacheWarmerSession, getMode: C.Callback<Unit, Settings.CacheWarmingMode>, context: C.Callback<Unit, CacheContext>, decide: C.Callback<CacheWarmingDecisionEvent, CacheWarmingAction>, onWarmed: C.Callback<Entry(), Unit>) -> IO(CacheWarmer):
   do IO<CacheWarmer>:
     state : R.Ref<Warmer> <- R.new(Warmer, initial())
     return CacheWarmer{state, streamSimple, session, getMode, context, decide, onWarmed}
@@ -816,7 +815,7 @@ def observe(warmer: CacheWarmer) -> IO(Observation):
         now : F64 <- Date.now()
         current : CacheContext <- C.call(Unit, CacheContext, context, Unit{})
         branch : List<&2, Entry()> <- C.call(Unit, List<&2, Entry()>, getBranch, Unit{})
-        return Observation{mode, now, current, lastPromptTokens(Unit, Tools.ToolDetails, V.Value, branch)}
+        return Observation{mode, now, current, lastPromptTokens(V.Value, Tools.ToolDetails, V.Value, branch)}
 
 def release(controller: Maybe<&2, A.AbortController<Unit>>) -> IO(Unit):
   match controller:
@@ -854,7 +853,7 @@ def askedDecision(+warmer: CacheWarmer, generation: Nat, action: CacheWarmingAct
     observation : Observation <- observe(warmer)
     R.modify(Warmer, Step, stateOf(warmer), current => decided(current, generation, action, observation))
 
-def replayedMessage(+warmer: CacheWarmer, generation: Nat, message: Ai.AssistantMessage<V.Value, Unit>) -> IO(Step):
+def replayedMessage(+warmer: CacheWarmer, generation: Nat, message: Ai.AssistantMessage<V.Value, V.Value>) -> IO(Step):
   do IO<Step>:
     observation : Observation <- observe(warmer)
     R.modify(Warmer, Step, stateOf(warmer), current => replayed(current, generation, message, observation))
@@ -863,7 +862,7 @@ def decideOf(warmer: CacheWarmer) -> C.Callback<CacheWarmingDecisionEvent, Cache
   match warmer:
     case CacheWarmer{_, _, _, _, _, decide, _}: decide
 
-def streamOf(warmer: CacheWarmer) -> C.Callback<CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>>:
+def streamOf(warmer: CacheWarmer) -> C.Callback<CacheWarmRequest, Ai.AssistantMessage<V.Value, V.Value>>:
   match warmer:
     case CacheWarmer{_, streamSimple, _, _, _, _, _}: streamSimple
 
@@ -881,7 +880,7 @@ def advance(+warmer: CacheWarmer, generation: Nat, controller: A.AbortController
         askedDecision(warmer, generation, action)
     case Replay{request}:
       do IO<Step>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- C.call(CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>, streamOf(warmer), request)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- C.call(CacheWarmRequest, Ai.AssistantMessage<V.Value, V.Value>, streamOf(warmer), request)
         replayedMessage(warmer, generation, message)
 
 def settlementOf(controller: A.AbortController<Unit>) -> D.Deferred<A.AbortReason<Unit>>:

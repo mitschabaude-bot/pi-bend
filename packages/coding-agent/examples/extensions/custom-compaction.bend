@@ -62,10 +62,10 @@ def textBlocks(content: List<&2, Ai.AssistantContent<V.Value>>) -> List<&2, Stri
     case Ai.AssistantText{Ai.TextContent{text, _}} <> rest: text <> textBlocks(rest)
     case _ <> rest: textBlocks(rest)
 
-def summaryOf(response: Ai.AssistantMessage<V.Value, Unit>) -> String:
-  String.join(textBlocks(Ai.assistantContent(V.Value, Unit, response)), "\n")
+def summaryOf(response: Ai.AssistantMessage<V.Value, V.Value>) -> String:
+  String.join(textBlocks(Ai.assistantContent(V.Value, V.Value, response)), "\n")
 
-def usageOf(response: Ai.AssistantMessage<V.Value, Unit>) -> Ai.Usage:
+def usageOf(response: Ai.AssistantMessage<V.Value, V.Value>) -> Ai.Usage:
   match response:
     case Ai.AssistantMessage{_, _, _, _, _, _, _, _, usage, _, _, _, _, _, _}: usage
 
@@ -77,7 +77,7 @@ def emptySummary(+ctx: Ctx.ExtensionContext, signal: Abort.AbortSignal<Unit>) ->
 
 # Return compaction content; the session manager adds id and parentId. The
 # preparation's firstKeptEntryId keeps the recent messages.
-def summarized(+ctx: Ctx.ExtensionContext, signal: Abort.AbortSignal<Unit>, +firstKeptEntryId: String, +tokensBefore: F64, +response: Ai.AssistantMessage<V.Value, Unit>) -> IO(Outcome()):
+def summarized(+ctx: Ctx.ExtensionContext, signal: Abort.AbortSignal<Unit>, +firstKeptEntryId: String, +tokensBefore: F64, +response: Ai.AssistantMessage<V.Value, V.Value>) -> IO(Outcome()):
   +summary = summaryOf(response)
   Bool.pick(Unit -> IO(Outcome()), String.is_empty(Text.trim(summary)),
     _ => emptySummary(ctx, signal),
@@ -93,21 +93,21 @@ def requestId(generated: Result<&2, &2, Uuid.Error, String>) -> Maybe<&2, String
 def requestOptions(signal: Abort.AbortSignal<Unit>, sessionId: Maybe<&2, String>) -> Composer.StreamOptions():
   Ai.SimpleStreamOptions{Some{signal}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{F.fromU32(8192)}, None{}, Some{Ai.CacheNone{}}, sessionId, None{}, None{}, None{}, None{}, None{}, None{}}
 
-def summarize(+ctx: Ctx.ExtensionContext, +model: Ai.Model<Ai.JsonValue>, preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, +signal: Abort.AbortSignal<Unit>) -> IO(Outcome()):
+def summarize(+ctx: Ctx.ExtensionContext, +model: Ai.Model<Ai.JsonValue>, preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>, +signal: Abort.AbortSignal<Unit>) -> IO(Outcome()):
   match preparation:
     case Compaction.CompactionPreparation{+firstKeptEntryId, messagesToSummarize, turnPrefixMessages, _, +tokensBefore, previousSummary, _, _}:
       +allMessages = List.append(&2, Ext.AgentMessage(), messagesToSummarize, turnPrefixMessages)
-      +conversation = CompactionUtils.serializeConversation(Unit, Tools.ToolDetails, Messages.convertToLlm(Unit, Tools.ToolDetails, V.Value, allMessages))
+      +conversation = CompactionUtils.serializeConversation(V.Value, Tools.ToolDetails, Messages.convertToLlm(V.Value, Tools.ToolDetails, V.Value, allMessages))
       do IO<Outcome()>:
         Ctx.notify(ctx, "Custom compaction: summarizing " ++ Nat.show(List.length(&2, Ext.AgentMessage(), allMessages)) ++ " messages (" ++ localeCount(tokensBefore) ++ " tokens) with " ++ Ai.modelId(model) ++ "...", Ctx.InfoNotice{})
         now : F64 <- Date.now()
         ids : Uuid.Generator <- Uuid.generator()
         generated : Result<&2, &2, Uuid.Error, String> <- Uuid.uuidv7(ids, None{})
-        +messages : List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>> = [Ai.User{Ai.UserMessage{Ai.UserBlocks{[Ai.TextImageText{Ai.TextContent{summaryPrompt(previousContext(previousSummary), conversation), None{}}}]}, now}}]
-        response : Ai.AssistantMessage<V.Value, Unit> <- Models.complete(Ctx.modelRegistry(ctx), model, Ai.Context{None{}, messages, None{}}, Some{requestOptions(signal, requestId(generated))})
+        +messages : List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>> = [Ai.User{Ai.UserMessage{Ai.UserBlocks{[Ai.TextImageText{Ai.TextContent{summaryPrompt(previousContext(previousSummary), conversation), None{}}}]}, now}}]
+        response : Ai.AssistantMessage<V.Value, V.Value> <- Models.complete(Ctx.modelRegistry(ctx), model, Ai.Context{None{}, messages, None{}}, Some{requestOptions(signal, requestId(generated))})
         summarized(ctx, signal, firstKeptEntryId, tokensBefore, response)
 
-def withModel(+ctx: Ctx.ExtensionContext, found: Maybe<&2, Ai.Model<Ai.JsonValue>>, preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, signal: Abort.AbortSignal<Unit>) -> IO(Outcome()):
+def withModel(+ctx: Ctx.ExtensionContext, found: Maybe<&2, Ai.Model<Ai.JsonValue>>, preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>, signal: Abort.AbortSignal<Unit>) -> IO(Outcome()):
   match found:
     case None{}:
       do IO<Outcome()>:

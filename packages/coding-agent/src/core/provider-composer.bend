@@ -887,8 +887,8 @@ def composedOAuth(providerId: String, base: Maybe<&2, Auth.OAuthAuth>, headerCon
 # consumes. Built-in providers stream by api through the runtime's
 # transport instead.
 def StreamOptions() -> Data: T.SimpleStreamOptions<T.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError>
-def StreamRequest() -> Data: Agent.StreamInput<Unit, Tools.ToolDetails, StreamOptions()>
-def StreamOutput() -> Type: Result<&2, &1, Tools.ToolError, Agent.StreamLease<Unit, Tools.ToolError>>
+def StreamRequest() -> Data: Agent.StreamInput<V.Value, Tools.ToolDetails, StreamOptions()>
+def StreamOutput() -> Type: Result<&2, &1, Tools.ToolError, Agent.StreamLease<V.Value, Tools.ToolError>>
 def ProviderStream() -> Data: C.Callback<StreamRequest(), StreamOutput()>
 
 # One of ProviderConfigInput.models; `api` and `baseUrl` fall back to the

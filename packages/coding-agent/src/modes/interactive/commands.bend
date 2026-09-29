@@ -199,7 +199,7 @@ def compact(session: Session.AgentSession,instructions: Maybe<&2,String>) -> IO(
 def currentName(session: Session.AgentSession) -> IO(Maybe<&2,String>):
   do IO<Maybe<&2,String>>:
     stored : Session.Session() <- Session.sessionOf(session)
-    return Tree.getSessionName(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored))
+    return Tree.getSessionName(Schema.Value,Tools.ToolDetails,Schema.Value,Session.stateOf(stored))
 def showName(current: Maybe<&2,String>) -> Action:
   match current:
     case Some{name}: Notice{"Session name: " ++ name}

@@ -16,8 +16,8 @@ import ../../ai/src/utils/uuid.bend as Uuid
 
 # The export must retain the typed session tree and encode hostile/Unicode text
 # as UTF-8 Base64 before it is inserted into the standalone HTML viewer.
-def State() -> Data: S.SessionManager<Unit, Tools.ToolDetails, V.Value>
-def Entries() -> Data: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>
+def State() -> Data: S.SessionManager<V.Value, Tools.ToolDetails, V.Value>
+def Entries() -> Data: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>
 def Source() -> String: "build/export-html-source.jsonl"
 def AssetsDir() -> String: "packages/coding-agent/src/core/export-html"
 
@@ -25,7 +25,7 @@ def usage() -> Ai.Usage:
   +zero = F.fromU32(0)
   Ai.Usage{F.fromU32(1), F.fromU32(2), zero, zero, None{}, None{}, F.fromU32(3), Ai.UsageCost{zero, zero, zero, zero, zero}}
 
-def assistant() -> Agent.AgentMessage<Unit, Tools.ToolDetails, Messages.CodingMessage<V.Value>>:
+def assistant() -> Agent.AgentMessage<V.Value, Tools.ToolDetails, Messages.CodingMessage<V.Value>>:
   +args = {V.ObjectValue{R.set(V.Value, R.new(V.Value), "command", V.Text{"printf '<script>'"})} : V.Value}
   Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"I will run it.", None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-1", "bash", args, None{}, None{}}} <> Nil{}, "openai-responses", "openai", "gpt-test", None{}, None{}, None{}, None{}, usage(), Ai.ToolUse{}, None{}, None{}, None{}, None{}, F.fromU32(2)}}}
 
@@ -37,12 +37,12 @@ def entries() -> Entries():
   S.SessionMessageEntry{S.SessionEntryBase{"r1", Some{"a1"}, timestamp()}, Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{"call-1", "bash", Ai.TextImageText{Ai.TextContent{"<ok>\n  indented", None{}}} <> Nil{}, Some{Tools.emptyDetails()}, None{}, False{}, F.fromU32(3)}}}} <> Nil{}
 
 def session() -> Result<&2, &2, S.Error, State()>:
-  S.restore(Unit, Tools.ToolDetails, V.Value, S.SessionHeader{Some{S.CURRENT_SESSION_VERSION()}, "export-1", "2026-01-01T00:00:00.000Z", "/tmp", None{}}, entries())
+  S.restore(V.Value, Tools.ToolDetails, V.Value, S.SessionHeader{Some{S.CURRENT_SESSION_VERSION()}, "export-1", "2026-01-01T00:00:00.000Z", "/tmp", None{}}, entries())
 
 def sourceContent(result: Result<&2, &2, S.Error, State()>) -> String:
   match result:
     case Fail{_}: ""
-    case Done{manager}: Persistence.fileContent(~Unit, ~Tools.ToolDetails, ~V.Value, ~Export.unitValue, ~Tools.detailsValue, ~Export.rawValue, manager)
+    case Done{manager}: Persistence.fileContent(~V.Value, ~Tools.ToolDetails, ~V.Value, ~Export.rawValue, ~Tools.detailsValue, ~Export.rawValue, manager)
 
 def model() -> Ai.Model<Ai.JsonValue>:
   +zero = F.fromU32(0)

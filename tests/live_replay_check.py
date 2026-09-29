@@ -1576,16 +1576,6 @@ def runtime_normalized(output):
     return output
 
 
-# The CLI types assistant diagnostics' details as Unit (agent-session.bend's
-# session codecs), so the port's messages carry details null where pinned
-# pi-mono keeps the provider's (Bedrock's status, errorCode and requestId).
-DETAILS_REASON = "the CLI's assistant messages carry no diagnostic details (agent-session.bend's Unit details); pinned pi-mono keeps the provider's diagnostics details (tests/bedrock_check.py compares them at the API module)"
-
-
-def without_details(message):
-    return {**message, 'diagnostics': [{**item, 'details': None} for item in message['diagnostics']]}
-
-
 def known_difference(api, want, have):
     reasons = []
     wanted, had = want.get('message') or {}, have.get('message') or {}
@@ -1594,10 +1584,6 @@ def known_difference(api, want, have):
             reasons.append(reason)
             have = {**have, 'message': {**had, 'errorMessage': upstream}}
             had = have['message']
-    if wanted.get('diagnostics') and had.get('diagnostics') and any(item.get('details') is not None for item in wanted['diagnostics']) and all(item.get('details') is None for item in had['diagnostics']):
-        if normalized({**want, 'message': without_details(wanted)}) == normalized(have):
-            reasons.append(DETAILS_REASON)
-            have = {**have, 'message': {**had, 'diagnostics': [{**item, 'details': upstream['details']} for item, upstream in zip(had['diagnostics'], wanted['diagnostics'])]}}
     return ('; '.join(reasons) or None), have
 
 

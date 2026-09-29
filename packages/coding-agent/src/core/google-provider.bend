@@ -20,9 +20,9 @@ import ./tools/index.bend as Tools
 def Details() -> Data: Tools.ToolDetails
 def Error() -> Data: Tools.ToolError
 def Options() -> Data: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>
-def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>
-def Stream() -> Data: Events.AssistantMessageEventStream(V.Value, Unit)
-def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<Unit, Error()>>
+def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>
+def Stream() -> Data: Events.AssistantMessageEventStream(V.Value, V.Value)
+def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<V.Value, Error()>>
 def GoogleOptions() -> Data: Client.Options(Unit, Unit, Error())
 def GoogleResult() -> Data: Result<&2, &2, String, GoogleOptions()>
 
@@ -38,7 +38,7 @@ def resolvedOptions(value: Maybe<&2, Options()>) -> Options():
 def produced(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, counter: Ref.Ref<Nat>, +model: Ai.Model<Ai.JsonValue>, +context: Context(), options: GoogleOptions(), timestamp: F64, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   do IO<Unit>:
     +agent : String <- IO.try(String, UserAgent.get())
-    Client.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, stream, signal, Client.Setup{urlContext, agent, fetch, counter}, model, context, options, timestamp)
+    Client.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, stream, signal, Client.Setup{urlContext, agent, fetch, counter}, model, context, options, timestamp)
 
 def disposeLocal(local: Maybe<&2, Abort.AbortController<Unit>>) -> IO(Unit):
   match local:
@@ -60,12 +60,12 @@ def producer(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context
 def release(stream: Stream(), task: Chan(Unit)) -> IO(Result<&2, &2, Error(), Unit>):
   do IO<Result<&2, &2, Error(), Unit>>:
     finished : Unit <- IO.join(Unit, task)
-    Events.disposeAssistantMessageEventStream(V.Value, Unit, stream)
+    Events.disposeAssistantMessageEventStream(V.Value, V.Value, stream)
     return Done{Unit{}}
 
 def openStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, counter: Ref.Ref<Nat>, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Client.Options(Unit, Unit, Error())) -> IO(Output()):
   do IO<Output()>:
-    +events : Stream() <- Events.createAssistantMessageEventStream(~V.Value, ~Unit)
+    +events : Stream() <- Events.createAssistantMessageEventStream(~V.Value, ~V.Value)
     timestamp : F64 <- Date.now()
     task : Chan(Unit) <- IO.fork(Unit, producer(events, fetch, urlContext, counter, model, context, options, timestamp))
     return Done{Agent.StreamLease{events, release(events, task)}}
@@ -79,4 +79,4 @@ def selectedStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, counter: R
 # before a stream exists. `counter` is the process's generated tool-call id
 # counter (upstream's module toolCallCounter).
 def open(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, counter: Ref.Ref<Nat>, +model: Ai.Model<Ai.JsonValue>, +context: Context(), options: Maybe<&2, Options()>) -> IO(Output()):
-  selectedStream(fetch, urlContext, counter, model, context, Google.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, Some{resolvedOptions(options)}))
+  selectedStream(fetch, urlContext, counter, model, context, Google.streamSimpleOptions(~V.Value, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, Some{resolvedOptions(options)}))

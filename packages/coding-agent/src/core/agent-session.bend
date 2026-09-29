@@ -67,51 +67,48 @@ import ../../../runtime/src/posix-path.bend as PosixPath
 # compacts the context manually or when it overflows or crosses the
 # settings' threshold, expands /skill: commands and prompt templates, and runs
 # user bash commands, and switches and cycles models and thinking levels
-# within the available or scoped models. Extensions, reload and the cache
-# warmer are not ported.
+# within the available or scoped models.
 
-# The CLI's session codecs: no diagnostic details, tool details as their
-# JSON shape (restored ones kept raw), extension payloads as JSON values.
-def Session() -> Data: Sessions.Session<Unit, Tools.ToolDetails, V.Value>
-def State() -> Data: S.SessionManager<Unit, Tools.ToolDetails, V.Value>
-def Appended() -> Data: Sessions.Appended<Unit, Tools.ToolDetails, V.Value>
-def Message() -> Data: T.AgentMessage<Unit, Runtime.Details(), Runtime.Custom()>
-def SessionEvent() -> Data: Agent.RunEvent(Unit, Runtime.Details(), Runtime.Custom())
-def AgentState() -> Data: T.AgentState<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>
-def Entry() -> Data: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>
+# Session codecs preserve provider diagnostics and extension payloads as
+# immutable JSON values; restored tool details keep their original JSON shape.
+def Session() -> Data: Sessions.Session<V.Value, Tools.ToolDetails, V.Value>
+def State() -> Data: S.SessionManager<V.Value, Tools.ToolDetails, V.Value>
+def Appended() -> Data: Sessions.Appended<V.Value, Tools.ToolDetails, V.Value>
+def Message() -> Data: T.AgentMessage<V.Value, Runtime.Details(), Runtime.Custom()>
+def SessionEvent() -> Data: Agent.RunEvent(V.Value, Runtime.Details(), Runtime.Custom())
+def AgentState() -> Data: T.AgentState<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>
+def Entry() -> Data: S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>
 
-def unitValue(value: Unit) -> V.Value: V.Null{}
 def rawValue(value: V.Value) -> V.Value: value
-def readUnit(value: V.Value) -> Result<&2, &2, Decode.Error, Unit>: Done{Unit{}}
 def readRaw(value: V.Value) -> Result<&2, &2, Decode.Error, V.Value>: Done{value}
 def readDetails(value: V.Value) -> Result<&2, &2, Decode.Error, Tools.ToolDetails>: Done{Tools.RawDetails{value}}
 
 def createSession(ids: Uuid.Generator, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
-  Sessions.create(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, cwd, sessionDir, agentDir, options)
+  Sessions.create(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, ~readRaw, ~readDetails, ~readRaw, ids, cwd, sessionDir, agentDir, options)
 
 def openSession(ids: Uuid.Generator, path: String, sessionDir: Maybe<&2, String>, cwd: String) -> IO(Sessions.Outcome(Session())):
-  Sessions.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, path, sessionDir, None{}, cwd)
+  Sessions.open(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, ~readRaw, ~readDetails, ~readRaw, ids, path, sessionDir, None{}, cwd)
 
 def continueSession(ids: Uuid.Generator, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Sessions.Outcome(Session())):
-  Sessions.continueRecent(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, cwd, sessionDir, agentDir)
+  Sessions.continueRecent(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, ~readRaw, ~readDetails, ~readRaw, ids, cwd, sessionDir, agentDir)
 
 def memorySession(ids: Uuid.Generator, cwd: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
-  Sessions.inMemory(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, cwd, options, None{})
+  Sessions.inMemory(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, ~readRaw, ~readDetails, ~readRaw, ids, cwd, options, None{})
 
 def forkSession(ids: Uuid.Generator, source: String, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
-  Sessions.forkFrom(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, source, cwd, sessionDir, agentDir, options)
+  Sessions.forkFrom(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, ~readRaw, ~readDetails, ~readRaw, ids, source, cwd, sessionDir, agentDir, options)
 
 def recordMessage(session: Session(), message: Message()) -> IO(Sessions.Outcome(Appended())):
-  Sessions.appendMessage(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, message)
+  Sessions.appendMessage(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, session, message)
 
 def recordCustomMessage(session: Session(), customType: String, content: Ai.UserContent, display: Bool, details: Maybe<&2, V.Value>) -> IO(Sessions.Outcome(Appended())):
-  Sessions.appendCustomMessageEntry(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, customType, content, display, details)
+  Sessions.appendCustomMessageEntry(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, session, customType, content, display, details)
 
 def recordName(session: Session(), name: String) -> IO(Sessions.Outcome(Appended())):
-  Sessions.appendSessionInfo(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, name)
+  Sessions.appendSessionInfo(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, session, name)
 
 def recordThinking(session: Session(), level: Ai.ModelThinkingLevel) -> IO(Sessions.Outcome(Appended())):
-  Sessions.appendThinkingLevelChange(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, Levels.name(level))
+  Sessions.appendThinkingLevelChange(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, session, Levels.name(level))
 
 def textsValue(values: List<&2, String>) -> List<&2, V.Value>:
   match values:
@@ -140,11 +137,11 @@ def detailsOf(value: V.Value) -> Maybe<&2, Compaction.CompactionDetails>:
     case _: None{}
 
 def recordCompaction(session: Session(), summary: String, firstKeptEntryId: String, tokensBefore: Nat, details: Maybe<&2, Compaction.CompactionDetails>, usage: Maybe<&2, Ai.Usage>, fromExtension: Bool) -> IO(Sessions.Outcome(Appended())):
-  Sessions.appendCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, summary, Some{firstKeptEntryId}, tokensBefore, Maybe.map(&2, Compaction.CompactionDetails, V.Value, detailsValue, details), Some{fromExtension}, usage)
+  Sessions.appendCompaction(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, session, summary, Some{firstKeptEntryId}, tokensBefore, Maybe.map(&2, Compaction.CompactionDetails, V.Value, detailsValue, details), Some{fromExtension}, usage)
 
 def recordModel(session: Session(), model: Ai.Model<Ai.JsonValue>) -> IO(Sessions.Outcome(Appended())):
   match model:
-    case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: Sessions.appendModelChange(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, provider, id)
+    case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: Sessions.appendModelChange(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, session, provider, id)
 
 def stateMessages(value: AgentState()) -> List<&2, Message()>:
   match value:
@@ -162,11 +159,11 @@ def stateThinking(value: AgentState()) -> Ai.ModelThinkingLevel:
   match value:
     case T.AgentState{_, thinking, _, _, _, _, _, _}: thinking
 
-def keepAssistant(assistant: Ai.AssistantMessage<V.Value,Unit>,found: Maybe<&2,Ai.AssistantMessage<V.Value,Unit>>) -> Maybe<&2,Ai.AssistantMessage<V.Value,Unit>>:
+def keepAssistant(assistant: Ai.AssistantMessage<V.Value,V.Value>,found: Maybe<&2,Ai.AssistantMessage<V.Value,V.Value>>) -> Maybe<&2,Ai.AssistantMessage<V.Value,V.Value>>:
   match assistant:
     case Ai.AssistantMessage{Nil{},_,_,_,_,_,_,_,_,Ai.Aborted{},_,_,_,_,_}: found
     case other: Some{other}
-def lastAssistantIn(messages: List<&2, Message()>, +found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>) -> Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>:
+def lastAssistantIn(messages: List<&2, Message()>, +found: Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>) -> Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>:
   match messages:
     case Nil{}: found
     case T.LlmMessage{Ai.Assistant{assistant}} <> rest: lastAssistantIn(rest, keepAssistant(assistant,found))
@@ -221,7 +218,7 @@ type CompactionState is Data:
 # The last assistant message of a run with the session entries that persisted
 # it and its turn's tool results; recovery omits them from the projection.
 type LastTurn is Data:
-  LastTurn{message: Ai.AssistantMessage<V.Value, Unit>, entryId: Maybe<&2, String>, toolResultIds: List<&2, String>}
+  LastTurn{message: Ai.AssistantMessage<V.Value, V.Value>, entryId: Maybe<&2, String>, toolResultIds: List<&2, String>}
 
 # The mutable session state shared with the agent's event handler.
 # User bash commands: the abort controllers of those running, keyed by the
@@ -251,8 +248,8 @@ type PendingMessages is Data:
 type Shared is Data:
   Shared{session: Session(), steering: List<&2, String>, followUp: List<&2, String>, listeners: List<&2, Listener()>, runActive: RunState, lastAssistant: Maybe<&2, LastTurn>, retry: RetryState, compaction: CompactionState, bash: BashState, pendingMessages: PendingMessages, extensionsRef: R.Ref<Runtime.Loadout>}
 
-def Turn() -> Data: Agent.Turn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())
-def TurnUpdate() -> Data: Agent.Update(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())
+def Turn() -> Data: Agent.Turn(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error())
+def TurnUpdate() -> Data: Agent.Update(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error())
 def TurnResult() -> Data: Agent.PrepareResult(TurnUpdate(), Runtime.Error())
 def NextTurnHook() -> Data: Agent.ContextHook(Turn(), TurnUpdate(), Runtime.Error())
 def LegacyTurnHook() -> Data: Agent.LegacyHook(TurnUpdate(), Runtime.Error())
@@ -261,7 +258,7 @@ def LegacyTurnHook() -> Data: Agent.LegacyHook(TurnUpdate(), Runtime.Error())
 # warmer, the stream function that starts it for session requests (replacing
 # the agent's own, restored on dispose) and the warmer's injected interfaces.
 type Warming is Data:
-  Warming{warmer: Warmer.CacheWarmer, stream: Runtime.Stream(), replaced: Runtime.Stream(), replay: C.Callback<Warmer.CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>>, append: C.Callback<Warmer.UsageRecord, Maybe<&2, Entry()>>, branch: C.Callback<Unit, List<&2, Entry()>>, mode: C.Callback<Unit, Settings.CacheWarmingMode>, context: C.Callback<Unit, Warmer.CacheContext>, decide: C.Callback<Warmer.CacheWarmingDecisionEvent, Warmer.CacheWarmingAction>, warmed: C.Callback<Entry(), Unit>}
+  Warming{warmer: Warmer.CacheWarmer, stream: Runtime.Stream(), replaced: Runtime.Stream(), replay: C.Callback<Warmer.CacheWarmRequest, Ai.AssistantMessage<V.Value, V.Value>>, append: C.Callback<Warmer.UsageRecord, Maybe<&2, Entry()>>, branch: C.Callback<Unit, List<&2, Entry()>>, mode: C.Callback<Unit, Settings.CacheWarmingMode>, context: C.Callback<Unit, Warmer.CacheContext>, decide: C.Callback<Warmer.CacheWarmingDecisionEvent, Warmer.CacheWarmingAction>, warmed: C.Callback<Entry(), Unit>}
 
 # What the session binds its extension runner to (upstream
 # _bindExtensionCore): the context actions, and the refresh of the current
@@ -288,14 +285,14 @@ type ExtensionBinding is Data:
 type StatsKey is Data: StatsKey{count: Nat, leaf: Maybe<&2, String>, file: Maybe<&2, String>, window: F64}
 type StatsMemo is Data: StatsMemo{key: StatsKey, stats: Result<&2, &2, S.Error, Stats.Stats>}
 
-def AfterToolInput() -> Data: T.ToolHookInput<T.AfterToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
+def AfterToolInput() -> Data: T.ToolHookInput<T.AfterToolCallContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
 def AfterToolResult() -> Data: Result<&2, &2, Runtime.Error(), Maybe<&2, T.AfterToolCallResult<Runtime.Details()>>>
-def AfterToolHook() -> Data: C.Callback<T.ToolHookInput<T.AfterToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AfterToolCallResult<Runtime.Details()>>>>
-def BeforeToolInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
-def BeforeToolResult() -> Data: Result<&2, &2, Runtime.Error(), T.BeforeToolCallUpdate<T.AgentContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>
+def AfterToolHook() -> Data: C.Callback<T.ToolHookInput<T.AfterToolCallContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AfterToolCallResult<Runtime.Details()>>>>
+def BeforeToolInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
+def BeforeToolResult() -> Data: Result<&2, &2, Runtime.Error(), T.BeforeToolCallUpdate<T.AgentContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>
 def BeforeToolHook() -> Data: C.Callback<BeforeToolInput(), BeforeToolResult()>
-def FinishTurnHook() -> Data: T.FinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())
-def FinishTurnInput() -> Data: T.ToolHookInput<T.AgentTurnContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
+def FinishTurnHook() -> Data: T.FinishTurn(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error())
+def FinishTurnInput() -> Data: T.ToolHookInput<T.AgentTurnContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
 def FinishTurnResult() -> Data: Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentTurnDecision>>
 # upstream _installAgentToolHooks and _installAgentBoundaryHooks: the hooks
 # the session installed on the agent and those they replaced (restored on
@@ -306,7 +303,7 @@ def ContextHook() -> Data: C.Callback<ContextInput(), ContextResult()>
 type ToolHooks is Data: ToolHooks{hook: AfterToolHook(), replaced: Maybe<&2, AfterToolHook()>, before: BeforeToolHook(), replacedBefore: Maybe<&2, BeforeToolHook()>, finish: FinishTurnHook(), replacedFinish: Maybe<&2, FinishTurnHook()>, context: ContextHook(), replacedContext: Maybe<&2, ContextHook()>}
 
 type SessionHooks is Data:
-  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: ExtensionBinding, warming: Warming, stats: R.Ref<Maybe<&2, StatsMemo>>, toolResults: ToolHooks}
+  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: ExtensionBinding, warming: Warming, stats: R.Ref<Maybe<&2, StatsMemo>>, toolResults: ToolHooks}
 
 type AgentSession is Data:
   AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: R.Ref<Runtime.Loadout>, models: Models.ModelRuntime, scoped: R.Ref<List<&2, Models.ScopedModel>>}
@@ -490,9 +487,9 @@ def persist(shared: R.Ref<Shared>, event: SessionEvent()) -> IO(Unit):
     case T.MessageEnd{message}: persistFinished(shared, message)
     case _: IO.pure(Unit, Unit{})
 
-def Projection() -> Data: S.SessionProjection<Unit, Tools.ToolDetails, V.Value>
+def Projection() -> Data: S.SessionProjection<V.Value, Tools.ToolDetails, V.Value>
 
-def stateOf(session: Session()) -> State(): Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, session)
+def stateOf(session: Session()) -> State(): Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, session)
 
 # The canonical projection of the session's current branch.
 def projectionFrom(result: Result<&2, &2, S.Error, Projection()>) -> Maybe<&2, Projection()>:
@@ -501,7 +498,7 @@ def projectionFrom(result: Result<&2, &2, S.Error, Projection()>) -> Maybe<&2, P
     case Fail{_}: None{}
 
 def projectionOf(session: Session()) -> Maybe<&2, Projection()>:
-  projectionFrom(S.sessionProjection(Unit, Tools.ToolDetails, V.Value, stateOf(session)))
+  projectionFrom(S.sessionProjection(V.Value, Tools.ToolDetails, V.Value, stateOf(session)))
 
 def projectedMessages(projection: Maybe<&2, Projection()>) -> List<&2, Message()>:
   match projection:
@@ -512,8 +509,8 @@ def sessionMessages(session: Session()) -> List<&2, Message()>: projectedMessage
 
 def replaceContext(agent: Runtime.Owner(), +messages: List<&2, Message()>) -> IO(F64):
   do IO<F64>:
-    Agent.replaceMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, messages)
-    return Compaction.estimateMessagesTokens(Unit, Tools.ToolDetails, V.Value, messages, F.fromU32(0))
+    Agent.replaceMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, messages)
+    return Compaction.estimateMessagesTokens(V.Value, Tools.ToolDetails, V.Value, messages, F.fromU32(0))
 
 # upstream _refreshFinalizedContext: the agent's transcript is the session's
 # canonical projection.
@@ -534,14 +531,14 @@ def announce(+shared: R.Ref<Shared>, appended: Maybe<&2, String>) -> IO(Unit):
     case Some{id}:
       do IO<Unit>:
         state : Shared <- R.read(Shared, shared)
-        announceEntry(shared, S.getEntry(Unit, Tools.ToolDetails, V.Value, stateOf(sharedSession(state)), id))
+        announceEntry(shared, S.getEntry(V.Value, Tools.ToolDetails, V.Value, stateOf(sharedSession(state)), id))
 
 def omitEntries(+shared: R.Ref<Shared>, ids: List<&2, String>) -> IO(Unit):
   match ids:
     case Nil{}: IO.pure(Unit, Unit{})
     case id <> rest:
       do IO<Unit>:
-        appended : Maybe<&2, String> <- storedId(shared, target => Sessions.appendContextEdit(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, target, id, None{}))
+        appended : Maybe<&2, String> <- storedId(shared, target => Sessions.appendContextEdit(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, target, id, None{}))
         announce(shared, appended)
         omitEntries(shared, rest)
 
@@ -552,7 +549,7 @@ def omitRecoveryAttempt(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, ids: Li
     omitEntries(shared, ids)
     refreshContext(agent, shared)
 
-def turnMessage(turn: LastTurn) -> Ai.AssistantMessage<V.Value, Unit>:
+def turnMessage(turn: LastTurn) -> Ai.AssistantMessage<V.Value, V.Value>:
   match turn:
     case LastTurn{message, _, _}: message
 
@@ -610,10 +607,10 @@ def withRetryPolicy(state: Shared,policy: Retry.RetryPolicy) -> Shared:
       Shared{session,steering,followUp,listeners,runActive,lastAssistant,RetryState{policy,attempt,contextWindow,sleeping},compaction,bash,pendingMessages,extensionsRef}
 
 # Context overflow is handled by compaction, not retry.
-def isRetryableError(+assistant: Ai.AssistantMessage<V.Value, Unit>, contextWindow: F64) -> Bool:
-  Bool.and(Bool.not(Overflow.isContextOverflow(V.Value, Unit, assistant, contextWindow)), Retry.isRetryableAssistantError(V.Value, Unit, assistant))
+def isRetryableError(+assistant: Ai.AssistantMessage<V.Value, V.Value>, contextWindow: F64) -> Bool:
+  Bool.and(Bool.not(Overflow.isContextOverflow(V.Value, V.Value, assistant, contextWindow)), Retry.isRetryableAssistantError(V.Value, V.Value, assistant))
 
-def retryableLast(found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, contextWindow: F64) -> Bool:
+def retryableLast(found: Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>, contextWindow: F64) -> Bool:
   match found:
     case None{}: False{}
     case Some{assistant}: isRetryableError(assistant, contextWindow)
@@ -663,8 +660,8 @@ def settleRetry(+shared: R.Ref<Shared>, event: SessionEvent()) -> IO(Unit):
   match event:
     case T.MessageEnd{T.LlmMessage{Ai.Assistant{+assistant}}}:
       do IO<Unit>:
-        settleOverflow(shared, Ai.assistantStopReason(V.Value, Unit, assistant))
-        succeededRetry(shared, Ai.assistantStopReason(V.Value, Unit, assistant))
+        settleOverflow(shared, Ai.assistantStopReason(V.Value, V.Value, assistant))
+        succeededRetry(shared, Ai.assistantStopReason(V.Value, V.Value, assistant))
     case _: IO.pure(Unit, Unit{})
 
 def ready() -> Loop.Emission<Runtime.Error()>: Loop.EmissionReady{Done{Unit{}}}
@@ -1193,13 +1190,13 @@ def sessionState(env: ContextEnv, unit: Unit) -> IO(Ctx.SessionState):
   match env:
     case ContextEnv{+agent, shared, scoped, settings, _}:
       do IO<Ctx.SessionState>:
-        +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        +current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +stored : Shared <- R.read(Shared, shared)
         +live : Session() = sharedSession(stored)
         models : List<&2, Models.ScopedModel> <- R.read(List<&2, Models.ScopedModel>, scoped)
         manager : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
-        signal : Maybe<&2, A.AbortSignal<Unit>> <- Agent.signal(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        return Ctx.SessionState{stateModel(current), models, stateThinking(current), S.getSessionId(Unit, Tools.ToolDetails, V.Value, stateOf(live)), Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, live), Bool.not(runActiveOf(stored)), Settings.isProjectTrusted(manager), queuedIn(stored), signal}
+        signal : Maybe<&2, A.AbortSignal<Unit>> <- Agent.signal(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        return Ctx.SessionState{stateModel(current), models, stateThinking(current), S.getSessionId(V.Value, Tools.ToolDetails, V.Value, stateOf(live)), Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, live), Bool.not(runActiveOf(stored)), Settings.isProjectTrusted(manager), queuedIn(stored), signal}
 
 # upstream ctx.abort(): the session aborts without waiting for idle, since
 # extension code (a tool, say) may call it from within the run.
@@ -1211,7 +1208,7 @@ def contextAbort(env: ContextEnv, unit: Unit) -> IO(Unit):
         abortSleeping(shared)
         abortCompactions(shared)
         abortBranchSummaryOf(shared)
-        Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.abort(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
 
 # upstream ctx.shutdown(): the handler the mode bound (setShutdownHandler,
 # upstream bindExtensions' shutdownHandler); none does nothing.
@@ -1233,7 +1230,7 @@ type ModelEnv is Data:
 def refreshedModel(+agent: Runtime.Owner(), found: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Unit):
   match found:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{model}: Agent.setModel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, model)
+    case Some{model}: Agent.setModel(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, model)
 
 def currentFrom(+agent: Runtime.Owner(), +models: Models.ModelRuntime, current: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Unit):
   match current:
@@ -1249,7 +1246,7 @@ def refreshCurrentModel(env: ModelEnv, unit: Unit) -> IO(Unit):
   match env:
     case ModelEnv{+agent, models}:
       do IO<Unit>:
-        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         currentFrom(agent, models, stateModel(current))
 
 def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -> IO(Unit):
@@ -1309,8 +1306,8 @@ def bindContext(loadout: Runtime.Loadout, binding: Maybe<&2, ExtensionBinding>) 
     case Runtime.Loadout{_, _, _, _, None{}, _, _, _}: IO.pure(Unit, Unit{})
     case Runtime.Loadout{_, _, _, _, Some{runner}, _, _, _}: boundWith(runner, binding)
 
-def StreamInput() -> Data: T.StreamInput<Unit, Runtime.Details(), Runtime.LoopConfig()>
-def StreamOutput() -> Type: Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>>
+def StreamInput() -> Data: T.StreamInput<V.Value, Runtime.Details(), Runtime.LoopConfig()>
+def StreamOutput() -> Type: Result<&2, &1, Runtime.Error(), T.StreamLease<V.Value, Runtime.Error()>>
 
 # Restore the agent's stream function, stop warming (waiting for refreshes in
 # flight) and release the warmer's interfaces.
@@ -1318,10 +1315,10 @@ def disposeWarming(agent: Runtime.Owner(), warming: Warming) -> IO(Unit):
   match warming:
     case Warming{warmer, stream, replaced, replay, append, branch, mode, context, decide, warmed}:
       do IO<Unit>:
-        Agent.setStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
+        Agent.setStreamFunction(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
         Warmer.dispose(warmer)
         C.dispose(StreamInput(), StreamOutput(), stream)
-        C.dispose(Warmer.CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>, replay)
+        C.dispose(Warmer.CacheWarmRequest, Ai.AssistantMessage<V.Value, V.Value>, replay)
         C.dispose(Warmer.UsageRecord, Maybe<&2, Entry()>, append)
         C.dispose(Unit, List<&2, Entry()>, branch)
         C.dispose(Unit, Settings.CacheWarmingMode, mode)
@@ -1346,7 +1343,7 @@ def shutdown(session: AgentSession) -> IO(Unit):
         abortCompactions(shared)
         abortBranchSummaryOf(shared)
         abortBashIn(shared)
-        Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.abort(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         disposeWarming(agent, warming)
         Agent.unsubscribe(SessionEvent(), Runtime.Error(), subscription)
 
@@ -1355,18 +1352,18 @@ def retire(session: AgentSession) -> IO(Unit):
     case AgentSession{+agent, shared, SessionHooks{_, handler, nextTurn, replaced, request, replacedRequest, context, _, stats, ToolHooks{afterTool, replacedAfterTool, beforeTool, replacedBeforeTool, finish, replacedFinish, contextHook, replacedContext}}, settings, _, loadout, _, _}:
       do IO<Unit>:
         C.dispose(Agent.Input<SessionEvent()>, Loop.Emission<Runtime.Error()>, handler)
-        Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
+        Agent.setPrepareNextTurnWithContext(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
         C.dispose(T.ToolHookInput<Turn()>, TurnResult(), nextTurn)
-        Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedRequest)
-        Agent.setAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedAfterTool)
+        Agent.setPrepareRequest(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedRequest)
+        Agent.setAfterToolCall(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedAfterTool)
         C.dispose(AfterToolInput(), AfterToolResult(), afterTool)
-        Agent.setBeforeToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedBeforeTool)
+        Agent.setBeforeToolCall(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedBeforeTool)
         C.dispose(BeforeToolInput(), BeforeToolResult(), beforeTool)
-        Agent.setFinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedFinish)
+        Agent.setFinishTurn(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedFinish)
         C.dispose(FinishTurnInput(), FinishTurnResult(), finish)
-        Agent.setTransformContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedContext)
+        Agent.setTransformContext(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedContext)
         C.dispose(ContextInput(), ContextResult(), contextHook)
-        C.dispose(T.ToolHookInput<T.PrepareRequestContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentRequestUpdate<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>, request)
+        C.dispose(T.ToolHookInput<T.PrepareRequestContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentRequestUpdate<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>, request)
         current : Runtime.Loadout <- R.dispose(Runtime.Loadout, loadout)
         bindContext(current, None{})
         disposeExtensionBinding(context)
@@ -1392,7 +1389,7 @@ def agentOf(session: AgentSession) -> Runtime.Owner():
     case AgentSession{agent, _, _, _, _, _, _, _}: agent
 
 def state(session: AgentSession) -> IO(AgentState()):
-  Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
+  Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
 
 def sessionOf(session: AgentSession) -> IO(Session()):
   match session:
@@ -1405,7 +1402,7 @@ def sessionOf(session: AgentSession) -> IO(Session()):
 def idGenerator(session: AgentSession) -> IO(Uuid.Generator):
   do IO<Uuid.Generator>:
     current : Session() <- sessionOf(session)
-    return Sessions.getIdGenerator(Unit, Tools.ToolDetails, V.Value, current)
+    return Sessions.getIdGenerator(V.Value, Tools.ToolDetails, V.Value, current)
 
 def messages(session: AgentSession) -> IO(List<&2, Message()>):
   do IO<List<&2, Message()>>:
@@ -1426,11 +1423,11 @@ def assistantText(content: List<&2, Ai.AssistantContent<V.Value>>) -> String:
     case _ <> rest: assistantText(rest)
 
 # upstream getLastAssistantText: the text of the last assistant message.
-def assistantTextOf(assistant: Ai.AssistantMessage<V.Value, Unit>) -> String:
+def assistantTextOf(assistant: Ai.AssistantMessage<V.Value, V.Value>) -> String:
   match assistant:
     case Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: assistantText(content)
 
-def usefulAssistantText(value: Maybe<&2,Ai.AssistantMessage<V.Value,Unit>>) -> Maybe<&2,String>:
+def usefulAssistantText(value: Maybe<&2,Ai.AssistantMessage<V.Value,V.Value>>) -> Maybe<&2,String>:
   match value:
     case None{}: None{}
     case Some{assistant}:
@@ -1481,7 +1478,7 @@ def errorText(errorMessage: Maybe<&2, String>) -> String:
     case Some{text}: text
     case None{}: "Unknown error"
 
-def errorMessageOf(assistant: Ai.AssistantMessage<V.Value, Unit>) -> String: errorText(Ai.assistantErrorMessage(V.Value, Unit, assistant))
+def errorMessageOf(assistant: Ai.AssistantMessage<V.Value, V.Value>) -> String: errorText(Ai.assistantErrorMessage(V.Value, V.Value, assistant))
 
 # Node clamps timer delays beyond its range to one millisecond.
 def sleepMilliseconds(delay: F64) -> U32:
@@ -1552,7 +1549,7 @@ def compactionSettingsFor(settings: Settings.SettingsManager, model: Ai.Model<Ai
   compactionSettingsOf(Settings.getCompactionSettings(settings, Some{modelIdentity(model)}))
 
 def branchOf(session: Session()) -> List<&2, Entry()>:
-  Result.default(&2, &2, S.Error, List<&2, Entry()>, S.getBranch(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, session), S.Latest{}), Nil{})
+  Result.default(&2, &2, S.Error, List<&2, Entry()>, S.getBranch(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, session), S.Latest{}), Nil{})
 
 def branchEntries(shared: R.Ref<Shared>) -> IO(List<&2, Entry()>):
   do IO<List<&2, Entry()>>:
@@ -1572,7 +1569,7 @@ def compactionTime(entry: Maybe<&2, S.CompactionEntry<V.Value>>) -> Maybe<&2, F6
 # The latest compaction boundary as a millisecond time; messages from before
 # it must not retrigger compaction.
 def compactionTimestamp(entries: List<&2, Entry()>) -> Maybe<&2, F64>:
-  compactionTime(S.getLatestCompactionEntry(Unit, Tools.ToolDetails, V.Value, entries))
+  compactionTime(S.getLatestCompactionEntry(V.Value, Tools.ToolDetails, V.Value, entries))
 
 def isAborted(stopReason: Ai.StopReason) -> Bool:
   match stopReason:
@@ -1601,7 +1598,7 @@ def notAfter(time: F64, boundary: Maybe<&2, F64>) -> Bool:
 
 def staleAnchor(message: Maybe<&2, Message()>, boundary: Maybe<&2, F64>) -> Bool:
   match message:
-    case Some{T.LlmMessage{Ai.Assistant{assistant}}}: notAfter(Ai.assistantTimestamp(V.Value, Unit, assistant), boundary)
+    case Some{T.LlmMessage{Ai.Assistant{assistant}}}: notAfter(Ai.assistantTimestamp(V.Value, V.Value, assistant), boundary)
     case _: False{}
 
 # A usage-backed estimate whose anchor predates the compaction is stale.
@@ -1612,13 +1609,13 @@ def estimateChecked(messages: List<&2, Message()>, boundary: Maybe<&2, F64>, est
 
 def usageOrEstimate(estimated: Bool, direct: F64, +messages: List<&2, Message()>, boundary: Maybe<&2, F64>) -> Maybe<&2, F64>:
   match estimated:
-    case True{}: estimateChecked(messages, boundary, Compaction.estimateContextTokens(Unit, Tools.ToolDetails, V.Value, messages))
+    case True{}: estimateChecked(messages, boundary, Compaction.estimateContextTokens(V.Value, Tools.ToolDetails, V.Value, messages))
     case False{}: Some{direct}
 
 # Error or zero-usage messages fall back to the estimate from the context.
-def thresholdTokens(+assistant: Ai.AssistantMessage<V.Value, Unit>, messages: List<&2, Message()>, boundary: Maybe<&2, F64>) -> Maybe<&2, F64>:
-  +direct = Compaction.calculateContextTokens(Ai.assistantUsage(V.Value, Unit, assistant))
-  usageOrEstimate(Bool.or(isErrorStop(Ai.assistantStopReason(V.Value, Unit, assistant)), F.isEqual(F.compare(direct, F.fromU32(0)))), direct, messages, boundary)
+def thresholdTokens(+assistant: Ai.AssistantMessage<V.Value, V.Value>, messages: List<&2, Message()>, boundary: Maybe<&2, F64>) -> Maybe<&2, F64>:
+  +direct = Compaction.calculateContextTokens(Ai.assistantUsage(V.Value, V.Value, assistant))
+  usageOrEstimate(Bool.or(isErrorStop(Ai.assistantStopReason(V.Value, V.Value, assistant)), F.isEqual(F.compare(direct, F.fromU32(0)))), direct, messages, boundary)
 
 def enabledOf(settings: Compaction.CompactionSettings) -> Bool:
   match settings:
@@ -1631,8 +1628,8 @@ def thresholdReached(settings: Compaction.CompactionSettings, contextWindow: F64
 
 # Disabled compaction, a skipped aborted message and a message from before
 # the latest compaction never compact.
-def skipsCheck(settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, Unit>, boundary: Maybe<&2, F64>) -> Bool:
-  Bool.or(Bool.not(enabledOf(settings)), Bool.or(Bool.and(skipAborted, isAborted(Ai.assistantStopReason(V.Value, Unit, assistant))), notAfter(Ai.assistantTimestamp(V.Value, Unit, assistant), boundary)))
+def skipsCheck(settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, V.Value>, boundary: Maybe<&2, F64>) -> Bool:
+  Bool.or(Bool.not(enabledOf(settings)), Bool.or(Bool.and(skipAborted, isAborted(Ai.assistantStopReason(V.Value, V.Value, assistant))), notAfter(Ai.assistantTimestamp(V.Value, V.Value, assistant), boundary)))
 
 # What the canonical projection says about the checked assistant message:
 # whether it still contributes an assistant message, whether its usage still
@@ -1648,15 +1645,15 @@ def hasAssistant(messages: List<&2, Message()>) -> Bool:
     case T.LlmMessage{Ai.Assistant{_}} <> _: True{}
     case _ <> rest: hasAssistant(rest)
 
-def projectsAssistant(entries: List<&2, S.ProjectedSessionEntry<Unit, Tools.ToolDetails, V.Value>>, +id: String) -> Bool:
+def projectsAssistant(entries: List<&2, S.ProjectedSessionEntry<V.Value, Tools.ToolDetails, V.Value>>, +id: String) -> Bool:
   match entries:
     case Nil{}: False{}
-    case S.ProjectedSessionEntry{source, contextMessages} <> rest: Bool.or(Bool.and(String.eq(S.entryId(Unit, Tools.ToolDetails, V.Value, source), id), hasAssistant(contextMessages)), projectsAssistant(rest, id))
+    case S.ProjectedSessionEntry{source, contextMessages} <> rest: Bool.or(Bool.and(String.eq(S.entryId(V.Value, Tools.ToolDetails, V.Value, source), id), hasAssistant(contextMessages)), projectsAssistant(rest, id))
 
 def entriesAfter(entries: List<&2, Entry()>, +id: String) -> List<&2, Entry()>:
   match entries:
     case Nil{}: Nil{}
-    case entry <> +rest: Bool.pick(Unit -> List<&2, Entry()>, String.eq(S.entryId(Unit, Tools.ToolDetails, V.Value, entry), id), _ => rest, _ => entriesAfter(rest, id))(Unit{})
+    case entry <> +rest: Bool.pick(Unit -> List<&2, Entry()>, String.eq(S.entryId(V.Value, Tools.ToolDetails, V.Value, entry), id), _ => rest, _ => entriesAfter(rest, id))(Unit{})
 
 def hasContextEdit(entries: List<&2, Entry()>) -> Bool:
   match entries:
@@ -1677,14 +1674,14 @@ def omittedBy(entries: List<&2, Entry()>, +id: String, found: Bool) -> Bool:
     case S.ContextEditEntry{_, target, replacement} <> rest: omittedBy(rest, id, Bool.pick(Bool, String.eq(target, id), Maybe.is_none(&2, S.ContextEditableContent, replacement), found))
     case _ <> rest: omittedBy(rest, id, found)
 
-def projectedSources(entries: List<&2, S.ProjectedSessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, Entry()>:
+def projectedSources(entries: List<&2, S.ProjectedSessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, Entry()>:
   match entries:
     case Nil{}: Nil{}
     case S.ProjectedSessionEntry{source, _} <> rest: source <> projectedSources(rest)
 
 def editedTokens(+projection: Projection(), +branch: List<&2, Entry()>) -> Maybe<&2, F64>:
   match projection:
-    case S.SessionProjection{entries, _, _, _}: Bool.pick(Maybe<&2, F64>, hasContextEdit(projectedSources(entries)), Some{Compaction.estimateTokensOf(Compaction.estimateProjectedContextTokens(Unit, Tools.ToolDetails, V.Value, projection, branch))}, None{})
+    case S.SessionProjection{entries, _, _, _}: Bool.pick(Maybe<&2, F64>, hasContextEdit(projectedSources(entries)), Some{Compaction.estimateTokensOf(Compaction.estimateProjectedContextTokens(V.Value, Tools.ToolDetails, V.Value, projection, branch))}, None{})
 
 def factsFor(+projection: Projection(), +branch: List<&2, Entry()>, entryId: Maybe<&2, String>) -> Facts:
   match projection entryId:
@@ -1708,12 +1705,12 @@ def orEdited(edited: Maybe<&2, F64>, measured: Maybe<&2, F64>) -> Maybe<&2, F64>
 # upstream _checkCompaction's decision (Plan.decideCompaction) from the
 # assistant message, the model, the session's compaction boundary and the
 # projection facts.
-def planCompaction(+settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, Unit>, +model: Ai.Model<Ai.JsonValue>, +boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool, facts: Facts) -> Plan.CompactionPlan:
+def planCompaction(+settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, V.Value>, +model: Ai.Model<Ai.JsonValue>, +boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool, facts: Facts) -> Plan.CompactionPlan:
   match facts:
     case Facts{+projected, usageMatches, retained, edited}:
-      +sameModel = Bool.and(String.eq(Ai.assistantProvider(V.Value, Unit, assistant), Ai.modelProvider(model)), String.eq(Ai.assistantModel(V.Value, Unit, assistant), Ai.modelId(model)))
-      +explicit = Bool.and(isErrorStop(Ai.assistantStopReason(V.Value, Unit, assistant)), Overflow.isContextOverflow(V.Value, Unit, assistant, F.fromU32(0)))
-      Plan.decideCompaction(skipsCheck(settings, skipAborted, assistant, boundary), Bool.and(sameModel, Bool.or(Bool.and(explicit, retained), Bool.and(usageMatches, Overflow.isContextOverflow(V.Value, Unit, assistant, Ai.modelContextWindow(model))))), Bool.and(sameModel, Bool.and(projected, Overflow.isRecoverableLength(V.Value, Unit, assistant, Ai.modelMaxTokens(model)))), isStop(Ai.assistantStopReason(V.Value, Unit, assistant)), attempted, thresholdReached(settings, Ai.modelContextWindow(model), orEdited(edited, thresholdTokens(assistant, messages, boundary))))
+      +sameModel = Bool.and(String.eq(Ai.assistantProvider(V.Value, V.Value, assistant), Ai.modelProvider(model)), String.eq(Ai.assistantModel(V.Value, V.Value, assistant), Ai.modelId(model)))
+      +explicit = Bool.and(isErrorStop(Ai.assistantStopReason(V.Value, V.Value, assistant)), Overflow.isContextOverflow(V.Value, V.Value, assistant, F.fromU32(0)))
+      Plan.decideCompaction(skipsCheck(settings, skipAborted, assistant, boundary), Bool.and(sameModel, Bool.or(Bool.and(explicit, retained), Bool.and(usageMatches, Overflow.isContextOverflow(V.Value, V.Value, assistant, Ai.modelContextWindow(model))))), Bool.and(sameModel, Bool.and(projected, Overflow.isRecoverableLength(V.Value, V.Value, assistant, Ai.modelMaxTokens(model)))), isStop(Ai.assistantStopReason(V.Value, V.Value, assistant)), attempted, thresholdReached(settings, Ai.modelContextWindow(model), orEdited(edited, thresholdTokens(assistant, messages, boundary))))
 
 # The summarizer: the agent's stream function with fresh options.
 type SummarizerEnv is Data:
@@ -1732,27 +1729,27 @@ def summaryConfig(config: Runtime.LoopConfig(), model: Ai.Model<Ai.JsonValue>, o
     case T.AgentLoopConfig{_, _, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}:
       T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 
-def errorReply(model: Ai.Model<Ai.JsonValue>, message: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+def errorReply(model: Ai.Model<Ai.JsonValue>, message: String, now: F64) -> Ai.AssistantMessage<V.Value, V.Value>:
   match model:
     case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _, _, _}: Ai.AssistantMessage{Nil{}, ModelApi.name(api), provider, id, None{}, None{}, None{}, None{}, Agent.emptyUsage(), Ai.Error{}, None{}, Some{message}, None{}, None{}, now}
 
-def leaseMessage(model: Ai.Model<Ai.JsonValue>, response: Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>>) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+def leaseMessage(model: Ai.Model<Ai.JsonValue>, response: Result<&2, &1, Runtime.Error(), T.StreamLease<V.Value, Runtime.Error()>>) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
   match response:
     case Fail{error}:
-      do IO<Ai.AssistantMessage<V.Value, Unit>>:
+      do IO<Ai.AssistantMessage<V.Value, V.Value>>:
         now : F64 <- Date.now()
         return errorReply(model, Runtime.render(error), now)
     case Done{T.StreamLease{events, release}}:
-      do IO<Ai.AssistantMessage<V.Value, Unit>>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- Stream.resultValue(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, events)
+      do IO<Ai.AssistantMessage<V.Value, V.Value>>:
+        message : Ai.AssistantMessage<V.Value, V.Value> <- Stream.resultValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events)
         released : Result<&2, &2, Runtime.Error(), Unit> <- release
         return message
 
-def summarizeWith(env: SummarizerEnv, request: Compaction.SummaryRequest<Unit, Tools.ToolDetails>) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+def summarizeWith(env: SummarizerEnv, request: Compaction.SummaryRequest<V.Value, Tools.ToolDetails>) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
   match env request:
     case SummarizerEnv{stream, config, +model, thinking, signal, requestId} Compaction.SummaryRequest{context, maxTokens}:
-      do IO<Ai.AssistantMessage<V.Value, Unit>>:
-        response : Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>> <- C.call(T.StreamInput<Unit, Tools.ToolDetails, Runtime.LoopConfig()>, Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>>, stream, T.StreamInput{model, context, Some{summaryConfig(config, model, summaryOptions(model, thinking, signal, requestId, maxTokens))}})
+      do IO<Ai.AssistantMessage<V.Value, V.Value>>:
+        response : Result<&2, &1, Runtime.Error(), T.StreamLease<V.Value, Runtime.Error()>> <- C.call(T.StreamInput<V.Value, Tools.ToolDetails, Runtime.LoopConfig()>, Result<&2, &1, Runtime.Error(), T.StreamLease<V.Value, Runtime.Error()>>, stream, T.StreamInput{model, context, Some{summaryConfig(config, model, summaryOptions(model, thinking, signal, requestId, maxTokens))}})
         leaseMessage(model, response)
 
 type RetryNotifier is Data:
@@ -1770,21 +1767,21 @@ def requestIdOf(generated: Result<&2, &2, Uuid.Error, String>) -> String:
 # Summaries get a fresh routing id from the process generator (upstream
 # completeSummarization's uuidv7()).
 def sessionIds(state: Shared) -> Uuid.Generator:
-  Sessions.getIdGenerator(Unit, Tools.ToolDetails, V.Value, sharedSession(state))
+  Sessions.getIdGenerator(V.Value, Tools.ToolDetails, V.Value, sharedSession(state))
 
 # upstream _runDefaultCompaction: summarize with the agent's stream function,
 # the session's thinking level, the retry policy and retry notices.
-def runDefaultCompaction(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, customInstructions: Maybe<&2, String>, +signal: A.AbortSignal<Unit>, reason: CompactionReason) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
+def runDefaultCompaction(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>, customInstructions: Maybe<&2, String>, +signal: A.AbortSignal<Unit>, reason: CompactionReason) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
   do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
-    stream : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    config : Runtime.LoopConfig() <- Agent.getConfig(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    stream : Runtime.Stream() <- Agent.getStreamFunction(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    config : Runtime.LoopConfig() <- Agent.getConfig(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +state : Shared <- R.read(Shared, shared)
     generated : Result<&2, &2, Uuid.Error, String> <- Uuid.uuidv7(sessionIds(state), None{})
-    +summarizer : Compaction.Summarizer(Unit, Tools.ToolDetails) <- C.create(~SummarizerEnv, ~Compaction.SummaryRequest<Unit, Tools.ToolDetails>, ~Ai.AssistantMessage<V.Value, Unit>, ~summarizeWith, SummarizerEnv{stream, config, model, stateThinking(current), signal, requestIdOf(generated)})
+    +summarizer : Compaction.Summarizer(V.Value, Tools.ToolDetails) <- C.create(~SummarizerEnv, ~Compaction.SummaryRequest<V.Value, Tools.ToolDetails>, ~Ai.AssistantMessage<V.Value, V.Value>, ~summarizeWith, SummarizerEnv{stream, config, model, stateThinking(current), signal, requestIdOf(generated)})
     +callbacks : Retry.RetryCallbacks() <- C.create(~RetryNotifier, ~Retry.RetryNotice, ~Unit, ~notifyRetry, RetryNotifier{shared, CompactionSource{reason}})
-    result : Result<&2, &2, String, Compaction.CompactionResult> <- Compaction.compact(~Unit, ~Tools.ToolDetails, ~V.Value, summarizer, preparation, model, customInstructions, Some{signal}, Some{policyOf(state)}, Some{callbacks})
-    C.dispose(Compaction.SummaryRequest<Unit, Tools.ToolDetails>, Ai.AssistantMessage<V.Value, Unit>, summarizer)
+    result : Result<&2, &2, String, Compaction.CompactionResult> <- Compaction.compact(~V.Value, ~Tools.ToolDetails, ~V.Value, summarizer, preparation, model, customInstructions, Some{signal}, Some{policyOf(state)}, Some{callbacks})
+    C.dispose(Compaction.SummaryRequest<V.Value, Tools.ToolDetails>, Ai.AssistantMessage<V.Value, V.Value>, summarizer)
     C.dispose(Retry.RetryNotice, Unit, callbacks)
     return result
 
@@ -1810,7 +1807,7 @@ def beforeCompact(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, event: Ext
     case None{}: IO.pure(Maybe<&2, ExtensionTypes.SessionBeforeCompactResult>, None{})
     case Some{found}: ExtensionRunner.emitSessionBeforeCompact(found, event)
 
-def compactionRun(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, customInstructions: Maybe<&2, String>, +signal: A.AbortSignal<Unit>, reason: CompactionReason, hooked: Maybe<&2, ExtensionTypes.SessionBeforeCompactResult>) -> IO(CompactionRun):
+def compactionRun(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>, customInstructions: Maybe<&2, String>, +signal: A.AbortSignal<Unit>, reason: CompactionReason, hooked: Maybe<&2, ExtensionTypes.SessionBeforeCompactResult>) -> IO(CompactionRun):
   match hooked:
     case Some{ExtensionTypes.SessionBeforeCompactResult{Some{True{}}, _}}: IO.pure(CompactionRun, CompactionRun{Fail{"Compaction cancelled"}, False{}, True{}})
     case Some{ExtensionTypes.SessionBeforeCompactResult{_, Some{compaction}}}: IO.pure(CompactionRun, CompactionRun{Done{compaction}, True{}, False{}})
@@ -1819,7 +1816,7 @@ def compactionRun(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Mo
         result : Result<&2, &2, String, Compaction.CompactionResult> <- runDefaultCompaction(agent, shared, model, preparation, customInstructions, signal, reason)
         return CompactionRun{result, False{}, False{}}
 
-def compactWithExtensions(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, +preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, entries: List<&2, Entry()>, +customInstructions: Maybe<&2, String>, +signal: A.AbortSignal<Unit>, +reason: CompactionReason, willRetry: Bool) -> IO(CompactionRun):
+def compactWithExtensions(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, +preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>, entries: List<&2, Entry()>, +customInstructions: Maybe<&2, String>, +signal: A.AbortSignal<Unit>, +reason: CompactionReason, willRetry: Bool) -> IO(CompactionRun):
   do IO<CompactionRun>:
     runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- sharedRunner(shared)
     hooked : Maybe<&2, ExtensionTypes.SessionBeforeCompactResult> <- beforeCompact(runner, ExtensionTypes.SessionBeforeCompactEvent{preparation, entries, customInstructions, extensionReason(reason), willRetry, signal})
@@ -1836,7 +1833,7 @@ def compactedEntry(+shared: R.Ref<Shared>, id: Maybe<&2, String>) -> IO(Maybe<&2
     case Some{value}:
       do IO<Maybe<&2, Entry()>>:
         state : Shared <- R.read(Shared, shared)
-        return S.getEntry(Unit, Tools.ToolDetails, V.Value, stateOf(sharedSession(state)), value)
+        return S.getEntry(V.Value, Tools.ToolDetails, V.Value, stateOf(sharedSession(state)), value)
 
 # upstream _emitSessionCompactFailed.
 def emitCompactFailed(shared: R.Ref<Shared>, reason: CompactionReason, errorMessage: Maybe<&2, String>, aborted: Bool, fromExtension: Bool) -> IO(Unit):
@@ -1861,7 +1858,7 @@ def applyCompaction(agent: Runtime.Owner(), +shared: R.Ref<Shared>, result: Comp
 def continueAfterAuto(+agent: Runtime.Owner(), willRetry: Bool) -> IO(Bool):
   match willRetry:
     case True{}: IO.pure(Bool, True{})
-    case False{}: Agent.hasQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    case False{}: Agent.hasQueuedMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
 
 def autoFailure(reason: CompactionReason, message: String) -> String:
   match reason:
@@ -1892,7 +1889,7 @@ def finishAuto(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +reason: Compact
     case CompactionRun{result, +fromExtension, cancelled}:
       finishAutoWith(agent, shared, reason, willRetry, aborted || cancelled, fromExtension, result)
 
-def autoCompactPrepared(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, +reason: CompactionReason, +willRetry: Bool, entries: List<&2, Entry()>, preparation: Maybe<&2, Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>>) -> IO(Bool):
+def autoCompactPrepared(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, +reason: CompactionReason, +willRetry: Bool, entries: List<&2, Entry()>, preparation: Maybe<&2, Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>>) -> IO(Bool):
   match preparation:
     case None{}: IO.pure(Bool, False{})
     case Some{prepared}:
@@ -1912,7 +1909,7 @@ def autoCompactPrepared(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model:
 def runAutoCompaction(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +model: Ai.Model<Ai.JsonValue>, reason: CompactionReason, willRetry: Bool) -> IO(Bool):
   do IO<Bool>:
     +entries : List<&2, Entry()> <- branchEntries(shared)
-    autoCompactPrepared(agent, shared, model, reason, willRetry, entries, Compaction.prepareCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~detailsOf, entries, compactionSettingsFor(settings, model)))
+    autoCompactPrepared(agent, shared, model, reason, willRetry, entries, Compaction.prepareCompaction(~V.Value, ~Tools.ToolDetails, ~V.Value, ~detailsOf, entries, compactionSettingsFor(settings, model)))
 
 def executePlan(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, model: Ai.Model<Ai.JsonValue>, turn: LastTurn, plan: Plan.CompactionPlan) -> IO(Bool):
   match plan:
@@ -1936,7 +1933,7 @@ def checkCompactionFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +setting
     case Some{+model}: executePlan(agent, shared, settings, model, turn, planCompaction(compactionSettingsFor(settings, model), skipAborted, turnMessage(turn), model, compactionTimestamp(entries), stateMessages(current), overflowAttemptedOf(state), facts))
 def checkCompaction(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +turn: LastTurn, skipAborted: Bool) -> IO(Bool):
   do IO<Bool>:
-    +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +entries : List<&2, Entry()> <- branchEntries(shared)
     +state : Shared <- R.read(Shared, shared)
     +facts : Facts = factsOf(projectionOf(sharedSession(state)), entries, entryIdOf(turn))
@@ -1944,17 +1941,17 @@ def checkCompaction(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: 
 
 # The entry of the last projected assistant message: the agent's transcript
 # is the projection, so this is the entry of its last assistant message.
-def lastAssistantEntry(entries: List<&2, S.ProjectedSessionEntry<Unit, Tools.ToolDetails, V.Value>>, found: Maybe<&2, String>) -> Maybe<&2, String>:
+def lastAssistantEntry(entries: List<&2, S.ProjectedSessionEntry<V.Value, Tools.ToolDetails, V.Value>>, found: Maybe<&2, String>) -> Maybe<&2, String>:
   match entries:
     case Nil{}: found
-    case S.ProjectedSessionEntry{source, contextMessages} <> rest: lastAssistantEntry(rest, Bool.pick(Maybe<&2, String>, hasAssistant(contextMessages), Some{S.entryId(Unit, Tools.ToolDetails, V.Value, source)}, found))
+    case S.ProjectedSessionEntry{source, contextMessages} <> rest: lastAssistantEntry(rest, Bool.pick(Maybe<&2, String>, hasAssistant(contextMessages), Some{S.entryId(V.Value, Tools.ToolDetails, V.Value, source)}, found))
 
 def projectedAssistantEntry(projection: Maybe<&2, Projection()>) -> Maybe<&2, String>:
   match projection:
     case Some{S.SessionProjection{entries, _, _, _}}: lastAssistantEntry(entries, None{})
     case None{}: None{}
 
-def checkLastAssistant(agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>) -> IO(Unit):
+def checkLastAssistant(agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, found: Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>) -> IO(Unit):
   match found:
     case None{}: IO.pure(Unit, Unit{})
     case Some{assistant}:
@@ -1967,7 +1964,7 @@ def checkLastAssistant(agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings:
 # aborted one) may trigger compaction.
 def compactBeforePrompt(+agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: Settings.SettingsManager) -> IO(Unit):
   do IO<Unit>:
-    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     checkLastAssistant(agent, shared, settings, lastAssistantIn(stateMessages(current), None{}))
 
 def firstMessage(messages: List<&2, Message()>, fallback: Message()) -> Message():
@@ -2001,7 +1998,7 @@ def hintedText(+text: String, hints: List<&2, String>) -> String:
     case Nil{}: text
     case _: text ++ "\n\n" ++ String.join(hints, "\n")
 def userMessageAt(+text: String, images: List<&2, Ai.ImageContent>, +now: F64) -> Message():
-  firstMessage(Agent.normalizePromptInputAt(Unit, Runtime.Details(), Runtime.Custom(), Agent.Text{text, images}, now), T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, now}}})
+  firstMessage(Agent.normalizePromptInputAt(V.Value, Runtime.Details(), Runtime.Custom(), Agent.Text{text, images}, now), T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, now}}})
 def normalizedUserMessage(+text: String, normalized: NormalizedImages, +now: F64) -> Message():
   match normalized:
     case NormalizedImages{images, hints}: userMessageAt(hintedText(text, hints), images, now)
@@ -2013,7 +2010,7 @@ def normalizedUserMessage(+text: String, normalized: NormalizedImages, +now: F64
 # the model currently has (replayed from the transcript) when they differ.
 # The agent loop declares tool changes on that message before the request.
 
-def llmOnly(messages: List<&2, Message()>) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Runtime.Details()>>:
+def llmOnly(messages: List<&2, Message()>) -> List<&2, Ai.Message<V.Value, V.Value, V.Value, Runtime.Details()>>:
   match messages:
     case Nil{}: Nil{}
     case T.LlmMessage{value} <> rest: value <> llmOnly(rest)
@@ -2031,8 +2028,8 @@ def prepareLoadout(agent: Runtime.Owner(), loadout: Runtime.Loadout, messages: L
   match loadout:
     case Runtime.Loadout{sections, tools, _, _, _, _, _, _}:
       do IO<Maybe<&2, Message()>>:
-        Agent.setTools(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, tools)
-        return sectionPatch(Prompt.diffSystemPromptSections(sectionsOf(Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Runtime.Details(), llmOnly(messages))), sections), now)
+        Agent.setTools(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, tools)
+        return sectionPatch(Prompt.diffSystemPromptSections(sectionsOf(Transcript.getCurrentSystemMessage(V.Value, V.Value, V.Value, Runtime.Details(), llmOnly(messages))), sections), now)
 
 def toolNamesOf(tools: List<&2, Tools.Tool()>) -> List<&2, String>:
   match tools:
@@ -2076,7 +2073,7 @@ def runSections(runPrompt: RunPrompt) -> Result<&2, &2, String, Prompt.SystemPro
 
 # The patch that brings the transcript's system sections to `sections`.
 def sectionsPatchFor(sections: Prompt.SystemPromptSections(), messages: List<&2, Message()>, now: F64) -> Maybe<&2, Message()>:
-  sectionPatch(Prompt.diffSystemPromptSections(sectionsOf(Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Runtime.Details(), llmOnly(messages))), sections), now)
+  sectionPatch(Prompt.diffSystemPromptSections(sectionsOf(Transcript.getCurrentSystemMessage(V.Value, V.Value, V.Value, Runtime.Details(), llmOnly(messages))), sections), now)
 
 # upstream _baseSystemPromptOptions: the options the loadout's prompt is
 # built from (sessions without a runtime source have none).
@@ -2204,7 +2201,7 @@ def withPatch(patch: Maybe<&2, Message()>, messages: List<&2, Message()>) -> Lis
 # thinking level and tools. The system-prompt and tool-loadout refresh is not
 # ported.
 
-def Context() -> Data: T.AgentContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>
+def Context() -> Data: T.AgentContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>
 
 type NextTurnEnv is Data:
   NextTurnEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: R.Ref<Settings.SettingsManager>, previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>, loadout: R.Ref<Runtime.Loadout>}
@@ -2235,7 +2232,7 @@ def contextMessagesIn(context: Context()) -> List<&2, Message()>:
 
 def projectedTokens(projection: Maybe<&2, Projection()>, +branch: List<&2, Entry()>) -> F64:
   match projection:
-    case Some{value}: Compaction.estimateTokensOf(Compaction.estimateProjectedContextTokens(Unit, Tools.ToolDetails, V.Value, value, branch))
+    case Some{value}: Compaction.estimateTokensOf(Compaction.estimateProjectedContextTokens(V.Value, Tools.ToolDetails, V.Value, value, branch))
     case None{}: F.fromU32(0)
 
 def overThreshold(settings: Settings.SettingsManager, +model: Ai.Model<Ai.JsonValue>, +session: Session()) -> Bool:
@@ -2264,7 +2261,7 @@ def compactBeforeFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings:
         return withContextMessages(context, sessionMessages(sharedSession(after)))
 def compactBeforeNextResponse(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +context: Context()) -> IO(Context()):
   do IO<Context()>:
-    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     compactBeforeFor(agent, shared, settings, context, stateModel(current))
 
 # A hook given to the agent before the session runs next, with precedence
@@ -2321,7 +2318,7 @@ def turnLoadoutWith(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, loadout: Ru
 def turnLoadout(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, loadout: Runtime.Loadout, messages: List<&2, Message()>, now: F64) -> IO(Maybe<&2, Message()>):
   do IO<Maybe<&2, Message()>>:
     state : Shared <- R.read(Shared, shared)
-    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     turnLoadoutWith(agent, shared, loadout, messages, now, current, runPromptIn(state))
 
 def refreshTurn(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>, loadout: Runtime.Loadout, +turn: Turn(), signal: Maybe<&2, A.AbortSignal<Unit>>) -> IO(TurnResult()):
@@ -2330,7 +2327,7 @@ def refreshTurn(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Setti
     +result : TurnResult() <- previousUpdate(previous, legacy, withTurnContext(turn, context), signal)
     now : F64 <- Date.now()
     patch : Maybe<&2, Message()> <- turnLoadout(agent, shared, loadout, contextMessagesIn(nextContext(context, result)), now)
-    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     return refreshedUpdate(context, current, result, patch)
 
 # Callback bodies cannot copy their environment; the copy happens inside.
@@ -2349,14 +2346,14 @@ def nextTurnHook(env: NextTurnEnv, input: T.ToolHookInput<Turn()>) -> IO(TurnRes
 # model and thinking level; a request hook the agent had before the session
 # still runs on that context and may replace any part.
 
-def RequestHook() -> Data: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())
-def RequestInput() -> Data: T.ToolHookInput<T.PrepareRequestContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
-def RequestResult() -> Data: Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentRequestUpdate<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>
+def RequestHook() -> Data: T.PrepareRequest(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error())
+def RequestInput() -> Data: T.ToolHookInput<T.PrepareRequestContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
+def RequestResult() -> Data: Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentRequestUpdate<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>
 
 type RequestEnv is Data:
   RequestEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, previous: Maybe<&2, RequestHook()>}
 
-def previousRequest(previous: Maybe<&2, RequestHook()>, request: T.PrepareRequestContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>, signal: Maybe<&2, A.AbortSignal<Unit>>) -> IO(RequestResult()):
+def previousRequest(previous: Maybe<&2, RequestHook()>, request: T.PrepareRequestContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>, signal: Maybe<&2, A.AbortSignal<Unit>>) -> IO(RequestResult()):
   match previous:
     case None{}: IO.pure(RequestResult(), Done{None{}})
     case Some{hook}: C.call(RequestInput(), RequestResult(), hook, T.ToolHookInput{request, signal})
@@ -2377,7 +2374,7 @@ def projectRequestFor(previous: Maybe<&2, RequestHook()>, +canonical: Context(),
 def projectRequest(+agent: Runtime.Owner(), shared: R.Ref<Shared>, previous: Maybe<&2, RequestHook()>, context: Context(), signal: Maybe<&2, A.AbortSignal<Unit>>) -> IO(RequestResult()):
   do IO<RequestResult()>:
     state : Shared <- R.read(Shared, shared)
-    +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +canonical : Context() = withContextTools(withContextMessages(context, sessionMessages(sharedSession(state))), stateTools(current))
     projectRequestFor(previous, canonical, current, signal, stateModel(current))
 
@@ -2424,13 +2421,13 @@ def normalizedToolResult(+original: List<&2, Ai.TextImageContent>, options: Tool
     case Fail{error}: Fail{error}
     case Done{+found}: Done{withNormalized(found, ToolResultImages.normalizeToolResultImages(Maybe.default(&2, List<&2, Ai.TextImageContent>, hookContent(found), original), options))}
 
-def toolCallResult(context: T.AfterToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>) -> T.AgentToolResult<Runtime.Details()>:
+def toolCallResult(context: T.AfterToolCallContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>) -> T.AgentToolResult<Runtime.Details()>:
   match context:
     case T.AfterToolCallContext{_, _, _, result, _, _}: result
 
 # upstream emitToolResult through the extension runner: the result as the
 # tool_result handlers patched it.
-def extensionToolResult(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, context: T.AfterToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>) -> IO(Maybe<&2, ExtensionTypes.ToolResultEventResult>):
+def extensionToolResult(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, context: T.AfterToolCallContext<V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error()>) -> IO(Maybe<&2, ExtensionTypes.ToolResultEventResult>):
   match runner context:
     case None{} _: IO.pure(Maybe<&2, ExtensionTypes.ToolResultEventResult>, None{})
     case Some{found} T.AfterToolCallContext{_, Ai.ToolCall{id, name, _, _, _}, args, T.AgentToolResult{content, details, usage, _}, isError, _}:
@@ -2453,7 +2450,7 @@ def afterToolHook(env: AfterToolEnv, input: AfterToolInput()) -> IO(AfterToolRes
         patch : Maybe<&2, ExtensionTypes.ToolResultEventResult> <- extensionToolResult(runner, context)
         +result : T.AgentToolResult<Runtime.Details()> = toolCallResult(context)
         settings : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsRef)
-        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         return normalizedToolResult(resultContent(result), toolImageOptions(settings, stateModel(current)), combinedToolResult(hooked, patch))
 
 # upstream beforeToolCall: tool_call handlers may block a call (with a
@@ -2495,16 +2492,16 @@ type WarmingEnv is Data:
 
 # The warmer replays through the agent's own stream function (upstream's
 # modelRuntime.streamSimple), not the warming hook.
-def replayWarm(env: WarmingEnv, request: Warmer.CacheWarmRequest) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+def replayWarm(env: WarmingEnv, request: Warmer.CacheWarmRequest) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
   match env request:
     case WarmingEnv{_, _, _, stream} Warmer.CacheWarmRequest{+model, context, options}:
-      do IO<Ai.AssistantMessage<V.Value, Unit>>:
+      do IO<Ai.AssistantMessage<V.Value, V.Value>>:
         response : StreamOutput() <- C.call(StreamInput(), StreamOutput(), stream, T.StreamInput{model, context, Some{options}})
         leaseMessage(model, response)
 
 def appendedEntry(outcome: Sessions.Outcome(Appended())) -> IO(Maybe<&2, Entry()>):
   match outcome:
-    case Done{Sessions.Appended{session, id}}: IO.pure(Maybe<&2, Entry()>, S.getEntry(Unit, Tools.ToolDetails, V.Value, stateOf(session), id))
+    case Done{Sessions.Appended{session, id}}: IO.pure(Maybe<&2, Entry()>, S.getEntry(V.Value, Tools.ToolDetails, V.Value, stateOf(session), id))
     case Fail{error}:
       do IO<Maybe<&2, Entry()>>:
         IO.print_err("Could not persist the session entry: " ++ Sessions.message(error))
@@ -2514,7 +2511,7 @@ def appendWarmUsage(env: WarmingEnv, record: Warmer.UsageRecord) -> IO(Maybe<&2,
   match env record:
     case WarmingEnv{_, shared, _, _} Warmer.UsageRecord{kind, provider, model, usage, note}:
       do IO<Maybe<&2, Entry()>>:
-        outcome : Sessions.Outcome(Appended()) <- appendEntry(shared, target => Sessions.appendUsage(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, target, kind, provider, model, usage, note))
+        outcome : Sessions.Outcome(Appended()) <- appendEntry(shared, target => Sessions.appendUsage(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, target, kind, provider, model, usage, note))
         appendedEntry(outcome)
 
 def warmBranch(env: WarmingEnv, unit: Unit) -> IO(List<&2, Entry()>):
@@ -2541,7 +2538,7 @@ def warmContext(env: WarmingEnv, unit: Unit) -> IO(Warmer.CacheContext):
   match env:
     case WarmingEnv{agent, _, _, _}:
       do IO<Warmer.CacheContext>:
-        +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        +current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         return cacheContextOf(modelKey(stateModel(current)), current)
 
 def announceWarm(env: WarmingEnv, entry: Entry()) -> IO(Unit):
@@ -2557,15 +2554,15 @@ def configSessionId(config: Runtime.LoopConfig()) -> Maybe<&2, String>:
 
 def isSessionRequest(requested: Maybe<&2, String>, state: Shared) -> Bool:
   match requested:
-    case Some{id}: String.eq(id, S.getSessionId(Unit, Tools.ToolDetails, V.Value, stateOf(sharedSession(state))))
+    case Some{id}: String.eq(id, S.getSessionId(V.Value, Tools.ToolDetails, V.Value, stateOf(sharedSession(state))))
     case None{}: False{}
 
-def warmRequest(warmer: Warmer.CacheWarmer, agent: Runtime.Owner(), +model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, Unit, Runtime.Details()>, config: Runtime.LoopConfig()) -> IO(Unit):
+def warmRequest(warmer: Warmer.CacheWarmer, agent: Runtime.Owner(), +model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Runtime.Details()>, config: Runtime.LoopConfig()) -> IO(Unit):
   do IO<Unit>:
-    +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     Warmer.start(warmer, Warmer.CacheWarmRequest{model, context, config}, cacheContextOf(modelKey(Some{model}), current))
 
-def warmIfSession(warmer: Warmer.CacheWarmer, agent: Runtime.Owner(), shared: R.Ref<Shared>, model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, Unit, Runtime.Details()>, options: Maybe<&2, Runtime.LoopConfig()>) -> IO(Unit):
+def warmIfSession(warmer: Warmer.CacheWarmer, agent: Runtime.Owner(), shared: R.Ref<Shared>, model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Runtime.Details()>, options: Maybe<&2, Runtime.LoopConfig()>) -> IO(Unit):
   match options:
     case None{}: IO.pure(Unit, Unit{})
     case Some{+config}:
@@ -2586,7 +2583,7 @@ def warmingStream(env: StreamEnv, input: StreamInput()) -> IO(StreamOutput()):
 def createWarming(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: R.Ref<Settings.SettingsManager>, +inner: Runtime.Stream()) -> IO(Warming):
   do IO<Warming>:
     +env : WarmingEnv = WarmingEnv{agent, shared, settings, inner}
-    +replay : C.Callback<Warmer.CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>> <- C.create(~WarmingEnv, ~Warmer.CacheWarmRequest, ~Ai.AssistantMessage<V.Value, Unit>, ~replayWarm, env)
+    +replay : C.Callback<Warmer.CacheWarmRequest, Ai.AssistantMessage<V.Value, V.Value>> <- C.create(~WarmingEnv, ~Warmer.CacheWarmRequest, ~Ai.AssistantMessage<V.Value, V.Value>, ~replayWarm, env)
     +append : C.Callback<Warmer.UsageRecord, Maybe<&2, Entry()>> <- C.create(~WarmingEnv, ~Warmer.UsageRecord, ~Maybe<&2, Entry()>, ~appendWarmUsage, env)
     +branch : C.Callback<Unit, List<&2, Entry()>> <- C.create(~WarmingEnv, ~Unit, ~List<&2, Entry()>, ~warmBranch, env)
     +mode : C.Callback<Unit, Settings.CacheWarmingMode> <- C.create(~WarmingEnv, ~Unit, ~Settings.CacheWarmingMode, ~warmingMode, env)
@@ -2595,7 +2592,7 @@ def createWarming(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: R.R
     +warmed : C.Callback<Entry(), Unit> <- C.create(~WarmingEnv, ~Entry(), ~Unit, ~announceWarm, env)
     +warmer : Warmer.CacheWarmer <- Warmer.create(replay, Warmer.CacheWarmerSession{append, branch}, mode, context, decide, warmed)
     +stream : Runtime.Stream() <- C.create(~StreamEnv, ~StreamInput(), ~StreamOutput(), ~warmingStream, StreamEnv{inner, warmer, agent, shared})
-    Agent.setStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, stream)
+    Agent.setStreamFunction(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, stream)
     return Warming{warmer, stream, inner, replay, append, branch, mode, context, decide, warmed}
 
 # Boundaries
@@ -2631,43 +2628,43 @@ def pendingCustomOf(state: Shared) -> List<&2, Message()>:
   match state:
     case Shared{_, _, _, _, _, _, _, _, _, PendingMessages{custom, _}, _}: custom
 
-def lastRoleIs(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Runtime.Details()>>, found: Bool) -> Bool:
+def lastRoleIs(messages: List<&2, Ai.Message<V.Value, V.Value, V.Value, Runtime.Details()>>, found: Bool) -> Bool:
   match messages:
     case Nil{}: found
     case Ai.Assistant{_} <> rest: lastRoleIs(rest, True{})
     case _ <> rest: lastRoleIs(rest, False{})
 
-def hasNonSystem(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Runtime.Details()>>) -> Bool:
+def hasNonSystem(messages: List<&2, Ai.Message<V.Value, V.Value, V.Value, Runtime.Details()>>) -> Bool:
   match messages:
     case Nil{}: False{}
     case Ai.System{_} <> rest: hasNonSystem(rest)
     case _ <> _: True{}
 
 # upstream _buildBoundaryContext's canContinue.
-def canContinue(+llm: List<&2, Ai.Message<V.Value, V.Value, Unit, Runtime.Details()>>, customPending: Bool, turnEnd: Bool, +hasQueued: Bool) -> Bool:
+def canContinue(+llm: List<&2, Ai.Message<V.Value, V.Value, V.Value, Runtime.Details()>>, customPending: Bool, turnEnd: Bool, +hasQueued: Bool) -> Bool:
   +finalAssistant = lastRoleIs(llm, False{})
   Bool.or(Bool.and(hasNonSystem(llm), Bool.not(finalAssistant)), Bool.or(customPending, Bool.pick(Bool, turnEnd, hasQueued, Bool.and(finalAssistant, hasQueued))))
 
 def previewStamp(+index: Nat, +now: String) -> S.EntryStamp: S.EntryStamp{"boundary-preview-" ++ Nat.show(index), now}
 
 def branchNow(state: State()) -> List<&2, Entry()>:
-  Result.default(&2, &2, S.Error, List<&2, Entry()>, S.getBranch(Unit, Tools.ToolDetails, V.Value, state, S.Latest{}), Nil{})
+  Result.default(&2, &2, S.Error, List<&2, Entry()>, S.getBranch(V.Value, Tools.ToolDetails, V.Value, state, S.Latest{}), Nil{})
 
 def projectedTokensFrom(projection: Result<&2, &2, S.Error, Projection()>, +branch: List<&2, Entry()>) -> Nat:
   match projection:
-    case Done{value}: tokensNat(Compaction.estimateTokensOf(Compaction.estimateProjectedContextTokens(Unit, Tools.ToolDetails, V.Value, value, branch)))
+    case Done{value}: tokensNat(Compaction.estimateTokensOf(Compaction.estimateProjectedContextTokens(V.Value, Tools.ToolDetails, V.Value, value, branch)))
     case Fail{_}: 0n
 
 def projectedTokensIn(+state: State()) -> Nat:
-  projectedTokensFrom(S.sessionProjection(Unit, Tools.ToolDetails, V.Value, state), branchNow(state))
+  projectedTokensFrom(S.sessionProjection(V.Value, Tools.ToolDetails, V.Value, state), branchNow(state))
 
 # One draft applied to a session state (upstream _applyBoundaryDrafts).
 def appliedDraft(+state: State(), +stamp: S.EntryStamp, draft: ExtensionTypes.SessionBoundaryDraft) -> Result<&2, &2, S.Error, State()>:
   match draft:
-    case ExtensionTypes.CustomEntryDraft{customType, data}: S.appendCustomEntry(Unit, Tools.ToolDetails, V.Value, state, stamp, customType, data)
-    case ExtensionTypes.CustomMessageEntryDraft{customType, content, display, details}: S.appendCustomMessageEntry(Unit, Tools.ToolDetails, V.Value, state, stamp, customType, content, display, details)
-    case ExtensionTypes.ContextEditEntryDraft{targetId, replacement}: S.appendContextEdit(Unit, Tools.ToolDetails, V.Value, state, stamp, targetId, replacement)
-    case ExtensionTypes.CompactionEntryDraft{summary, firstKept, details, usage}: S.appendCompaction(Unit, Tools.ToolDetails, V.Value, state, stamp, summary, firstKept, projectedTokensIn(state), details, Some{True{}}, usage)
+    case ExtensionTypes.CustomEntryDraft{customType, data}: S.appendCustomEntry(V.Value, Tools.ToolDetails, V.Value, state, stamp, customType, data)
+    case ExtensionTypes.CustomMessageEntryDraft{customType, content, display, details}: S.appendCustomMessageEntry(V.Value, Tools.ToolDetails, V.Value, state, stamp, customType, content, display, details)
+    case ExtensionTypes.ContextEditEntryDraft{targetId, replacement}: S.appendContextEdit(V.Value, Tools.ToolDetails, V.Value, state, stamp, targetId, replacement)
+    case ExtensionTypes.CompactionEntryDraft{summary, firstKept, details, usage}: S.appendCompaction(V.Value, Tools.ToolDetails, V.Value, state, stamp, summary, firstKept, projectedTokensIn(state), details, Some{True{}}, usage)
 
 def appliedDrafts(drafts: List<&2, ExtensionTypes.SessionBoundaryDraft>, +state: State(), +index: Nat, +now: String) -> Result<&2, &2, S.Error, State()>:
   match drafts:
@@ -2680,7 +2677,7 @@ type PreviewEnv is Data:
 def previewOf(+projection: Projection(), +pending: List<&2, Message()>, +customPending: Bool, +turnEnd: Bool, +queued: Bool) -> ExtensionTypes.BoundaryContextPreview:
   match projection:
     case S.SessionProjection{entries, +projected, _, _}:
-      +llm = Messages.convertToLlm(Unit, Tools.ToolDetails, V.Value, projected)
+      +llm = Messages.convertToLlm(V.Value, Tools.ToolDetails, V.Value, projected)
       ExtensionTypes.BoundaryContextPreview{entries, projected, llm, pending, canContinue(llm, customPending, turnEnd, queued)}
 
 def previewProjected(projection: Result<&2, &2, S.Error, Projection()>, +pending: List<&2, Message()>, +customPending: Bool, +turnEnd: Bool, +queued: Bool) -> Result<&2, &2, String, ExtensionTypes.BoundaryContextPreview>:
@@ -2691,7 +2688,7 @@ def previewProjected(projection: Result<&2, &2, S.Error, Projection()>, +pending
 def previewFrom(applied: Result<&2, &2, S.Error, State()>, +pending: List<&2, Message()>, +customPending: Bool, +turnEnd: Bool, +queued: Bool) -> Result<&2, &2, String, ExtensionTypes.BoundaryContextPreview>:
   match applied:
     case Fail{error}: Fail{Sessions.stateMessage(error)}
-    case Done{applied}: previewProjected(S.sessionProjection(Unit, Tools.ToolDetails, V.Value, applied), pending, customPending, turnEnd, queued)
+    case Done{applied}: previewProjected(S.sessionProjection(V.Value, Tools.ToolDetails, V.Value, applied), pending, customPending, turnEnd, queued)
 
 # upstream _buildBoundaryContext: the session with the drafts applied, the
 # pending agent-level and custom messages, and whether a request could run.
@@ -2700,8 +2697,8 @@ def buildPreview(env: PreviewEnv, drafts: List<&2, ExtensionTypes.SessionBoundar
     case PreviewEnv{+agent, shared, +turnEnd}:
       do IO<Result<&2, &2, String, ExtensionTypes.BoundaryContextPreview>>:
         +state : Shared <- R.read(Shared, shared)
-        queuedMessages : List<&2, Message()> <- Agent.peekQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        queued : Bool <- Agent.hasQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        queuedMessages : List<&2, Message()> <- Agent.peekQueuedMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        queued : Bool <- Agent.hasQueuedMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         now : F64 <- Date.now()
         +custom : List<&2, Message()> = pendingCustomOf(state)
         return previewFrom(appliedDrafts(drafts, stateOf(sharedSession(state)), 0n, Maybe.default(&2, String, Date.formatIso(now), "1970-01-01T00:00:00.000Z")), List.append(&2, Message(), queuedMessages, custom), Bool.not(List.is_empty(&2, Message(), custom)), turnEnd, queued)
@@ -2719,14 +2716,14 @@ def previewCanContinue(preview: ExtensionTypes.BoundaryContextPreview) -> Bool:
 # live session manager).
 def committedDraft(+shared: R.Ref<Shared>, draft: ExtensionTypes.SessionBoundaryDraft) -> IO(Maybe<&2, String>):
   match draft:
-    case ExtensionTypes.CustomEntryDraft{customType, data}: storedId(shared, target => Sessions.appendCustomEntry(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, target, customType, data))
+    case ExtensionTypes.CustomEntryDraft{customType, data}: storedId(shared, target => Sessions.appendCustomEntry(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, target, customType, data))
     case ExtensionTypes.CustomMessageEntryDraft{customType, content, display, details}: storedId(shared, target => recordCustomMessage(target, customType, content, display, details))
-    case ExtensionTypes.ContextEditEntryDraft{targetId, replacement}: storedId(shared, target => Sessions.appendContextEdit(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, target, targetId, replacement))
+    case ExtensionTypes.ContextEditEntryDraft{targetId, replacement}: storedId(shared, target => Sessions.appendContextEdit(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, target, targetId, replacement))
     case ExtensionTypes.CompactionEntryDraft{summary, firstKept, details, usage}:
       do IO<Maybe<&2, String>>:
         state : Shared <- R.read(Shared, shared)
         +tokens : Nat = projectedTokensIn(stateOf(sharedSession(state)))
-        storedId(shared, target => Sessions.appendCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, target, summary, firstKept, tokens, details, Some{True{}}, usage))
+        storedId(shared, target => Sessions.appendCompaction(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, target, summary, firstKept, tokens, details, Some{True{}}, usage))
 
 def committedDrafts(+shared: R.Ref<Shared>, drafts: List<&2, ExtensionTypes.SessionBoundaryDraft>) -> IO(List<&2, Maybe<&2, String>>):
   match drafts:
@@ -2788,7 +2785,7 @@ def currentPreview(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, turnEnd: Boo
 def checkedContinuation(+runner: ExtensionRunner.ExtensionRunner, +event: String, +requested: Bool, runnable: Bool) -> IO(Bool):
   Bool.pick(Unit -> IO(Bool), Bool.and(requested, Bool.not(runnable)), _ => IO.bind(Unit, Bool, reportInvalidContinuation(runner, event), _ => IO.pure(Bool, False{})), _ => IO.pure(Bool, requested))(Unit{})
 
-def turnEndWith(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +runner: ExtensionRunner.ExtensionRunner, +message: Ai.AssistantMessage<V.Value, Unit>, toolResults: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>, +outcome: ExtensionTypes.AgentActivityOutcome, turn: Maybe<&2, LastTurn>, turnIndex: Nat) -> IO(Bool):
+def turnEndWith(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +runner: ExtensionRunner.ExtensionRunner, +message: Ai.AssistantMessage<V.Value, V.Value>, toolResults: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>, +outcome: ExtensionTypes.AgentActivityOutcome, turn: Maybe<&2, LastTurn>, turnIndex: Nat) -> IO(Bool):
   match turn:
     case Some{LastTurn{_, Some{+entryId}, toolResultIds}}:
       do IO<Bool>:
@@ -2801,7 +2798,7 @@ def turnEndWith(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +runner: Extens
         ExtensionRunner.emitError(runner, ExtensionTypes.ExtensionError{"<boundary>", "turn_end", "turn_end could not resolve the persisted assistant entry ID", None{}})
         return False{}
 
-def turnEndFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, +message: Ai.AssistantMessage<V.Value, Unit>, toolResults: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>) -> IO(Bool):
+def turnEndFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, +message: Ai.AssistantMessage<V.Value, V.Value>, toolResults: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>) -> IO(Bool):
   match runner:
     case None{}: IO.pure(Bool, False{})
     case Some{+found}:
@@ -2812,9 +2809,9 @@ def turnEndFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, runner: Maybe<&2
 
 # upstream _dispatchTurnEndBoundary: true when a handler validly asked for
 # one more request.
-def dispatchTurnEndBoundary(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +message: Ai.AssistantMessage<V.Value, Unit>, toolResults: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>) -> IO(Bool):
+def dispatchTurnEndBoundary(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +message: Ai.AssistantMessage<V.Value, V.Value>, toolResults: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>) -> IO(Bool):
   do IO<Bool>:
-    R.modify(Shared, Unit, shared, current => (withActivityOutcome(current, outcomeOf(Ai.assistantStopReason(V.Value, Unit, message))), Unit{}))
+    R.modify(Shared, Unit, shared, current => (withActivityOutcome(current, outcomeOf(Ai.assistantStopReason(V.Value, V.Value, message))), Unit{}))
     runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- sharedRunner(shared)
     turnEndFor(agent, shared, runner, message, toolResults)
 
@@ -2826,7 +2823,7 @@ def settleWith(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +runner: Extensi
     flushPendingCustom(agent, shared)
     after : ExtensionTypes.BoundaryContextPreview <- currentPreview(agent, shared, False{})
     latest : Shared <- R.read(Shared, shared)
-    +hasQueued : Bool <- Agent.hasQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +hasQueued : Bool <- Agent.hasQueuedMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +requested : Bool = boundaryContinue(result)
     Bool.pick(Unit -> IO(Bool), abortRequestedOf(latest),
       _ => IO.pure(Bool, False{}),
@@ -2836,11 +2833,11 @@ def settleWith(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +runner: Extensi
 
 def settleFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, runner: Maybe<&2, ExtensionRunner.ExtensionRunner>) -> IO(Bool):
   match runner:
-    case None{}: Agent.hasQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    case None{}: Agent.hasQueuedMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     case Some{+found}:
       do IO<Bool>:
         handlers : Bool <- ExtensionRunner.hasHandlers(found, "agent_before_settle")
-        Bool.pick(Unit -> IO(Bool), handlers, _ => settleWith(agent, shared, found), _ => Agent.hasQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent))(Unit{})
+        Bool.pick(Unit -> IO(Bool), handlers, _ => settleWith(agent, shared, found), _ => Agent.hasQueuedMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent))(Unit{})
 
 # upstream _runBeforeSettleBoundary: true when the run continues once more.
 def runBeforeSettleBoundary(+agent: Runtime.Owner(), +shared: R.Ref<Shared>) -> IO(Bool):
@@ -2851,10 +2848,10 @@ def runBeforeSettleBoundary(+agent: Runtime.Owner(), +shared: R.Ref<Shared>) -> 
 # upstream _installAgentBoundaryHooks' finishTurn: the turn_end boundary runs
 # first; a hook the agent had before decides next, and an explicit end wins.
 type FinishTurnEnv is Data:
-  FinishTurnEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, previous: Maybe<&2, T.FinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>}
+  FinishTurnEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, previous: Maybe<&2, T.FinishTurn(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error())>}
 
 
-def previousFinish(previous: Maybe<&2, T.FinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, input: FinishTurnInput()) -> IO(FinishTurnResult()):
+def previousFinish(previous: Maybe<&2, T.FinishTurn(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, input: FinishTurnInput()) -> IO(FinishTurnResult()):
   match previous:
     case None{}: IO.pure(FinishTurnResult(), Done{None{}})
     case Some{hook}: C.call(FinishTurnInput(), FinishTurnResult(), hook, input)
@@ -2960,7 +2957,7 @@ def forcedHead(+text: String, current: Maybe<&2, Ai.SystemMessage<V.Value>>, now
     case None{}: T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{text}, None{}, None{}, None{}, now}}}
 
 def projectForced(+text: String, +messages: List<&2, Message()>, now: F64) -> List<&2, Message()>:
-  forcedHead(text, Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Runtime.Details(), llmOnly(messages)), now) <> withoutSystemMessages(messages)
+  forcedHead(text, Transcript.getCurrentSystemMessage(V.Value, V.Value, V.Value, Runtime.Details(), llmOnly(messages)), now) <> withoutSystemMessages(messages)
 
 # upstream _installAgentForcedPromptProjection: a system prompt forced by
 # before_agent_start is sent as the request's one leading system message,
@@ -3002,11 +2999,11 @@ def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: M
 def continueQueued(+agent: Runtime.Owner(), compacted: Bool) -> IO(Bool):
   match compacted:
     case True{}: IO.pure(Bool, True{})
-    case False{}: Agent.hasQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    case False{}: Agent.hasQueuedMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
 
 def finishFailed(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, +turn: LastTurn) -> IO(Bool):
   do IO<Bool>:
-    failedRetry(shared, Ai.assistantStopReason(V.Value, Unit, turnMessage(turn)), Ai.assistantErrorMessage(V.Value, Unit, turnMessage(turn)))
+    failedRetry(shared, Ai.assistantStopReason(V.Value, V.Value, turnMessage(turn)), Ai.assistantErrorMessage(V.Value, V.Value, turnMessage(turn)))
     state : Shared <- R.read(Shared,shared)
     Bool.pick(Unit -> IO(Bool),abortRequestedOf(state),_ => IO.pure(Bool,False{}),_ => IO.bind(Bool, Bool, checkCompaction(agent, shared, settings, turn, True{}), compacted => continueQueued(agent, compacted)))(Unit{})
 
@@ -3021,7 +3018,7 @@ def retryOrFinish(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Set
 
 def afterRun(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, taken: Maybe<&2, LastTurn>, contextWindow: F64) -> IO(Bool):
   match taken:
-    case None{}: Agent.hasQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    case None{}: Agent.hasQueuedMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     case Some{+turn}: Bool.pick(Unit -> IO(Bool), isRetryableError(turnMessage(turn), contextWindow), _ => retryOrFinish(agent, shared, settings, turn), _ => finishFailed(agent, shared, settings, turn))(Unit{})
 
 # upstream _handlePostAgentRun: retry a transient error, else check compaction.
@@ -3038,12 +3035,12 @@ def stepOf(+agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: Settings.Se
     case Fail{error}: IO.pure(Step, Step{False{}, Fail{promptError(error)}})
     case Done{Unit{}}:
       do IO<Step>:
-        Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.waitForIdle(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         again : Bool <- handlePostAgentRun(agent, shared, settings)
         return Step{again, Done{Unit{}}}
 
 def continueRun(agent: Runtime.Owner()) -> IO(Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit>):
-  Agent.continueRun(~Unit, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent)
+  Agent.continueRun(~V.Value, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent)
 
 # upstream _runAgentPrompt: continue the agent while post-run handling asks for it.
 def runUntilSettled(fuel: Nat, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, step: Step) -> IO(Result<&2, &2, String, Unit>):
@@ -3078,7 +3075,7 @@ def emitSettled(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>) -> IO(Unit):
 def runMessages(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, hooks: SessionHooks, +settings: Settings.SettingsManager, loadout: R.Ref<Runtime.Loadout>, messages: List<&2, Message()>) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     setRunActive(shared, True{})
-    result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- Agent.prompt(~Unit, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent, Agent.Messages{messages})
+    result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- Agent.prompt(~V.Value, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent, Agent.Messages{messages})
     step : Step <- stepOf(agent, shared, settings, result)
     outcome : Result<&2, &2, String, Unit> <- runUntilSettled(1000n, agent, shared, settings, step)
     setRunActive(shared, False{})
@@ -3112,11 +3109,11 @@ def sendStreaming(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +message: Mess
         return Done{Unit{}}
     case ExtensionTypes.SendMessageOptions{_, Some{ExtensionTypes.DeliverFollowUp{}}}:
       do IO<Result<&2, &2, String, Unit>>:
-        Agent.followUp(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, message)
+        Agent.followUp(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, message)
         return Done{Unit{}}
     case ExtensionTypes.SendMessageOptions{_, _}:
       do IO<Result<&2, &2, String, Unit>>:
-        Agent.steer(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, message)
+        Agent.steer(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, message)
         return Done{Unit{}}
 
 def sendAt(+session: AgentSession, +message: Message(), options: ExtensionTypes.SendMessageOptions, streaming: Bool) -> IO(Result<&2, &2, String, Unit>):
@@ -3206,7 +3203,7 @@ def runLoadout(agent: Runtime.Owner(), registry: List<&2, Tools.Tool()>, +runPro
     case Done{built} RunPrompt{options, paths}:
       do IO<Result<&2, &2, String, StartPrep>>:
         +tools : List<&2, Tools.Tool()> = selectedFrom(registry, selectedToolsOf(options), Nil{})
-        Agent.setTools(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, tools)
+        Agent.setTools(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, tools)
         return Done{StartPrep{sectionsPatchFor(built, messages, now), Some{RunPrompt{withSelectedTools(options, toolNamesOf(tools)), paths}}}}
 
 # upstream _preparePromptAndToolLoadout(result.systemPromptOptions): options a
@@ -3249,7 +3246,7 @@ def runAgentPrompt(session: AgentSession, +text: String, +images: List<&2, Ai.Im
         sdk : List<&2, ExtensionTypes.ToolDefinition> <- sdkFromHooks(hooks)
         prompts : Runtime.ToolPrompts <- toolPromptsOf(loadout,sdk)
         +start : Maybe<&2, AgentStart> <- agentStart(runnerIn(loadout), text, images, basePrompt(loadout, prompts))
-        +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        +current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +now : F64 <- Date.now()
         +user : Message() = normalizedUserMessage(text, normalizePromptImages(promptImageOptions(settings, stateModel(current)), images, NormalizedImages{Nil{}, Nil{}}), now)
         prepared : Result<&2, &2, String, StartPrep> <- startLoadout(agent, loadout, start, stateMessages(current), now)
@@ -3264,8 +3261,8 @@ def queued(state: Shared, behavior: StreamingBehavior, +text: String) -> Shared:
 # current turn, follow-ups wait for the run to end.
 def deliverQueued(agent: Runtime.Owner(), +behavior: StreamingBehavior, +message: Message()) -> IO(Unit):
   match behavior:
-    case Steer{}: Agent.steer(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, message)
-    case FollowUp{}: Agent.followUp(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, message)
+    case Steer{}: Agent.steer(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, message)
+    case FollowUp{}: Agent.followUp(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, message)
 
 def queueAt(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +behavior: StreamingBehavior, +text: String, images: List<&2, Ai.ImageContent>, now: F64) -> IO(Unit):
   do IO<Unit>:
@@ -3423,8 +3420,8 @@ def clearQueue(session: AgentSession) -> IO(QueuedMessages):
     case AgentSession{+agent, +shared, _, _, _, _, _, _}:
       do IO<QueuedMessages>:
         cleared : QueuedMessages <- R.modify(Shared, QueuedMessages, shared, clearedQueues)
-        Agent.clearSteeringQueue(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        Agent.clearFollowUpQueue(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.clearSteeringQueue(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.clearFollowUpQueue(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         emitQueueUpdate(shared)
         return cleared
 
@@ -3821,18 +3818,18 @@ def requestAbort(session: AgentSession) -> IO(Unit):
         abortSleeping(shared)
         abortCompactions(shared)
         abortBranchSummaryOf(shared)
-        Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.abort(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
 
 # upstream abort: requestAbort, then wait until the agent is idle.
 def abort(+session: AgentSession) -> IO(Unit):
   do IO<Unit>:
     requestAbort(session)
-    Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
+    Agent.waitForIdle(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
 
 def nothingToCompact(entries: List<&2, Entry()>) -> String:
-  Bool.pick(String, Compaction.lastIsCompaction(Unit, Tools.ToolDetails, V.Value, entries), "Already compacted", "Nothing to compact (session too small)")
+  Bool.pick(String, Compaction.lastIsCompaction(V.Value, Tools.ToolDetails, V.Value, entries), "Already compacted", "Nothing to compact (session too small)")
 
-def manualPrepared(agent: Runtime.Owner(), shared: R.Ref<Shared>, model: Ai.Model<Ai.JsonValue>, customInstructions: Maybe<&2, String>, signal: A.AbortSignal<Unit>, +entries: List<&2, Entry()>, preparation: Maybe<&2, Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>>) -> IO(CompactionRun):
+def manualPrepared(agent: Runtime.Owner(), shared: R.Ref<Shared>, model: Ai.Model<Ai.JsonValue>, customInstructions: Maybe<&2, String>, signal: A.AbortSignal<Unit>, +entries: List<&2, Entry()>, preparation: Maybe<&2, Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>>) -> IO(CompactionRun):
   match preparation:
     case None{}: IO.pure(CompactionRun, CompactionRun{Fail{nothingToCompact(entries)}, False{}, False{}})
     case Some{prepared}: compactWithExtensions(agent, shared, model, prepared, entries, customInstructions, signal, Manual{}, False{})
@@ -3867,7 +3864,7 @@ def finishManualWith(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +aborted: B
 def manualFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +customInstructions: Maybe<&2, String>, signal: A.AbortSignal<Unit>, +entries: List<&2, Entry()>, selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(CompactionRun):
   match selected:
     case None{}: IO.pure(CompactionRun, CompactionRun{Fail{"No model selected"}, False{}, False{}})
-    case Some{+model}: manualPrepared(agent, shared, model, customInstructions, signal, entries, Compaction.prepareCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~detailsOf, entries, compactionSettingsFor(settings, model)))
+    case Some{+model}: manualPrepared(agent, shared, model, customInstructions, signal, entries, Compaction.prepareCompaction(~V.Value, ~Tools.ToolDetails, ~V.Value, ~detailsOf, entries, compactionSettingsFor(settings, model)))
 def finishManual(agent: Runtime.Owner(), +shared: R.Ref<Shared>, signalled: Bool, run: CompactionRun) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
   match run:
     case CompactionRun{result, fromExtension, cancelled}:
@@ -3880,12 +3877,12 @@ def compactIn(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settingsRef: R.Re
         abortSleeping(shared)
         abortCompactions(shared)
         abortBranchSummaryOf(shared)
-        Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.abort(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.waitForIdle(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +controller : A.AbortController<Unit> <- A.new(Unit)
         R.modify(Shared, Unit, shared, current => (setManualController(current, Some{controller}), Unit{}))
         emit(shared, CompactionStart{Manual{}})
-        +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        +current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +entries : List<&2, Entry()> <- branchEntries(shared)
         run : CompactionRun <- manualFor(agent, shared, settings, customInstructions, A.signal(Unit, controller), entries, stateModel(current))
         +aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
@@ -3922,8 +3919,8 @@ def navigationTarget(entry: Entry(), targetId: String) -> Navigation:
 
 def branchTo(session: Session(), leafId: Maybe<&2, String>) -> Sessions.Outcome(Session()):
   match leafId:
-    case None{}: Sessions.resetLeaf(Unit, Tools.ToolDetails, V.Value, session)
-    case Some{id}: Sessions.branch(Unit, Tools.ToolDetails, V.Value, session, id)
+    case None{}: Sessions.resetLeaf(V.Value, Tools.ToolDetails, V.Value, session)
+    case Some{id}: Sessions.branch(V.Value, Tools.ToolDetails, V.Value, session, id)
 
 # upstream navigateTree options.
 type NavigateTreeOptions is Data:
@@ -3953,7 +3950,7 @@ def wantsSummary(+options: NavigateTreeOptions) -> Bool:
   match options:
     case NavigateTreeOptions{summarize, _, _, _}: summarize
 
-def collectedEntries(collected: Result<&2, &2, S.Error, BranchSummary.Collected<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, Entry()>:
+def collectedEntries(collected: Result<&2, &2, S.Error, BranchSummary.Collected<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, Entry()>:
   match collected:
     case Done{BranchSummary.Collected{entries, _}}: entries
     case Fail{_}: Nil{}
@@ -3961,7 +3958,7 @@ def collectedEntries(collected: Result<&2, &2, S.Error, BranchSummary.Collected<
 def missingModel(+options: NavigateTreeOptions, +model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> Bool:
   Bool.and(wantsSummary(options), Maybe.is_none(&2, Ai.Model<Ai.JsonValue>, model))
 
-def leafOfSession(session: Session()) -> Maybe<&2, String>: S.getLeafId(Unit, Tools.ToolDetails, V.Value, stateOf(session))
+def leafOfSession(session: Session()) -> Maybe<&2, String>: S.getLeafId(V.Value, Tools.ToolDetails, V.Value, stateOf(session))
 
 def appendedSession(outcome: Sessions.Outcome(Appended())) -> Result<&2, &2, String, Session()>:
   match outcome:
@@ -3974,7 +3971,7 @@ def labelled(+session: Session(), labelTarget: String, +label: Maybe<&2, String>
     case None{}: IO.pure(Result<&2, &2, String, Session()>, Done{session})
     case Some{text}:
       do IO<Result<&2, &2, String, Session()>>:
-        appended : Sessions.Outcome(Appended()) <- Sessions.appendLabelChange(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, labelTarget, Some{text})
+        appended : Sessions.Outcome(Appended()) <- Sessions.appendLabelChange(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, session, labelTarget, Some{text})
         return appendedSession(appended)
 
 def branchedAndLabelled(branched: Sessions.Outcome(Session()), +targetId: String, +label: Maybe<&2, String>) -> IO(Result<&2, &2, String, Session()>):
@@ -3999,7 +3996,7 @@ def summaryDetails(summary: BranchSummary.Summary) -> V.Value:
     case BranchSummary.Summary{_, _, details}: details
 
 def summaryEntryOf(session: Session(), id: String) -> Maybe<&2, Entry()>:
-  S.getEntry(Unit, Tools.ToolDetails, V.Value, stateOf(session), id)
+  S.getEntry(V.Value, Tools.ToolDetails, V.Value, stateOf(session), id)
 
 def summaryLabelled(+label: Maybe<&2, String>, outcome: Sessions.Outcome(Appended())) -> IO(Result<&2, &2, String, Session()> & Maybe<&2, Entry()>):
   match outcome:
@@ -4029,7 +4026,7 @@ def navigateTo(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +current: Sessio
         settledNavigation(agent, shared, editorText, None{}, oldLeafId, None{}, labelledTarget)
     case Navigation{editorText, leafId} Some{TreeSummary{text, usage, details, +fromExtension}}:
       do IO<TreeResult()>:
-        appended : Sessions.Outcome(Appended()) <- Sessions.branchWithSummary(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, current, leafId, text, details, Some{fromExtension}, usage)
+        appended : Sessions.Outcome(Appended()) <- Sessions.branchWithSummary(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, current, leafId, text, details, Some{fromExtension}, usage)
         pair : Result<&2, &2, String, Session()> & Maybe<&2, Entry()> <- summaryLabelled(label, appended)
         settledPair(agent, shared, editorText, oldLeafId, fromExtension, pair)
 
@@ -4044,15 +4041,15 @@ def summarizeBranch(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: 
   match options:
     case NavigateTreeOptions{_, custom, replace, _}:
       do IO<Result<&2, &2, String, BranchSummary.Summary>>:
-        stream : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        config : Runtime.LoopConfig() <- Agent.getConfig(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        stream : Runtime.Stream() <- Agent.getStreamFunction(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        config : Runtime.LoopConfig() <- Agent.getConfig(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +state : Shared <- R.read(Shared, shared)
         generated : Result<&2, &2, Uuid.Error, String> <- Uuid.uuidv7(sessionIds(state), None{})
-        +summarizer : Compaction.Summarizer(Unit, Tools.ToolDetails) <- C.create(~SummarizerEnv, ~Compaction.SummaryRequest<Unit, Tools.ToolDetails>, ~Ai.AssistantMessage<V.Value, Unit>, ~summarizeWith, SummarizerEnv{stream, config, model, stateThinking(current), signal, requestIdOf(generated)})
+        +summarizer : Compaction.Summarizer(V.Value, Tools.ToolDetails) <- C.create(~SummarizerEnv, ~Compaction.SummaryRequest<V.Value, Tools.ToolDetails>, ~Ai.AssistantMessage<V.Value, V.Value>, ~summarizeWith, SummarizerEnv{stream, config, model, stateThinking(current), signal, requestIdOf(generated)})
         +callbacks : Retry.RetryCallbacks() <- C.create(~RetryNotifier, ~Retry.RetryNotice, ~Unit, ~notifyRetry, RetryNotifier{shared, BranchSummarySource{}})
-        result : Result<&2, &2, String, BranchSummary.Summary> <- BranchSummary.generate(~Unit, ~Tools.ToolDetails, summarizer, entries, model, branchReserve(Settings.getBranchSummarySettings(settings)), signal, custom, Maybe.default(&2, Bool, replace, False{}), Some{policyOf(state)}, Some{callbacks})
-        C.dispose(Compaction.SummaryRequest<Unit, Tools.ToolDetails>, Ai.AssistantMessage<V.Value, Unit>, summarizer)
+        result : Result<&2, &2, String, BranchSummary.Summary> <- BranchSummary.generate(~V.Value, ~Tools.ToolDetails, summarizer, entries, model, branchReserve(Settings.getBranchSummarySettings(settings)), signal, custom, Maybe.default(&2, Bool, replace, False{}), Some{policyOf(state)}, Some{callbacks})
+        C.dispose(Compaction.SummaryRequest<V.Value, Tools.ToolDetails>, Ai.AssistantMessage<V.Value, V.Value>, summarizer)
         C.dispose(Retry.RetryNotice, Unit, callbacks)
         return result
 
@@ -4119,7 +4116,7 @@ def navigatePrepared(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings:
         A.dispose(Unit, controller)
         return navigated
 
-def collectedCommon(collected: Result<&2, &2, S.Error, BranchSummary.Collected<Unit, Tools.ToolDetails, V.Value>>) -> Maybe<&2, String>:
+def collectedCommon(collected: Result<&2, &2, S.Error, BranchSummary.Collected<V.Value, Tools.ToolDetails, V.Value>>) -> Maybe<&2, String>:
   match collected:
     case Done{BranchSummary.Collected{_, common}}: common
     case Fail{_}: None{}
@@ -4128,7 +4125,7 @@ def navigateFound(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Se
   match entry:
     case None{}: IO.pure(TreeResult(), Fail{"Entry " ++ targetId ++ " not found"})
     case Some{selected}:
-      +collected = BranchSummary.collect(Unit, Tools.ToolDetails, V.Value, tree, oldLeafId, targetId)
+      +collected = BranchSummary.collect(V.Value, Tools.ToolDetails, V.Value, tree, oldLeafId, targetId)
       navigatePrepared(agent, shared, settings, model, current, navigationTarget(selected, targetId), targetId, oldLeafId, collectedEntries(collected), collectedCommon(collected), options)
 
 def sameLeaf(leafId: Maybe<&2, String>, +targetId: String) -> Bool:
@@ -4141,13 +4138,13 @@ def navigateLocated(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: 
     _ => IO.pure(TreeResult(), Done{TreeNavigated{None{}, oldLeafId, None{}}}),
     _ => Bool.pick(Unit -> IO(TreeResult()), missingModel(options, model),
       _ => IO.pure(TreeResult(), Fail{"No model available for summarization"}),
-      _ => navigateFound(agent, shared, settings, model, current, targetId, tree, oldLeafId, options, S.getEntry(Unit, Tools.ToolDetails, V.Value, tree, targetId)))(Unit{}))(Unit{})
+      _ => navigateFound(agent, shared, settings, model, current, targetId, tree, oldLeafId, options, S.getEntry(V.Value, Tools.ToolDetails, V.Value, tree, targetId)))(Unit{}))(Unit{})
 
 def navigateSnapshot(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +model: Maybe<&2, Ai.Model<Ai.JsonValue>>, snapshot: Shared, +targetId: String, +options: NavigateTreeOptions) -> IO(TreeResult()):
   match snapshot:
     case Shared{+current, _, _, _, _, _, _, _, _, pendingMessages, extensionsRef}:
       +tree = stateOf(current)
-      navigateLocated(agent, shared, settings, model, current, targetId, tree, S.getLeafId(Unit, Tools.ToolDetails, V.Value, tree), options)
+      navigateLocated(agent, shared, settings, model, current, targetId, tree, S.getLeafId(V.Value, Tools.ToolDetails, V.Value, tree), options)
 
 # upstream navigateTree(targetId, options): move the leaf within the same
 # session file; with `summarize`, the abandoned branch (old leaf back to the
@@ -4165,7 +4162,7 @@ def navigateTreeWith(+session: AgentSession, +targetId: String, +options: Naviga
             _ => do IO<TreeResult()>:
               snapshot : Shared <- R.read(Shared, shared)
               settings : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsRef)
-              current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+              current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
               navigateSnapshot(agent, shared, settings, stateModel(current), snapshot, targetId, options))(Unit{}))(Unit{})
 
 # upstream abortBranchSummary: cancel an in-progress branch summarization;
@@ -4204,7 +4201,7 @@ def forkMessages(entries: List<&2, Entry()>) -> List<&2, ForkMessage>:
 def getUserMessagesForForking(session: AgentSession) -> IO(List<&2, ForkMessage>):
   do IO<List<&2, ForkMessage>>:
     stored : Session() <- sessionOf(session)
-    return forkMessages(S.getEntries(Unit, Tools.ToolDetails, V.Value, stateOf(stored)))
+    return forkMessages(S.getEntries(V.Value, Tools.ToolDetails, V.Value, stateOf(stored)))
 
 def forkText(text: Maybe<&2, String>, parent: Maybe<&2, String>) -> Maybe<&2, Navigation>:
   match text:
@@ -4310,7 +4307,7 @@ def setSteeringMode(session: AgentSession, +mode: T.QueueMode) -> IO(Result<&2, 
   match session:
     case AgentSession{agent, _, _, +settings, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
-        Agent.setSteeringMode(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, mode)
+        Agent.setSteeringMode(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, mode)
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
         updated : Result<&2, &2, String, Settings.SettingsManager> <- persistedSetting(Settings.setSteeringMode(mode, current))
         settingApplied(settings, updated)
@@ -4319,7 +4316,7 @@ def setFollowUpMode(session: AgentSession, +mode: T.QueueMode) -> IO(Result<&2, 
   match session:
     case AgentSession{agent, _, _, +settings, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
-        Agent.setFollowUpMode(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, mode)
+        Agent.setFollowUpMode(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, mode)
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
         updated : Result<&2, &2, String, Settings.SettingsManager> <- persistedSetting(Settings.setFollowUpMode(mode, current))
         settingApplied(settings, updated)
@@ -4328,7 +4325,7 @@ def setTransport(session: AgentSession, +transport: Ai.Transport) -> IO(Result<&
   match session:
     case AgentSession{agent, _, _, +settings, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
-        Agent.setTransport(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, transport)
+        Agent.setTransport(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, transport)
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
         updated : Result<&2, &2, String, Settings.SettingsManager> <- persistedSetting(Settings.setTransport(transport, current))
         settingApplied(settings, updated)
@@ -4385,10 +4382,10 @@ def persistThinking(settings: R.Ref<Settings.SettingsManager>, level: Ai.ModelTh
 # on request, and record and announce the clamped level only when it changes.
 def applyThinking(+agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: R.Ref<Settings.SettingsManager>, +level: Ai.ModelThinkingLevel, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
-    +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +effective : Ai.ModelThinkingLevel = clamped(current, level)
     +previous : Ai.ModelThinkingLevel = stateThinking(current)
-    Agent.setThinkingLevel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, effective)
+    Agent.setThinkingLevel(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, effective)
     persisted : Result<&2, &2, String, Unit> <- persistThinking(settings, level, options)
     changed : Result<&2, &2, String, Unit> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), sameLevel(effective, previous), _ => done(), _ => recordThinkingChange(shared, effective))(Unit{})
     return both(persisted, changed)
@@ -4498,9 +4495,9 @@ def switchModel(session: AgentSession, +model: Ai.Model<Ai.JsonValue>, explicit:
     case AgentSession{+agent, +shared, _, +settings, _, _, _, scoped}:
       do IO<Result<&2, &2, String, Unit>>:
         manager : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
-        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +level : Ai.ModelThinkingLevel = switchThinking(manager, model, explicit, stateThinking(current))
-        Agent.setModel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, model)
+        Agent.setModel(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, model)
         R.modify(Shared, Unit, shared, value => (withContextWindow(value, Ai.modelContextWindow(model)), Unit{}))
         modelResult : Result<&2, &2, String, Unit> <- recorded(shared, target => recordModel(target, model))
         persisted : Result<&2, &2, String, Unit> <- persistModel(settings, scoped, model, options)
@@ -4601,7 +4598,7 @@ def cycleModel(+session: AgentSession, direction: CycleDirection, options: Model
 # upstream emits sessionManager.getSessionName(): the sanitized name the
 # session info entry recorded (newlines become spaces, trimmed, empty unset).
 def sessionName(state: Shared) -> Maybe<&2, String>:
-  S.getSessionName(Unit, Tools.ToolDetails, V.Value, stateOf(sharedSession(state)))
+  S.getSessionName(V.Value, Tools.ToolDetails, V.Value, stateOf(sharedSession(state)))
 
 def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, String, Unit>):
   match session:
@@ -4614,7 +4611,7 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
 
 # Functional access to the session manager's persistent label mutation.
 def appendLabelChange(session: AgentSession,+entryId: String,+label: Maybe<&2,String>) -> IO(Result<&2,&2,String,Unit>):
-  recorded(sharedOf(session),target => Sessions.appendLabelChange(~Unit,~Tools.ToolDetails,~V.Value,~unitValue,~Tools.detailsValue,~rawValue,target,entryId,label))
+  recorded(sharedOf(session),target => Sessions.appendLabelChange(~V.Value, ~Tools.ToolDetails, ~V.Value,~rawValue,~Tools.detailsValue,~rawValue,target,entryId,label))
 
 # upstream session.promptTemplates and resourceLoader.getSkills(): the
 # resources this session was loaded (or last reloaded) with.
@@ -4717,7 +4714,7 @@ def setActiveToolsByName(session: AgentSession, names: List<&2, String>) -> IO(U
         sdk : List<&2, ExtensionTypes.ToolDefinition> <- sdkFromHooks(hooks)
         prompts : Runtime.ToolPrompts <- toolPromptsOf(current,sdk)
         +next : Runtime.Loadout <- R.modify(Runtime.Loadout, Runtime.Loadout, loadoutRef, value => activatedPair(value, names, prompts))
-        Agent.setTools(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, activeToolsIn(next))
+        Agent.setTools(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, activeToolsIn(next))
 
 
 
@@ -4904,7 +4901,7 @@ def reload(+session: AgentSession) -> IO(Result<&2, &2, String, Unit>):
 # with the current context usage.
 def statsKey(+stored: Session(), model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> StatsKey:
   +manager = stateOf(stored)
-  StatsKey{List.length(&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>, S.getEntries(Unit, Tools.ToolDetails, V.Value, manager)), S.getLeafId(Unit, Tools.ToolDetails, V.Value, manager), Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored), Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, model), F.fromU32(0))}
+  StatsKey{List.length(&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>, S.getEntries(V.Value, Tools.ToolDetails, V.Value, manager)), S.getLeafId(V.Value, Tools.ToolDetails, V.Value, manager), Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, stored), Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, model), F.fromU32(0))}
 def sameText(left: Maybe<&2, String>, right: Maybe<&2, String>) -> Bool:
   match left right:
     case None{} None{}: True{}
@@ -4939,7 +4936,7 @@ def getSessionStats(+session: AgentSession) -> IO(Result<&2, &2, S.Error, Stats.
 def contextUsageIn(+agent: Runtime.Owner(), shared: R.Ref<Shared>) -> IO(Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>):
   do IO<Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>>:
     stored : Shared <- R.read(Shared, shared)
-    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     return Stats.context(stateOf(sharedSession(stored)), Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(current)), F.fromU32(0)))
 
 def getContextUsage(+session: AgentSession) -> IO(Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>):
@@ -5024,7 +5021,7 @@ def appendEntryAction(+session: AgentSession, request: ExtensionTypes.AppendEntr
   match request:
     case ExtensionTypes.AppendEntry{customType, data}:
       do IO<Unit>:
-        outcome : Sessions.Outcome(Appended()) <- appendEntry(sharedOf(session), target => Sessions.appendCustomEntry(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, target, customType, data))
+        outcome : Sessions.Outcome(Appended()) <- appendEntry(sharedOf(session), target => Sessions.appendCustomEntry(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, target, customType, data))
         return Unit{}
 
 def appendEntryCallback(session: AgentSession, request: ExtensionTypes.AppendEntry) -> IO(Unit): appendEntryAction(session, request)
@@ -5128,38 +5125,38 @@ def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime, sdk: 
 def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>,sdk: List<&2, ExtensionTypes.ToolDefinition>) -> IO(AgentSession):
   do IO<AgentSession>:
     +scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
-    initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    initial : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +window : F64 = Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(initial)), F.fromU32(0))
     +loadoutRef : R.Ref<Runtime.Loadout> <- R.new(Runtime.Loadout, loadout)
     +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{},0n,Nil{},ExtensionTypes.OutcomeCompleted{},False{},None{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}, PendingMessages{Nil{}, Nil{}}, loadoutRef})
     +settingsRef : R.Ref<Settings.SettingsManager> <- R.new(Settings.SettingsManager,settings)
     +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~EventEnv, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, EventEnv{agent, shared, loadoutRef})
-    subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
-    +replaced : Maybe<&2, NextTurnHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    legacy : Maybe<&2, LegacyTurnHook()> <- Agent.getPrepareNextTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
+    +replaced : Maybe<&2, NextTurnHook()> <- Agent.getPrepareNextTurnWithContext(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    legacy : Maybe<&2, LegacyTurnHook()> <- Agent.getPrepareNextTurn(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +nextTurn : NextTurnHook() <- C.create(~NextTurnEnv, ~T.ToolHookInput<Turn()>, ~TurnResult(), ~nextTurnHook, NextTurnEnv{agent, shared, settingsRef, replaced, legacy, loadoutRef})
-    Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{nextTurn})
-    +replacedRequest : Maybe<&2, RequestHook()> <- Agent.getPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    Agent.setPrepareNextTurnWithContext(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{nextTurn})
+    +replacedRequest : Maybe<&2, RequestHook()> <- Agent.getPrepareRequest(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
-    Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
+    Agent.setPrepareRequest(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
     shutdownHandler : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
     +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef, shutdownHandler}, models, sdk)
     bindContext(loadout, Some{context})
-    inner : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    inner : Runtime.Stream() <- Agent.getStreamFunction(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     warming : Warming <- createWarming(agent, shared, settingsRef, inner)
     stats : R.Ref<Maybe<&2, StatsMemo>> <- R.new(Maybe<&2, StatsMemo>, None{})
-    +replacedAfterTool : Maybe<&2, AfterToolHook()> <- Agent.getAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +replacedAfterTool : Maybe<&2, AfterToolHook()> <- Agent.getAfterToolCall(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +afterTool : AfterToolHook() <- C.create(~AfterToolEnv, ~AfterToolInput(), ~AfterToolResult(), ~afterToolHook, AfterToolEnv{agent, settingsRef, replacedAfterTool, loadoutRef})
-    Agent.setAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{afterTool})
-    +replacedBeforeTool : Maybe<&2, BeforeToolHook()> <- Agent.getBeforeToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    Agent.setAfterToolCall(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{afterTool})
+    +replacedBeforeTool : Maybe<&2, BeforeToolHook()> <- Agent.getBeforeToolCall(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +beforeTool : BeforeToolHook() <- C.create(~BeforeToolEnv, ~BeforeToolInput(), ~BeforeToolResult(), ~beforeToolHook, BeforeToolEnv{loadoutRef})
-    Agent.setBeforeToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{beforeTool})
-    +replacedFinish : Maybe<&2, FinishTurnHook()> <- Agent.getFinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    Agent.setBeforeToolCall(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{beforeTool})
+    +replacedFinish : Maybe<&2, FinishTurnHook()> <- Agent.getFinishTurn(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +finish : FinishTurnHook() <- C.create(~FinishTurnEnv, ~FinishTurnInput(), ~FinishTurnResult(), ~finishTurnHook, FinishTurnEnv{agent, shared, replacedFinish})
-    Agent.setFinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{finish})
-    +replacedContext : Maybe<&2, ContextHook()> <- Agent.getTransformContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    Agent.setFinishTurn(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{finish})
+    +replacedContext : Maybe<&2, ContextHook()> <- Agent.getTransformContext(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +contextHook : ContextHook() <- C.create(~ContextHookEnv, ~ContextInput(), ~ContextResult(), ~contextTransform, ContextHookEnv{shared, replacedContext})
-    Agent.setTransformContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{contextHook})
+    Agent.setTransformContext(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{contextHook})
     return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming, stats, ToolHooks{afterTool, replacedAfterTool, beforeTool, replacedBeforeTool, finish, replacedFinish, contextHook, replacedContext}}, settingsRef, cwd, loadoutRef, models, scoped}
 
 # upstream AgentSession constructor: the session, its agent hooks and its

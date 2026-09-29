@@ -159,7 +159,7 @@ def sameTexts(left: List<&2,String>,right: List<&2,String>) -> Bool:
 def entryIds(entries: List<&2,Session.Entry()>) -> List<&2,String>:
   match entries:
     case Nil{}: Nil{}
-    case entry <> rest: S.entryId(Unit,Tools.ToolDetails,V.Value,entry) <> entryIds(rest)
+    case entry <> rest: S.entryId(V.Value,Tools.ToolDetails,V.Value,entry) <> entryIds(rest)
 def lastId(entries: List<&2,Session.Entry()>) -> Maybe<&2,String>:
   Maybe.map(&2,String,String,id => id,List.last(&2,String,entryIds(entries)))
 def providerOf(model: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> String:
@@ -455,7 +455,7 @@ def prependChain(id: String,rest: Chain) -> Chain:
 def chain(nodes: List<&2,Types.TreeNode()>) -> Chain:
   match nodes:
     case Nil{}: Chain{Nil{},0n}
-    case S.SessionTreeNode{entry,children,_,_} <> Nil{}: prependChain(S.entryId(Unit,Tools.ToolDetails,V.Value,entry),chain(children))
+    case S.SessionTreeNode{entry,children,_,_} <> Nil{}: prependChain(S.entryId(V.Value,Tools.ToolDetails,V.Value,entry),chain(children))
     case _ <> _ <> rest: Chain{Nil{},2n + List.length(&2,Types.TreeNode(),rest)}
 def chainMatches(walked: Chain,expected: List<&2,String>) -> Bool:
   match walked:

@@ -217,7 +217,7 @@ def runBash(handle: Command,request: BashRequest) -> IO(Unit):
       do IO<Unit>:
         stored : Session.Session() <- Session.sessionOf(session)
         runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(session)
-        outcome : Result<&2,&2,String,Maybe<&2,ExtensionTypes.UserBashEventResult>> <- userBashOf(runner,ExtensionTypes.UserBashEvent{command,Maybe.default(&2,Bool,exclude,False{}),Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,stored)})
+        outcome : Result<&2,&2,String,Maybe<&2,ExtensionTypes.UserBashEventResult>> <- userBashOf(runner,ExtensionTypes.UserBashEvent{command,Maybe.default(&2,Bool,exclude,False{}),Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value,stored)})
         bashDecided(session,sink,id,command,exclude,outcome)
 def newStarted() -> IO(Started):
   do IO<Started>:
@@ -769,7 +769,7 @@ def entryValues(entries: List<&2,Session.Entry()>) -> List<&2,V.Value>:
   match entries:
     case Nil{}: Nil{}
     case value <> rest: Types.entryValue(value) <> entryValues(rest)
-def entryId(value: Session.Entry()) -> String: S.entryId(Unit,Tools.ToolDetails,V.Value,value)
+def entryId(value: Session.Entry()) -> String: S.entryId(V.Value, Tools.ToolDetails, V.Value,value)
 def entriesAfter(entries: List<&2,Session.Entry()>,+since: String) -> Maybe<&2,List<&2,Session.Entry()>>:
   match entries:
     case Nil{}: None{}
@@ -793,8 +793,8 @@ def getEntries(handle: Command,id: Maybe<&2,String>,since: Result<&2,&2,String,M
     case Command{session,sink,_,_,_,_} Done{since}:
       do IO<Unit>:
         +stored : Session.Session() <- Session.sessionOf(session)
-        output(sink,entriesResponse(id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),selectedEntries(S.getEntries(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),since)))
-def treeResponse(id: Maybe<&2,String>,leaf: Maybe<&2,String>,result: Result<&2,&2,S.Error,List<&2,S.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>>>) -> V.Value:
+        output(sink,entriesResponse(id,S.getLeafId(V.Value, Tools.ToolDetails, V.Value,Session.stateOf(stored)),selectedEntries(S.getEntries(V.Value, Tools.ToolDetails, V.Value,Session.stateOf(stored)),since)))
+def treeResponse(id: Maybe<&2,String>,leaf: Maybe<&2,String>,result: Result<&2,&2,S.Error,List<&2,S.SessionTreeNode<V.Value, Tools.ToolDetails, V.Value>>>) -> V.Value:
   match result:
     case Fail{_}: failure(id,"get_tree","Session tree is invalid")
     case Done{tree}: data(id,"get_tree",MessageJson.object(MessageJson.field("tree",Types.treeValue(tree),MessageJson.field("leafId",optionalValue(leaf),Nil{}))))
@@ -803,7 +803,7 @@ def getTree(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
     case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         +stored : Session.Session() <- Session.sessionOf(session)
-        output(sink,treeResponse(id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),S.getTree(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored))))
+        output(sink,treeResponse(id,S.getLeafId(V.Value, Tools.ToolDetails, V.Value,Session.stateOf(stored)),S.getTree(V.Value, Tools.ToolDetails, V.Value,Session.stateOf(stored))))
 def forkText(id: String,text: Maybe<&2,String>) -> Maybe<&2,V.Value>:
   match text:
     case None{}: None{}
@@ -826,7 +826,7 @@ def getForkMessages(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
     case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         stored : Session.Session() <- Session.sessionOf(session)
-        output(sink,data(id,"get_fork_messages",MessageJson.object(MessageJson.field("messages",V.ArrayValue{forkItems(S.getEntries(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)))},Nil{}))))
+        output(sink,data(id,"get_fork_messages",MessageJson.object(MessageJson.field("messages",V.ArrayValue{forkItems(S.getEntries(V.Value, Tools.ToolDetails, V.Value,Session.stateOf(stored)))},Nil{}))))
 def compactResponse(id: Maybe<&2,String>,result: Result<&2,&2,String,Compaction.CompactionResult>) -> V.Value:
   match result:
     case Fail{reason}: failure(id,"compact",reason)
@@ -891,7 +891,7 @@ def pendingCount(value: Session.Shared) -> Nat:
   match value:
     case Session.Shared{_,steering,followUp,_,_,_,_,_, _, _, _}: List.length(&2,String,steering) + List.length(&2,String,followUp)
 def stateOf(+stored: Session.Session(),+current: Session.AgentState(),shared: Session.Shared,streaming: Bool,compacting: Bool,steering: AgentTypes.QueueMode,followUp: AgentTypes.QueueMode,auto: Bool) -> Types.RpcSessionState:
-  Types.RpcSessionState{Session.stateModel(current),Session.stateThinking(current),streaming,compacting,steering,followUp,Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),S.getSessionId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),S.getSessionName(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),auto,List.length(&2,Session.Message(),Session.stateMessages(current)),pendingCount(shared)}
+  Types.RpcSessionState{Session.stateModel(current),Session.stateThinking(current),streaming,compacting,steering,followUp,Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value,stored),S.getSessionId(V.Value, Tools.ToolDetails, V.Value,Session.stateOf(stored)),S.getSessionName(V.Value, Tools.ToolDetails, V.Value,Session.stateOf(stored)),auto,List.length(&2,Session.Message(),Session.stateMessages(current)),pendingCount(shared)}
 def sharedSnapshot(session: Session.AgentSession) -> IO(Session.Shared):
   match session:
     case Session.AgentSession{_,shared,_,_,_,_,_,_}: Ref.read(Session.Shared,shared)
@@ -905,8 +905,8 @@ def getState(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
         shared : Session.Shared <- sharedSnapshot(session)
         streaming : Bool <- Session.isStreaming(session)
         compacting : Bool <- Session.isCompacting(session)
-        steering : AgentTypes.QueueMode <- Agent.getSteeringMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
-        followUp : AgentTypes.QueueMode <- Agent.getFollowUpMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
+        steering : AgentTypes.QueueMode <- Agent.getSteeringMode(V.Value,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
+        followUp : AgentTypes.QueueMode <- Agent.getFollowUpMode(V.Value,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
         auto : Bool <- Session.getAutoCompactionEnabled(session)
         output(sink,data(id,"get_state",Types.sessionStateValue(stateOf(stored,current,shared,streaming,compacting,steering,followUp,auto))))
 def autoResult(sink: Sink(),id: Maybe<&2,String>,command: String,result: Result<&2,&2,String,Unit>) -> IO(Unit):
@@ -1073,7 +1073,7 @@ def cloneCommand(handle: Command,host: Host,id: Maybe<&2,String>) -> IO(Unit):
     case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         stored : Session.Session() <- Session.sessionOf(session)
-        cloneLeaf(sink,host,id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)))
+        cloneLeaf(sink,host,id,S.getLeafId(V.Value, Tools.ToolDetails, V.Value,Session.stateOf(stored)))
 
 # get_commands: extension commands by invocation name, prompt templates, then
 # skills, each with its source metadata.

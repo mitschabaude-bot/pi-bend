@@ -67,7 +67,7 @@ type ExtensionError is Data:
 # Events
 # ------
 
-def AgentMessage() -> Data: Agent.AgentMessage<Unit, Tools.ToolDetails, Messages.CodingMessage<V.Value>>
+def AgentMessage() -> Data: Agent.AgentMessage<V.Value, Tools.ToolDetails, Messages.CodingMessage<V.Value>>
 def ToolResult() -> Data: Agent.AgentToolResult<Tools.ToolDetails>
 
 type AgentStartEvent is Data:
@@ -86,12 +86,12 @@ type MessageStartEvent is Data:
   MessageStartEvent{message: AgentMessage()}
 
 type MessageUpdateEvent is Data:
-  MessageUpdateEvent{message: AgentMessage(), assistantMessageEvent: Ai.AssistantMessageEvent<V.Value, Unit>}
+  MessageUpdateEvent{message: AgentMessage(), assistantMessageEvent: Ai.AssistantMessageEvent<V.Value, V.Value>}
 
 type MessageEndEvent is Data:
   MessageEndEvent{message: AgentMessage()}
 
-def SessionEntry() -> Data: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>
+def SessionEntry() -> Data: S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>
 
 # Session events
 # --------------
@@ -119,7 +119,7 @@ type CompactionReason is Data:
   OverflowReason{}
 
 type SessionBeforeCompactEvent is Data:
-  SessionBeforeCompactEvent{preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, branchEntries: List<&2, SessionEntry()>, customInstructions: Maybe<&2, String>, reason: CompactionReason, willRetry: Bool, signal: Abort.AbortSignal<Unit>}
+  SessionBeforeCompactEvent{preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>, branchEntries: List<&2, SessionEntry()>, customInstructions: Maybe<&2, String>, reason: CompactionReason, willRetry: Bool, signal: Abort.AbortSignal<Unit>}
 
 type SessionBeforeCompactResult is Data:
   SessionBeforeCompactResult{cancel: Maybe<&2, Bool>, compaction: Maybe<&2, Compaction.CompactionResult>}
@@ -150,7 +150,7 @@ type SessionBoundaryDraft is Data:
   CompactionEntryDraft{summary: String, firstKeptEntryId: Maybe<&2, String>, details: Maybe<&2, V.Value>, usage: Maybe<&2, Ai.Usage>}
 
 type BoundaryContextPreview is Data:
-  BoundaryContextPreview{contextEntries: List<&2, S.ProjectedSessionEntry<Unit, Tools.ToolDetails, V.Value>>, contextMessages: List<&2, AgentMessage()>, llmMessages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>, pendingMessages: List<&2, AgentMessage()>, canContinue: Bool}
+  BoundaryContextPreview{contextEntries: List<&2, S.ProjectedSessionEntry<V.Value, Tools.ToolDetails, V.Value>>, contextMessages: List<&2, AgentMessage()>, llmMessages: List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>>, pendingMessages: List<&2, AgentMessage()>, canContinue: Bool}
 
 type BoundaryResult is Data:
   BoundaryResult{entries: Maybe<&2, List<&2, SessionBoundaryDraft>>, continue: Maybe<&2, Bool>}

@@ -338,15 +338,15 @@ def decodeClearedQueue(value: V.Value) -> Decoded(Session.QueuedMessages):
 
 # Session entries and the entry tree, with the session's detail types.
 def entryValue(entry: Session.Entry()) -> V.Value:
-  SessionJson.entry(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,entry)
+  SessionJson.entry(~V.Value, ~Tools.ToolDetails, ~V.Value,~Session.rawValue,~Tools.detailsValue,~Session.rawValue,entry)
 def entryFields(+fields: R.Record<V.Value>) -> Decoded(Session.Entry()):
   do Result<&2,&2,Decode.Error,Session.Entry()>:
     kind : String <- Decode.required(String,fields,"type",Decode.string)
-    SessionJson.entryOf(~Unit,~Tools.ToolDetails,~V.Value,~Session.readUnit,~Session.readDetails,~Session.readRaw,kind,fields)
+    SessionJson.entryOf(~V.Value, ~Tools.ToolDetails, ~V.Value,~Session.readRaw,~Session.readDetails,~Session.readRaw,kind,fields)
 def decodeEntry(value: V.Value) -> Decoded(Session.Entry()):
   Result.bind(&2,&2,Decode.Error,R.Record<V.Value>,Session.Entry(),Decode.object(value),fields => entryFields(fields))
 
-def TreeNode() -> Data: S.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>
+def TreeNode() -> Data: S.SessionTreeNode<V.Value, Tools.ToolDetails, V.Value>
 # The nested tree is rendered with an explicit work stack, so deep chains do
 # not recurse through the JSON builder.
 type TreeTask is Data:

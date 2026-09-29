@@ -579,7 +579,7 @@ def seedCompaction(handle: Handle,value: CoreMessages.CompactionSummaryMessage) 
 def seedBranch(handle: Handle,value: CoreMessages.BranchSummaryMessage) -> IO(Unit):
   match value:
     case CoreMessages.BranchSummaryMessage{summary,_,_}: note(handle,"branch",Some{"Branch summary"},"**Branch Summary**\n\n" ++ summary)
-def seedSessionEntry(+handle: Handle,message: Agent.AgentMessage<Unit,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>>) -> IO(Unit):
+def seedSessionEntry(+handle: Handle,message: Agent.AgentMessage<Schema.Value,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>>) -> IO(Unit):
   match message:
     case Agent.CustomMessage{CoreMessages.BashExecution{value}}: seedHistoricalBash(handle,value)
     case Agent.CustomMessage{CoreMessages.Custom{value}}: seedCustom(handle,value)
@@ -587,11 +587,11 @@ def seedSessionEntry(+handle: Handle,message: Agent.AgentMessage<Unit,Tools.Tool
     case Agent.CustomMessage{CoreMessages.BranchSummary{value}}: seedBranch(handle,value)
     case Agent.LlmMessage{+value}:
       do IO<Unit>:
-        begun : Bool <- accept(Unit,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageStart{Agent.LlmMessage{value}})
-        ended : Bool <- accept(Unit,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageEnd{Agent.LlmMessage{value}})
+        begun : Bool <- accept(Schema.Value,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageStart{Agent.LlmMessage{value}})
+        ended : Bool <- accept(Schema.Value,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageEnd{Agent.LlmMessage{value}})
         return Unit{}
     case Agent.CustomMessage{_}: IO.pure(Unit,Unit{})
-def seedSession(+handle: Handle,messages: List<&2,Agent.AgentMessage<Unit,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>>>) -> IO(Unit):
+def seedSession(+handle: Handle,messages: List<&2,Agent.AgentMessage<Schema.Value,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>>>) -> IO(Unit):
   match messages:
     case Nil{}: IO.pure(Unit,Unit{})
     case message <> rest:

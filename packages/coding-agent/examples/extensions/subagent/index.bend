@@ -330,7 +330,7 @@ def appended(result: SingleResult, message: Message()) -> SingleResult:
 
 # An assistant message counts a turn and its usage, names the model unless
 # one is known, and records its stop reason and error.
-def assistantEnded(result: SingleResult, message: Ai.AssistantMessage<V.Value, Unit>) -> SingleResult:
+def assistantEnded(result: SingleResult, message: Ai.AssistantMessage<V.Value, V.Value>) -> SingleResult:
   match result message:
     case SingleResult{agent, source, task, exitCode, messages, stderr, usage, model, _, errorMessage, step} Ai.AssistantMessage{_, _, _, messageModel, _, _, _, _, messageUsage, stopReason, _, messageError, _, _, _}:
       SingleResult{agent, source, task, exitCode, messages, stderr, addUsage(countTurn(usage), messageUsage), orMaybe(model, nonEmpty(messageModel)), Some{Json.stopReason(stopReason)}, orMaybe(messageError, errorMessage), step}

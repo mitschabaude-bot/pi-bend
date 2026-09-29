@@ -591,12 +591,12 @@ def onAgentEnd(env: PlanMode, call: Ext.HandlerCall<Ext.AgentEndEvent>) -> IO(Re
 # session_start: restore state
 # ----------------------------
 
-def Entry() -> Data: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>
+def Entry() -> Data: S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>
 
 def entriesOf(manager: Maybe<&2, Ctx.ReadonlySessionManager()>) -> List<&2, Entry()>:
   match manager:
     case None{}: Nil{}
-    case Some{session}: S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, session))
+    case Some{session}: S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, session))
 
 # The last custom entry of type "plan-mode" (upstream filters and pops).
 def lastPlanModeEntry(entries: List<&2, Entry()>, found: Maybe<&2, Maybe<&2, V.Value>>) -> Maybe<&2, Maybe<&2, V.Value>>:

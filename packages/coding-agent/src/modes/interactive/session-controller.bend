@@ -240,7 +240,7 @@ def performClone(option: Maybe<&2,Replacement>,session: Maybe<&2,Session.AgentSe
     case Some{Replacement{_,fork}} Some{live}:
       do IO<Result<&2,&2,String,Unit>>:
         stored : Session.Session() <- Session.sessionOf(live)
-        cloneLeaf(fork,observer,Tree.getLeafId(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored)))
+        cloneLeaf(fork,observer,Tree.getLeafId(Schema.Value,Tools.ToolDetails,Schema.Value,Session.stateOf(stored)))
     case _ _:
       do IO<Result<&2,&2,String,Unit>>:
         notifyCommand(observer,Commands.CommandError{"Cloning is not available"})

@@ -131,7 +131,7 @@ def compactOptions() -> CompactOptions: CompactOptions{None{}, None{}, None{}}
 # upstream ReadonlySessionManager: a snapshot of the session record. Its
 # queries are session-manager.bend's and session-persistence.bend's pure
 # functions (getEntries, getBranch, getLeafId, getSessionFile, ...).
-def ReadonlySessionManager() -> Data: Sessions.Session<Unit, Tools.ToolDetails, V.Value>
+def ReadonlySessionManager() -> Data: Sessions.Session<V.Value, Tools.ToolDetails, V.Value>
 
 type ExtensionContextActions is Data:
   ExtensionContextActions{state: C.Callback<Unit, SessionState>, abort: C.Callback<Unit, Unit>, shutdown: C.Callback<Unit, Unit>, getContextUsage: C.Callback<Unit, Maybe<&2, ContextUsage>>, compact: C.Callback<CompactOptions, Unit>, getSystemPrompt: C.Callback<Unit, String>, sessionManager: C.Callback<Unit, ReadonlySessionManager()>}

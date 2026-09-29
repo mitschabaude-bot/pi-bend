@@ -5,6 +5,7 @@ import ../../../../runtime/src/deferred.bend as Deferred
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/ref.bend as Ref
 import ../../../../runtime/src/record.bend as Record
+import ../../../../runtime/src/schema-value.bend as Schema
 import ../../../../runtime/src/text.bend as Text
 import ../../../../tui/src/tui-process.bend as Process
 import ../../core/agent-runtime.bend as Runtime
@@ -80,7 +81,7 @@ def observed(events: Events,event: Session.SessionEvent()) -> IO(Unit):
   match events:
     case Events{transcript,redraw,retryAttempt}:
       do IO<Unit>:
-        changed : Bool <- Transcript.acceptWithRetry(Unit,Runtime.Custom(),transcript,Some{retryAttempt},event)
+        changed : Bool <- Transcript.acceptWithRetry(Schema.Value,Runtime.Custom(),transcript,Some{retryAttempt},event)
         Bool.pick(Unit -> IO(Unit),changed,_ => requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
 def onSessionEvent(events: Events,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:

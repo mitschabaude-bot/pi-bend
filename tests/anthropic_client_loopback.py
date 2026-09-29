@@ -66,12 +66,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--toolchain", default=str(ROOT / "build/bend-native-toolchain/bend2/main.ts"))
     parser.add_argument("--backend", choices=("bun", "native", "all"), default="all")
+    parser.add_argument("--source", choices=("all", "client", "provider", "oauth"), default="all")
     args = parser.parse_args()
     sources = {
         "client": ROOT / "packages/ai/test/anthropic-messages-client.bend",
         "provider": ROOT / "packages/coding-agent/test/anthropic-provider-loopback.bend",
         "oauth": ROOT / "packages/ai/test/anthropic-oauth-refresh.bend",
     }
+    if args.source != "all":
+        sources = {args.source: sources[args.source]}
     with tempfile.TemporaryDirectory(prefix="anthropic-loopback-") as directory:
         target = pathlib.Path(directory)
         commands = []
@@ -103,6 +106,25 @@ def main():
                 if kind != "oauth":
                     invoke(command, address, 0, EVENTS + ("\nsuccess" if kind == "client" else ""))
                     print(f"{kind} {name}: live request and SSE events pass")
+            Handler.response = "".join([
+                event("message_start", {"type": "message_start", "message": {"id": "m-diagnostic", "model": "claude-opus-5", "usage": {"input_tokens": 2, "output_tokens": 0}, "input_transformations": [{"type": "thinking_dropped", "path": "messages.1.content.0", "reason": "prefix_binding_mismatch"}]}}),
+                event("content_block_start", {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}),
+                event("content_block_delta", {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hi"}}),
+                event("content_block_stop", {"type": "content_block_stop", "index": 0}),
+                event("message_delta", {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}}),
+                event("message_stop", {"type": "message_stop"}),
+            ]).encode()
+            for kind, name, command in commands:
+                if kind == "provider":
+                    result = subprocess.run([*command, address, "diagnostics"], text=True, capture_output=True, timeout=30)
+                    lines = result.stdout.strip().splitlines()
+                    if result.returncode != 0 or lines[:-1] != EVENTS.splitlines():
+                        raise AssertionError((name, result.returncode, result.stdout, result.stderr))
+                    diagnostics = json.loads(lines[-1])["diagnostics"]
+                    expected = [{"type": "anthropic_input_transformations", "details": {"transformations": [{"type": "thinking_dropped", "path": "messages.1.content.0", "reason": "prefix_binding_mismatch"}]}}]
+                    if [{"type": item["type"], "details": item["details"]} for item in diagnostics] != expected:
+                        raise AssertionError((name, diagnostics))
+                    print(f"{kind} {name}: Anthropic diagnostic details pass")
             Handler.response = event("error", {"type": "error", "error": {"message": "nope"}}).encode()
             for kind, name, command in commands:
                 if kind != "oauth":

@@ -1305,7 +1305,7 @@ def prepareHost(host: Host,+current: List<&2,Session.SessionInfo>,+all: List<&2,
         resetTouched(loader)
         live : AgentSession.AgentSession <- Ref.read(AgentSession.AgentSession,session)
         stored : AgentSession.Session() <- AgentSession.sessionOf(live)
-        active : List<&2,String> <- protectedPaths(List.append(&2,Session.SessionInfo,current,all),Persistence.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored))
+        active : List<&2,String> <- protectedPaths(List.append(&2,Session.SessionInfo,current,all),Persistence.getSessionFile(V.Value, Tools.ToolDetails, V.Value,stored))
         Ref.write(Loads,loads,progress)
         Ref.write(Modal,modal,Open{State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{},active}}})
 def openHost(host: Host,current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>) -> IO(Unit):
@@ -1317,7 +1317,7 @@ def openLoadingHost(+host: Host,context: LoadContext) -> IO(Unit):
         prepareHost(host,Nil{},Nil{},Loads{Some{Starting{}},Some{Starting{}}})
         live : AgentSession.AgentSession <- Ref.read(AgentSession.AgentSession,session)
         stored : AgentSession.Session() <- AgentSession.sessionOf(live)
-        startLoading(modal,loader,LoadSource{context,Persistence.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored)},Current{},Browse{})
+        startLoading(modal,loader,LoadSource{context,Persistence.getSessionFile(V.Value, Tools.ToolDetails, V.Value,stored)},Current{},Browse{})
 def disposeLoader(loader: HostLoader) -> IO(Unit):
   match loader:
     case HostLoader{loads,worker,_,touched,pending}:

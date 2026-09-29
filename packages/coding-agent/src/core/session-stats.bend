@@ -37,32 +37,32 @@ def addOptionalUsage(value: Maybe<&2,Ai.Usage>,totals: Totals) -> Totals:
   match value:
     case None{}: totals
     case Some{usage}: addUsage(usage,totals)
-def addMessage(message: Agent.AgentMessage<Unit,Tools.ToolDetails,Messages.CodingMessage<V.Value>>,totals: Totals) -> Totals:
+def addMessage(message: Agent.AgentMessage<V.Value,Tools.ToolDetails,Messages.CodingMessage<V.Value>>,totals: Totals) -> Totals:
   match message totals:
     case Agent.LlmMessage{Ai.User{_}} Totals{users,assistants,calls,results,messages,input,output,read,write,cost}:
       Totals{Nat.add(1n,users),assistants,calls,results,Nat.add(1n,messages),input,output,read,write,cost}
     case Agent.LlmMessage{Ai.Assistant{+assistant}} Totals{users,assistants,calls,results,messages,input,output,read,write,cost}:
-      addUsage(Ai.assistantUsage(V.Value,Unit,assistant),Totals{users,Nat.add(1n,assistants),Nat.add(calls,countCalls(Ai.assistantContent(V.Value,Unit,assistant))),results,Nat.add(1n,messages),input,output,read,write,cost})
+      addUsage(Ai.assistantUsage(V.Value,V.Value,assistant),Totals{users,Nat.add(1n,assistants),Nat.add(calls,countCalls(Ai.assistantContent(V.Value,V.Value,assistant))),results,Nat.add(1n,messages),input,output,read,write,cost})
     case Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{_,_,_,_,usage,_,_}}} Totals{users,assistants,calls,results,messages,input,output,read,write,cost}:
       addOptionalUsage(usage,Totals{users,assistants,calls,Nat.add(1n,results),Nat.add(1n,messages),input,output,read,write,cost})
     case _ Totals{users,assistants,calls,results,messages,input,output,read,write,cost}:
       Totals{users,assistants,calls,results,Nat.add(1n,messages),input,output,read,write,cost}
-def addEntry(entry: S.SessionEntry<Unit,Tools.ToolDetails,V.Value>,totals: Totals) -> Totals:
+def addEntry(entry: S.SessionEntry<V.Value,Tools.ToolDetails,V.Value>,totals: Totals) -> Totals:
   match entry:
     case S.SessionMessageEntry{_,message}: addMessage(message,totals)
     case S.Compaction{S.CompactionEntry{_,_,_,_,_,usage,_,_}}: addOptionalUsage(usage,totals)
     case S.BranchSummaryEntry{_,_,_,_,usage,_}: addOptionalUsage(usage,totals)
     case S.UsageEntry{_,_,_,_,usage,_}: addUsage(usage,totals)
     case _: totals
-def aggregate(entries: List<&2,S.SessionEntry<Unit,Tools.ToolDetails,V.Value>>,totals: Totals) -> Totals:
+def aggregate(entries: List<&2,S.SessionEntry<V.Value,Tools.ToolDetails,V.Value>>,totals: Totals) -> Totals:
   match entries:
     case Nil{}: totals
     case entry <> rest: aggregate(rest,addEntry(entry,totals))
 
-def Entry() -> Data: S.SessionEntry<Unit,Tools.ToolDetails,V.Value>
-def Projected() -> Data: S.ProjectedSessionEntry<Unit,Tools.ToolDetails,V.Value>
-def Projection() -> Data: S.SessionProjection<Unit,Tools.ToolDetails,V.Value>
-def Message() -> Data: Agent.AgentMessage<Unit,Tools.ToolDetails,Messages.CodingMessage<V.Value>>
+def Entry() -> Data: S.SessionEntry<V.Value,Tools.ToolDetails,V.Value>
+def Projected() -> Data: S.ProjectedSessionEntry<V.Value,Tools.ToolDetails,V.Value>
+def Projection() -> Data: S.SessionProjection<V.Value, Tools.ToolDetails, V.Value>
+def Message() -> Data: Agent.AgentMessage<V.Value,Tools.ToolDetails,Messages.CodingMessage<V.Value>>
 def validUsage(stop: Ai.StopReason,usage: Ai.Usage) -> Bool:
   match stop:
     case Ai.Aborted{}: False{}
@@ -71,7 +71,7 @@ def validUsage(stop: Ai.StopReason,usage: Ai.Usage) -> Bool:
 def assistantHasUsage(message: Message()) -> Bool:
   match message:
     case Agent.LlmMessage{Ai.Assistant{+assistant}}:
-      validUsage(Ai.assistantStopReason(V.Value,Unit,assistant),Ai.assistantUsage(V.Value,Unit,assistant))
+      validUsage(Ai.assistantStopReason(V.Value,V.Value,assistant),Ai.assistantUsage(V.Value,V.Value,assistant))
     case _: False{}
 def anyAssistant(messages: List<&2,Message()>) -> Bool:
   match messages:
@@ -81,18 +81,18 @@ def projectedSource(entries: List<&2,Projected()>,+id: String) -> Bool:
   match entries:
     case Nil{}: False{}
     case S.ProjectedSessionEntry{sourceEntry,messages} <> rest:
-      (String.eq(S.entryId(Unit,Tools.ToolDetails,V.Value,sourceEntry),id) && anyAssistant(messages)) || projectedSource(rest,id)
+      (String.eq(S.entryId(V.Value, Tools.ToolDetails, V.Value,sourceEntry),id) && anyAssistant(messages)) || projectedSource(rest,id)
 def afterCompaction(branch: List<&2,Entry()>,+compactionId: String) -> List<&2,Entry()>:
   match branch:
     case Nil{}: Nil{}
     case entry <> +rest:
-      Bool.pick(List<&2,Entry()>,String.eq(S.entryId(Unit,Tools.ToolDetails,V.Value,entry),compactionId),rest,afterCompaction(rest,compactionId))
+      Bool.pick(List<&2,Entry()>,String.eq(S.entryId(V.Value, Tools.ToolDetails, V.Value,entry),compactionId),rest,afterCompaction(rest,compactionId))
 def hasProjectedUsage(branch: List<&2,Entry()>,+projected: List<&2,Projected()>) -> Bool:
   match branch:
     case Nil{}: False{}
-    case entry <> rest: projectedSource(projected,S.entryId(Unit,Tools.ToolDetails,V.Value,entry)) || hasProjectedUsage(rest,projected)
+    case entry <> rest: projectedSource(projected,S.entryId(V.Value, Tools.ToolDetails, V.Value,entry)) || hasProjectedUsage(rest,projected)
 def knownContext(projection: Projection(),branch: List<&2,Entry()>,+window: F64) -> ContextUsage:
-  +tokens = Compaction.estimateTokensOf(Compaction.estimateProjectedContextTokens(Unit,Tools.ToolDetails,V.Value,projection,branch))
+  +tokens = Compaction.estimateTokensOf(Compaction.estimateProjectedContextTokens(V.Value, Tools.ToolDetails, V.Value,projection,branch))
   ContextUsage{Some{tokens},window,Some{F.multiply(F.divide(tokens,window),F.fromU32(100))}}
 def contextFromLatest(+projection: Projection(),+branch: List<&2,Entry()>,+window: F64,latest: Maybe<&2,S.CompactionEntry<V.Value>>) -> ContextUsage:
   match projection latest:
@@ -100,23 +100,23 @@ def contextFromLatest(+projection: Projection(),+branch: List<&2,Entry()>,+windo
       Bool.pick(ContextUsage,hasProjectedUsage(afterCompaction(branch,compactionId),projected),knownContext(projection,branch,window),ContextUsage{None{},window,None{}})
     case _ None{}: knownContext(projection,branch,window)
 def contextFrom(projection: Projection(),+branch: List<&2,Entry()>,window: F64) -> ContextUsage:
-  contextFromLatest(projection,branch,window,S.getLatestCompactionEntry(Unit,Tools.ToolDetails,V.Value,branch))
+  contextFromLatest(projection,branch,window,S.getLatestCompactionEntry(V.Value, Tools.ToolDetails, V.Value,branch))
 def fromProjection(projection: Result<&2,&2,S.Error,Projection()>,branch: Result<&2,&2,S.Error,List<&2,Entry()>>,window: F64) -> Result<&2,&2,S.Error,ContextUsage>:
   match projection branch:
     case Fail{reason} _: Fail{reason}
     case _ Fail{reason}: Fail{reason}
     case Done{projected} Done{entries}: Done{contextFrom(projected,entries,window)}
-def context(+manager: S.SessionManager<Unit,Tools.ToolDetails,V.Value>,+window: F64) -> Result<&2,&2,S.Error,Maybe<&2,ContextUsage>>:
+def context(+manager: S.SessionManager<V.Value, Tools.ToolDetails, V.Value>,+window: F64) -> Result<&2,&2,S.Error,Maybe<&2,ContextUsage>>:
   Bool.pick(Result<&2,&2,S.Error,Maybe<&2,ContextUsage>>,F.isGreater(F.compare(window,zero())),
-    Result.map(&2,&2,S.Error,ContextUsage,Maybe<&2,ContextUsage>,usage => Some{usage},fromProjection(S.buildSessionProjection(Unit,Tools.ToolDetails,V.Value,S.getEntries(Unit,Tools.ToolDetails,V.Value,manager),S.Latest{}),S.getBranch(Unit,Tools.ToolDetails,V.Value,manager,S.Latest{}),window)),Done{None{}})
+    Result.map(&2,&2,S.Error,ContextUsage,Maybe<&2,ContextUsage>,usage => Some{usage},fromProjection(S.buildSessionProjection(V.Value, Tools.ToolDetails, V.Value,S.getEntries(V.Value, Tools.ToolDetails, V.Value,manager),S.Latest{}),S.getBranch(V.Value, Tools.ToolDetails, V.Value,manager,S.Latest{}),window)),Done{None{}})
 def withContext(path: Maybe<&2,String>,id: String,totals: Totals,value: Result<&2,&2,S.Error,Maybe<&2,ContextUsage>>) -> Result<&2,&2,S.Error,Stats>:
   match value:
     case Fail{reason}: Fail{reason}
     case Done{usage}: Done{Stats{path,id,totals,usage}}
-def stats(+stored: Persistence.Session<Unit,Tools.ToolDetails,V.Value>,model: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> Result<&2,&2,S.Error,Stats>:
-  +manager = Persistence.stateOf(Unit,Tools.ToolDetails,V.Value,stored)
+def stats(+stored: Persistence.Session<V.Value, Tools.ToolDetails, V.Value>,model: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> Result<&2,&2,S.Error,Stats>:
+  +manager = Persistence.stateOf(V.Value, Tools.ToolDetails, V.Value,stored)
   +window = Maybe.default(&2,F64,Maybe.map(&2,Ai.Model<Ai.JsonValue>,F64,Ai.modelContextWindow,model),zero())
-  withContext(Persistence.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),S.getSessionId(Unit,Tools.ToolDetails,V.Value,manager),aggregate(S.getEntries(Unit,Tools.ToolDetails,V.Value,manager),empty()),context(manager,window))
+  withContext(Persistence.getSessionFile(V.Value, Tools.ToolDetails, V.Value,stored),S.getSessionId(V.Value, Tools.ToolDetails, V.Value,manager),aggregate(S.getEntries(V.Value, Tools.ToolDetails, V.Value,manager),empty()),context(manager,window))
 
 def contextValue(value: ContextUsage) -> V.Value:
   match value:
