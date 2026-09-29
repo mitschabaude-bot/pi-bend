@@ -3459,10 +3459,13 @@
         "tests/package_manager_check.py",
         "tests/package-manager.md",
         "tests/package-sources.bend",
-        "tests/package_sources_check.py"
+        "tests/package_sources_check.py",
+        "tests/package-git-update.bend",
+        "tests/package_git_update_check.py",
+        "tests/package_command_check.py"
       ],
       "sha256": "ca17de96e051959a93d8c294a037f04f5cb6a6fd6618553457e5da7d09d563f7",
-      "notes": "Ported (Bun and native one/four threads), tests/package-sources.bend: source parsing (\"should parse package source types from docs examples\", \"should never parse dot-relative paths as git\"), git install paths (traversal refused for user, project and temporary scopes), temporary install paths (node_modules/left-pad under <agentDir>/tmp/extensions, created 0700), all six settings source normalization cases (local sources relative to the scope base, removal by equivalent path, same-ref add unchanged, ref replacement keeping package filters) and all 12 HTTPS git URL parsing cases. Resolution of local settings/auto-discovered skills, prompts and themes is covered differentially by tests/package_manager_check.py. Pending: package installs, removal and updates (npm/git commands, progress events, npmCommand), package resource collection (manifests, filters, force-include/exclude inside packages, extension discovery), package deduplication in resolve, offline/update checks; the npm `range` field needs semver ranges."
+      "notes": "Ported (Bun and native one/four threads), tests/package-sources.bend: source parsing (\"should parse package source types from docs examples\", \"should never parse dot-relative paths as git\"), git install paths (traversal refused for user, project and temporary scopes), temporary install paths (node_modules/left-pad under <agentDir>/tmp/extensions, created 0700), all six settings source normalization cases (local sources relative to the scope base, removal by equivalent path, same-ref add unchanged, ref replacement keeping package filters) and all 12 HTTPS git URL parsing cases. Resolution of local settings/auto-discovered skills, prompts and themes is covered differentially by tests/package_manager_check.py. Native local-Git tests cover managed clone, update, rewritten history, pinned refs, interrupted cleanup and removal; package command tests cover local install/list/remove persistence, trust rejection and missing paths against upstream pi. Pending: npm lifecycle, configured-source update, progress events, npmCommand, package resource collection (manifests, filters, force-include/exclude inside packages, extension discovery), package deduplication in resolve, offline/update checks; the npm `range` field needs semver ranges."
     },
     {
       "source": "packages/coding-agent/test/path-utils.test.ts",

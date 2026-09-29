@@ -4,6 +4,7 @@ import ./cli/initial-message.bend as Initial
 import ./core/settings-diagnostics.bend as SettingsDiagnostics
 import ./cli/auth-login.bend as AuthLogin
 import ./cli/auth-command.bend as AuthCommand
+import ./cli/package-command.bend as PackageCommand
 import ./cli/auth-check.bend as AuthCheck
 import ./cli/credential-print.bend as CredentialPrint
 import ./cli/file-processor.bend as Files
@@ -61,7 +62,7 @@ import ../../ai/src/utils/uuid.bend as Uuid
 
 # The pi entry point: argument parsing, mode selection, session selection,
 # initial message assembly, runtime creation and exit behavior. Extensions
-# and package commands remain to be ported.
+# and the update/config package commands remain to be ported.
 
 type AppMode is Data:
   Interactive{}
@@ -1774,12 +1775,27 @@ def authCommandParsed(parsed: Result<&2,&2,String,Maybe<&2,AuthCommand.AuthComma
 def runAuthCommand(+values: List<&2, String>) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit), AuthCommand.isAuthCommandHelp(values), _ => AuthCommand.printAuthCommandHelp(), _ => authCommandParsed(AuthCommand.parseAuthCommand(values)))(Unit{})
 
+def packageLoaded(values: List<&2, String>, environment: Result<&2, &2, FS.Error, Paths.Environment>, directory: Config.Located()) -> IO(Unit):
+  match environment directory:
+    case Done{environment} Done{agentDir}: PackageCommand.run(values, environment, agentDir)
+    case _ _: IO.die(Unit, 1, "Could not resolve package directories")
+
+def runPackageCommand(values: List<&2, String>) -> IO(Unit):
+  do IO<Unit>:
+    environment : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(Runtime.urlContext())
+    directory : Config.Located() <- Config.getAgentDir()
+    packageLoaded(values, environment, directory)
+
 def runValues(values: List<&2, String>) -> IO(Unit):
   match values:
     case "auth" <> "login" <> Nil{}: AuthLogin.run()
     case "auth" <> "login" <> "--provider" <> "openai-codex" <> Nil{}: AuthLogin.run()
     case "auth" <> "login" <> _: fail("Usage: pi auth login [--provider openai-codex]")
     case "auth" <> rest: runAuthCommand("auth" <> rest)
+    case "install" <> rest: runPackageCommand("install" <> rest)
+    case "remove" <> rest: runPackageCommand("remove" <> rest)
+    case "uninstall" <> rest: runPackageCommand("uninstall" <> rest)
+    case "list" <> rest: runPackageCommand("list" <> rest)
     case other: run(Args.parseArgs(other))
 
 # upstream cli/setup.ts setupCli and main's offline switch: variables the

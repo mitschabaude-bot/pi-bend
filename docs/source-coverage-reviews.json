@@ -962,7 +962,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "0401425d15b3efc3d3d844f6ed7c81e07b1f654f4d56c4323821b12ed64e2a30",
         "packages/coding-agent/src/modes/interactive/commands.bend": "dc44029e5b58c1710514d951bf85e9ea822ab11553590fb4fae0a403effba086",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
-        "packages/coding-agent/src/main.bend": "817b2225f9d4702d48ba9e6e4a6399cefea20982e3af6480b55eed8a37e8f15f",
+        "packages/coding-agent/src/main.bend": "78aeaac3b100815e6cb94202638074a8bee8d2fed392f46ca304b2bea83ee4f1",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "2953a0fd626f212d3e94cd4ee387462307e710be9590551e69ac362997c7f6f8",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "32cccab2dde6e9413d1ea84f1e471a0774e1a2a261d971be689fa3e8af147546",
@@ -1199,13 +1199,13 @@
     },
     "packages/coding-agent/src/core/package-manager.ts": {
       "state": "partial",
-      "note": "Ported: resolve for local settings entries and auto-discovered skills, prompts and themes (patterns, overrides, ignore files, precedence, canonical dedupe); parseSource/parseNpmSpec/isExactNpmVersion, getPackageIdentity, addSourceToSettings/removeSourceFromSettings with settings normalization, getBaseDirForScope with the project-trust check, resolveManagedPath, getExtensionTempFolder, getTemporaryDir, getGitInstallPath and getManagedNpmInstallPath. Managed Git update clones missing sources, checks out pinned refs, installs manifest dependencies, fetches tracked branches with force-refspec reconciliation, and resets/cleans changed checkouts with an interruption marker; removal deletes the checkout and marker. Native local-Git integration test covers clone, no-op, marker cleanup, advance, rewritten history, pins and removal. Missing: package sources in resolve (install on missing, manifests, package filters, dedupePackages), extensions, public install/remove/update through npm and git, missing-dependency repair, failed-clone cleanup and parent pruning, update checks, legacy global npm paths, progress events, listConfiguredPackages and getInstalledPath; NpmSource has no `range` until semver ranges are ported.",
+      "note": "Ported: resolve for local settings entries and auto-discovered skills, prompts and themes (patterns, overrides, ignore files, precedence, canonical dedupe); parseSource/parseNpmSpec/isExactNpmVersion, getPackageIdentity, addSourceToSettings/removeSourceFromSettings with settings normalization, getBaseDirForScope with the project-trust check, resolveManagedPath, getExtensionTempFolder, getTemporaryDir, getGitInstallPath and getManagedNpmInstallPath. Managed Git update clones missing sources, checks out pinned refs, installs manifest dependencies, fetches tracked branches with force-refspec reconciliation, and resets/cleans changed checkouts with an interruption marker; removal deletes the checkout and marker. Public install/remove operations dispatch Git and local sources; npm returns an explicit error. Native local-Git integration test covers clone, no-op, marker cleanup, advance, rewritten history, pins and removal. Missing: package sources in resolve (install on missing, manifests, package filters, dedupePackages), extensions, npm lifecycle, public configured-source update, missing-dependency repair, failed-clone cleanup and parent pruning, update checks, legacy global npm paths, progress events, listConfiguredPackages and getInstalledPath; NpmSource has no `range` until semver ranges are ported.",
       "ports": [
         "packages/coding-agent/src/core/package-manager.bend"
       ],
       "source_sha256": "e2fdd18093dc69cb8fe82bb6bef674f20f8a5093d0d13fd1b7180f49dbe751fd",
       "port_sha256": {
-        "packages/coding-agent/src/core/package-manager.bend": "b9d15caf4ee9f353773958cb00eae5f4536cf8aa323db4326cc0e6eab60d741d"
+        "packages/coding-agent/src/core/package-manager.bend": "9f79481f4b709ebef78b79b612e3148f926dced6f4a89f90faef5a90de38676e"
       }
     },
     "packages/ai/src/providers/faux.ts": {
@@ -1553,7 +1553,7 @@
         "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
         "packages/coding-agent/src/core/agent-runtime.bend": "6e1f14a64da0d5a895bd77eb322ea76109442303506b97dddfaf2dc9df1084c2",
-        "packages/coding-agent/src/main.bend": "817b2225f9d4702d48ba9e6e4a6399cefea20982e3af6480b55eed8a37e8f15f"
+        "packages/coding-agent/src/main.bend": "78aeaac3b100815e6cb94202638074a8bee8d2fed392f46ca304b2bea83ee4f1"
       }
     },
     "packages/coding-agent/src/core/crash-log.ts": {
@@ -1747,7 +1747,7 @@
     },
     "packages/coding-agent/src/main.ts": {
       "state": "partial",
-      "note": "Reviewed the extension startup path: upstream combines built-in and injected inline factories, resolves explicit extension paths, passes factories to session services and reports load errors. Native RPC startup now loads the settings-selected global theme with the terminal color mode and dark fallback, and supplies it to extension UI; custom and missing-theme RPC startup smoke checks pass. Native main selects named linked Bend factories through --extension and effective settings; --no-extensions suppresses settings discovery but retains explicit selections, and project settings follow trust. The loopback CLI check covers global and project settings, trust switches, de-duplication, explicit selection and a delegated model request. Arbitrary Bend source-file discovery, package commands and broader main behavior remain incomplete or unreviewed. Missing-cwd Continue reopens the selected session file after the prompt, so concurrent edits are included as upstream does. Plain help and model metadata remain on stdout; explicit print/JSON/RPC mode routes them to stderr so machine output stays clean.",
+      "note": "Reviewed the extension startup path: upstream combines built-in and injected inline factories, resolves explicit extension paths, passes factories to session services and reports load errors. Native RPC startup now loads the settings-selected global theme with the terminal color mode and dark fallback, and supplies it to extension UI; custom and missing-theme RPC startup smoke checks pass. Native main selects named linked Bend factories through --extension and effective settings; --no-extensions suppresses settings discovery but retains explicit selections, and project settings follow trust. The loopback CLI check covers global and project settings, trust switches, de-duplication, explicit selection and a delegated model request. Main now dispatches install/remove/uninstall/list to the package command module; update/config and broader main behavior remain incomplete or unreviewed. Missing-cwd Continue reopens the selected session file after the prompt, so concurrent edits are included as upstream does. Plain help and model metadata remain on stdout; explicit print/JSON/RPC mode routes them to stderr so machine output stays clean.",
       "source_sha256": "d5f38460ed5ff89a8822a56bb40d279c08fe00b4d1d501e83cce0faf0b99addd",
       "ports": [
         "packages/coding-agent/src/main.bend",
@@ -1755,9 +1755,22 @@
         "packages/coding-agent/src/core/agent-runtime.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/main.bend": "817b2225f9d4702d48ba9e6e4a6399cefea20982e3af6480b55eed8a37e8f15f",
+        "packages/coding-agent/src/main.bend": "78aeaac3b100815e6cb94202638074a8bee8d2fed392f46ca304b2bea83ee4f1",
         "packages/coding-agent/src/extensions/index.bend": "cac66e23a500ff2bbd041ab89114ad74c7fc09a599fbb4d982dbc77bf502d3d8",
         "packages/coding-agent/src/core/agent-runtime.bend": "6e1f14a64da0d5a895bd77eb322ea76109442303506b97dddfaf2dc9df1084c2"
+      }
+    },
+    "packages/coding-agent/src/package-manager-cli.ts": {
+      "state": "partial",
+      "note": "The native CLI routes install/remove/uninstall/list before session startup. Local sources are checked, successful changes persist in settings, and project-local writes use the saved trust decision; tests/package_command_check.py passes against upstream pi, the Bend JS runner and the native binary. Git install/remove use the managed lifecycle. Missing: npm lifecycle, update/config commands, package-command help and full option parsing (including --approve), filtered-path display, progress output and self-update.",
+      "ports": [
+        "packages/coding-agent/src/cli/package-command.bend",
+        "packages/coding-agent/src/main.bend"
+      ],
+      "source_sha256": "8f75c01f9c2c2e07d2144eaef43a0739435844cacf28a6fd6b316692e510a1c0",
+      "port_sha256": {
+        "packages/coding-agent/src/cli/package-command.bend": "1f6be981d25d53892947486319ac5139675c7f86415160caef73c4602bf57656",
+        "packages/coding-agent/src/main.bend": "78aeaac3b100815e6cb94202638074a8bee8d2fed392f46ca304b2bea83ee4f1"
       }
     },
     "packages/coding-agent/src/cli/args.ts": {

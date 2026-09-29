@@ -605,6 +605,10 @@ def cwdOf(context: Context) -> String:
   match context:
     case Context{_, _, cwd, _, _}: cwd
 
+def settingsOf(context: Context) -> Settings.SettingsManager:
+  match context:
+    case Context{_, settings, _, _, _}: settings
+
 def autoMetadata(scope: Scope, baseDir: String) -> PathMetadata: PathMetadata{Auto{}, scope, Some{baseDir}}
 
 def addedAuto(+resources: List<&2, ResolvedResource>, +paths: List<&2, String>, scope: Scope, +overrides: List<&2, String>, +baseDir: String) -> List<&2, ResolvedResource>:
@@ -730,8 +734,8 @@ def enabledPaths(resources: List<&2, ResolvedResource>) -> List<&2, String>:
 # Package sources
 # ---------------
 # upstream parseSource, getPackageIdentity, settings source normalization
-# and install locations. Installing, updating and resolving package contents
-# (npm and git commands, manifests, filters) are not ported yet.
+# and install locations. Managed Git lifecycle is below; npm commands and
+# resolving resources from package contents are still pending.
 
 # upstream NpmSource (without `range`, which needs semver ranges), GitSource
 # and LocalSource.
@@ -1269,3 +1273,29 @@ def removeGit(+context: Context, source: Git.GitSource, scope: SourceScope) -> I
   do IO<PackageResult()>:
     located : Result<&2, &2, String, String> <- getGitInstallPath(context, source, scope)
     removeLocated(located)
+
+def installedLocal(path: String, exists: Bool) -> PackageResult():
+  Bool.pick(PackageResult(), exists, Done{Unit{}}, Fail{"Path does not exist: " ++ path})
+
+def installParsed(+context: Context, parsed: ParsedSource, scope: SourceScope) -> IO(PackageResult()):
+  match parsed:
+    case GitRepo{source}: updateGit(context, source, scope)
+    case LocalSource{path}:
+      do IO<PackageResult()>:
+        +resolved : String = resolveSourcePath(context, path)
+        exists : Bool <- FS.accessible(resolved, 0)
+        return installedLocal(resolved, exists)
+    case NpmSource{_, _, _, _}: IO.pure(PackageResult(), Fail{"npm package installation is not yet available"})
+
+# Public package operation; settings persistence is a separate, explicit step.
+def install(+context: Context, +source: String, local: Bool) -> IO(PackageResult()):
+  installParsed(context, parseSource(context, source), scopeOf(local))
+
+def removeParsed(+context: Context, parsed: ParsedSource, scope: SourceScope) -> IO(PackageResult()):
+  match parsed:
+    case GitRepo{source}: removeGit(context, source, scope)
+    case LocalSource{_}: IO.pure(PackageResult(), Done{Unit{}})
+    case NpmSource{_, _, _, _}: IO.pure(PackageResult(), Fail{"npm package removal is not yet available"})
+
+def remove(+context: Context, +source: String, local: Bool) -> IO(PackageResult()):
+  removeParsed(context, parseSource(context, source), scopeOf(local))
