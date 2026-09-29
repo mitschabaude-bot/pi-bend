@@ -148,6 +148,10 @@ def loginSyncFailed(result: Auth.LoginOutcome()) -> Bool:
   match result:
     case Fail{+message}: String.contains(message, "Credential saved") && String.contains(message, "cache restore failed")
     case Done{_}: False{}
+def loginSucceeded(result: Auth.LoginOutcome()) -> Bool:
+  match result:
+    case Done{_}: True{}
+    case Fail{_}: False{}
 
 def loginPrompt(_: Unit, _: Auth.AuthPrompt) -> IO(Result<&2, &2, String, String>):
   IO.pure(Result<&2, &2, String, String>, Done{"login-key"})
@@ -245,6 +249,53 @@ def checkDynamicSynchronization() -> IO(Unit):
     previous : RefreshState <- Ref.dispose(RefreshState, refreshState)
     return Unit{}
 
+# An older network refresh must not hold a new login or its local catalog
+# synchronization. The gated refresh is released only after login completes.
+type RefreshGate is Data: RefreshGate{started: Chan(Unit),release: Chan(Unit)}
+def ambientGateAuth(_: Unit,_: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
+  IO.pure(Auth.AuthOutcome(),Done{Some{Auth.AuthResult{Auth.ModelAuth{Some{"ambient-key"},None{},None{}},None{},Some{"ambient"}}}})
+def gateLogin(_: Unit,_: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  IO.pure(Auth.LoginOutcome(),Done{Auth.ApiKeyCredential{Some{"login-key"},None{}}})
+def gatedProvider(refresh: AiModels.RefreshModels()) -> IO(AiModels.Provider):
+  do IO<AiModels.Provider>:
+    login : C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()> <- C.create(~Unit,~Auth.ProviderAuthInteraction,~Auth.LoginOutcome(),~gateLogin,Unit{})
+    resolve : C.Callback<Auth.ResolveInput,Auth.AuthOutcome()> <- C.create(~Unit,~Auth.ResolveInput,~Auth.AuthOutcome(),~ambientGateAuth,Unit{})
+    return AiModels.Provider{"dynamic","dynamic","https://faux.invalid",Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test API key",Some{login},resolve,None{}}},None{}},[model("dynamic")],AiModels.ApiStreams{},Some{refresh},None{}}
+def gatedRefresh(gate: RefreshGate,context: AiModels.RefreshModelsContext) -> IO(Result<&2,&2,String,Unit>):
+  match gate context:
+    case RefreshGate{started,release} AiModels.RefreshModelsContext{_,_,_,True{},_,_}:
+      do IO<Result<&2,&2,String,Unit>>:
+        sent : Bool <- Chan.send(Unit,started,Unit{})
+        done : Maybe<&1,Unit> <- Chan.recv(Unit,release)
+        return Done{Unit{}}
+    case _ _: IO.pure(Result<&2,&2,String,Unit>,Done{Unit{}})
+def loginBesideStalledRefresh() -> IO(Unit):
+  do IO<Unit>:
+    +started : Chan(Unit) <- Chan.new(Unit,1)
+    +release : Chan(Unit) <- Chan.new(Unit,1)
+    +refresh : AiModels.RefreshModels() <- C.create(~RefreshGate,~AiModels.RefreshModelsContext,~Result<&2,&2,String,Unit>,~gatedRefresh,RefreshGate{started,release})
+    +store : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    provider : AiModels.Provider <- gatedProvider(refresh)
+    +runtime : Models.ModelRuntime <- Models.fromProviders([provider],store,context)
+    +old : Chan(Models.ModelsRefreshResult) <- IO.fork(Models.ModelsRefreshResult,Models.refresh(runtime,Models.ModelsRefreshOptions{Some{True{}},Some{["dynamic"]},None{},None{}}))
+    began : Maybe<&1,Unit> <- Chan.recv(Unit,started)
+    +prompt : C.Callback<Auth.AuthPrompt,Result<&2,&2,String,String>> <- C.create(~Unit,~Auth.AuthPrompt,~Result<&2,&2,String,String>,~loginPrompt,Unit{})
+    +notify : C.Callback<Auth.AuthEvent,Unit> <- C.create(~Unit,~Auth.AuthEvent,~Unit,~loginNotice,Unit{})
+    login : Auth.LoginOutcome() <- Models.login(runtime,"dynamic",Auth.ApiKeyType{},Auth.AuthInteraction{None{},prompt,notify})
+    require(loginSucceeded(login),"login waited for an older stalled network refresh")
+    stored : Auth.StoreResult(Maybe<&2,Auth.Credential>) <- Auth.read(store,"dynamic",None{})
+    require(keyIs(stored,"login-key"),"login did not persist its credential")
+    available : List<&2,AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
+    require(Nat.is_eq(List.length(&2,AiModels.Model(),available),1n),"login did not publish local availability")
+    released : Bool <- Chan.send(Unit,release,Unit{})
+    late : Models.ModelsRefreshResult <- IO.join(Models.ModelsRefreshResult,old)
+    C.dispose(Auth.AuthPrompt,Result<&2,&2,String,String>,prompt)
+    C.dispose(Auth.AuthEvent,Unit,notify)
+    Models.dispose(runtime)
+    Auth.disposeStore(store)
+    return Unit{}
+
 def main() -> IO(Unit):
   do IO<Unit>:
     +state : Ref.Ref<State> <- Ref.new(State, State{Nil{}, False{}, True{}, True{}})
@@ -258,4 +309,5 @@ def main() -> IO(Unit):
     Auth.disposeStore(store)
     previous : State <- Ref.dispose(State, state)
     checkDynamicSynchronization()
+    loginBesideStalledRefresh()
     IO.print("model availability: scoped reads, credential synchronization, and snapshots pass")

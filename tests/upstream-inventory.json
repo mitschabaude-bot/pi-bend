@@ -4573,10 +4573,12 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7027-credential-refresh-hang.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/model-availability.bend"
+      ],
       "sha256": "9fa83fcef17cf5fed6f849f74193fe568a19476001678ed20835dff356ebbfbb",
-      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
+      "notes": "A gated native runtime fixture proves login saves its credential and updates local availability before an older stalled network refresh is released (Bun and native one/four). The interactive 15-second background refresh and post-login dynamic model selection remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7048-compaction-truncated-summary.test.ts",
