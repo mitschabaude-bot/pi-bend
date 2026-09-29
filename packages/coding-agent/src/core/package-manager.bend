@@ -1242,3 +1242,30 @@ def updateGit(+context: Context, +source: Git.GitSource, scope: SourceScope) -> 
   do IO<PackageResult()>:
     located : Result<&2, &2, String, String> <- getGitInstallPath(context, source, scope)
     updateLocated(source, located)
+
+def removedPath(path: String, result: Result<&2, &2, FS.Error, Unit>) -> PackageResult():
+  match result:
+    case Done{_}: Done{Unit{}}
+    case Fail{error}: Fail{"Cannot remove " ++ path ++ ": " ++ FS.errorMessage(error)}
+
+def removedGit(target: String, removed: PackageResult()) -> IO(PackageResult()):
+  match removed:
+    case Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case Done{_}:
+      do IO<PackageResult()>:
+        +marker : String = markerFor(target)
+        cleared : Result<&2, &2, FS.Error, Unit> <- FS.remove(marker, False{}, True{})
+        return removedPath(marker, cleared)
+
+def removeLocated(located: Result<&2, &2, String, String>) -> IO(PackageResult()):
+  match located:
+    case Fail{message}: IO.pure(PackageResult(), Fail{message})
+    case Done{+target}:
+      do IO<PackageResult()>:
+        removed : Result<&2, &2, FS.Error, Unit> <- FS.remove(target, True{}, True{})
+        removedGit(target, removedPath(target, removed))
+
+def removeGit(+context: Context, source: Git.GitSource, scope: SourceScope) -> IO(PackageResult()):
+  do IO<PackageResult()>:
+    located : Result<&2, &2, String, String> <- getGitInstallPath(context, source, scope)
+    removeLocated(located)

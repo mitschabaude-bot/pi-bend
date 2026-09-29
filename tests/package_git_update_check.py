@@ -74,7 +74,10 @@ def main(binary: str) -> None:
         assert_checkout(first, "first\n")
         update("second")
         assert_checkout(second, "second\n")
-        print("managed Git update: clone, no-op, interrupted cleanup, advance, rewrite, pinned refs passed")
+        marker.write_text("")
+        update("--remove")
+        assert not checkout.exists() and not marker.exists(), "removal should clear checkout and marker"
+        print("managed Git lifecycle: clone, no-op, interrupted cleanup, advance, rewrite, pins, remove passed")
 
 
 if __name__ == "__main__":

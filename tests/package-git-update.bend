@@ -17,14 +17,19 @@ def reported(result: Package.PackageResult()) -> IO(Unit):
     case Done{_}: IO.print("updated")
     case Fail{message}: IO.die(Unit, 1, message)
 
-def withEnvironment(+cwd: String, +agentDir: String, repo: String, +ref: Maybe<&2, String>, loaded: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Unit):
+def action(+context: Package.Context, source: Git.GitSource, remove: Bool) -> IO(Package.PackageResult()):
+  match remove:
+    case True{}: Package.removeGit(context, source, Package.UserSource{})
+    case False{}: Package.updateGit(context, source, Package.UserSource{})
+
+def withEnvironment(+cwd: String, +agentDir: String, repo: String, +ref: Maybe<&2, String>, remove: Bool, loaded: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Unit):
   match loaded:
     case Fail{_}: IO.die(Unit, 1, "no environment")
     case Done{environment}:
       do IO<Unit>:
         settings : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
         source : Git.GitSource = Git.GitSource{repo, "github.com", "test/extension", ref, Maybe.is_some(&2, String, ref)}
-        result : Package.PackageResult() <- Package.updateGit(Package.contextOf(environment, settingsOf(settings), cwd, agentDir), source, Package.UserSource{})
+        result : Package.PackageResult() <- action(Package.contextOf(environment, settingsOf(settings), cwd, agentDir), source, remove)
         reported(result)
 
 def run(args: List<String>) -> IO(Unit):
@@ -32,7 +37,7 @@ def run(args: List<String>) -> IO(Unit):
     case cwd <> agentDir <> repo <> +ref <> Nil{}:
       do IO<Unit>:
         environment : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(Runtime.urlContext())
-        withEnvironment(cwd, agentDir, repo, Bool.pick(Maybe<&2, String>, String.eq(ref, "-"), None{}, Some{ref}), environment)
+        withEnvironment(cwd, agentDir, repo, Bool.pick(Maybe<&2, String>, String.eq(ref, "-") || String.eq(ref, "--remove"), None{}, Some{ref}), String.eq(ref, "--remove"), environment)
     case _: IO.die(Unit, 1, "usage: package-git-update <cwd> <agentDir> <repo> <ref|->")
 
 def main() -> IO(Unit):
