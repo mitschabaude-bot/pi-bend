@@ -294,8 +294,10 @@ def forkCompleted(observer: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,re
 def performSelection(session: Maybe<&2,Session.AgentSession>,observer: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,replacement: Maybe<&2,Replacement>,selection: Selection) -> IO(Result<&2,&2,String,Unit>):
   match session replacement selection:
     case None{} _ _: IO.pure(Result<&2,&2,String,Unit>,Fail{"Selection requires an active session"})
-    case Some{value} _ Navigate{id}:
+    case Some{+value} _ Navigate{id}:
       do IO<Result<&2,&2,String,Unit>>:
+        streaming : Bool <- Session.isStreaming(value)
+        Bool.pick(Unit -> IO(Unit),streaming,_ => Session.abort(value),_ => IO.pure(Unit,Unit{}))(Unit{})
         outcome : Result<&2,&2,String,Session.Navigation> <- Session.navigateTree(value,id)
         notifySelection(observer,navigationResult(outcome))
         return Done{Unit{}}

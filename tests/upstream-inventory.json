@@ -3242,9 +3242,12 @@
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-tree-navigation.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4a69fe761643e2c71649a9333b048d59ac91a100c3c59d1f6fb948d8432c055d"
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py"
+      ],
+      "sha256": "4a69fe761643e2c71649a9333b048d59ac91a100c3c59d1f6fb948d8432c055d",
+      "notes": "Active-response abort before navigation is checked in tree-interrupt-navigation. Summary-choice dialog and dialog-time busy races remain unported."
     },
     {
       "source": "packages/coding-agent/test/interactive-tui.test.ts",

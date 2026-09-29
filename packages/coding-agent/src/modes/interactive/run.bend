@@ -2262,9 +2262,15 @@ def failedSelection(sink: SelectionSink,message: String) -> IO(Unit):
         Interactive.report(failure,Interactive.PromptFailure{message})
 def forkSelectionNotice(sink: SelectionSink) -> IO(Unit):
   match sink: case SelectionSink{_,_,_,_,failure,_,_,_}: selectorNotice(failure,"Forked to new session")
+def navigationNotice(sink: SelectionSink) -> IO(Unit):
+  match sink: case SelectionSink{_,_,_,_,failure,_,_,_}: selectorNotice(failure,"Navigated to selected point")
 def selectionResult(sink: SelectionSink,result: Controller.SelectionResult) -> IO(Unit):
   match result:
-    case Controller.Navigated{navigation}: refreshSelection(sink,Controller.Navigated{navigation})
+    case Controller.Navigated{navigation}:
+      +target = {sink: SelectionSink}
+      do IO<Unit>:
+        refreshSelection(target,Controller.Navigated{navigation})
+        navigationNotice(target)
     case Controller.Forked{text}:
       +target = {sink: SelectionSink}
       do IO<Unit>:
@@ -2272,18 +2278,40 @@ def selectionResult(sink: SelectionSink,result: Controller.SelectionResult) -> I
         forkSelectionNotice(target)
     case Controller.SelectionFailed{message}: failedSelection(sink,message)
 type SelectInput is Data: SelectInput{queue: Controller.Handle,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+type TreeSelectInput is Data: TreeSelectInput{queue: Controller.Handle,session: Ref.Ref<Session.AgentSession>,failure: Interactive.StatusSink}
 type ScopeInput is Data:
   ScopeInput{session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 def selectionJob(mode: Selector.Mode,id: String) -> Controller.Selection:
   match mode:
     case Selector.TreeMode{}: Controller.Navigate{id}
     case Selector.ForkMode{}: Controller.Fork{id}
-def chosenSelection(input: SelectInput,choice: Selector.Choice) -> IO(Unit):
+def submitSelection(queue: Controller.Handle,failure: Interactive.StatusSink,mode: Selector.Mode,id: String) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitSelection(queue,selectionJob(mode,id))
+    Interactive.submittedResult(failure,result)
+def atLeaf(leaf: Maybe<&2,String>,id: String) -> Bool:
+  match leaf:
+    case Some{current}: String.eq(current,id)
+    case None{}: False{}
+def treeReady(queue: Controller.Handle,+failure: Interactive.StatusSink,session: Session.AgentSession,id: String) -> IO(Unit):
+  do IO<Unit>:
+    compacting : Bool <- Session.isCompacting(session)
+    Bool.pick(Unit -> IO(Unit),compacting,
+      _ => Interactive.report(failure,Interactive.PromptFailure{"Wait for the current compaction or tree navigation to finish before navigating the session tree."}),
+      _ => submitSelection(queue,failure,Selector.TreeMode{},id))(Unit{})
+def treeChosen(queue: Controller.Handle,sessionRef: Ref.Ref<Session.AgentSession>,+failure: Interactive.StatusSink,+id: String) -> IO(Unit):
+  do IO<Unit>:
+    +session : Session.AgentSession <- Ref.read(Session.AgentSession,sessionRef)
+    current : Session.Session() <- Session.sessionOf(session)
+    +leaf : Maybe<&2,String> = Tree.getLeafId(Schema.Value,Tools.ToolDetails,Schema.Value,Session.stateOf(current))
+    Bool.pick(Unit -> IO(Unit),atLeaf(leaf,id),
+      _ => Interactive.report(failure,Interactive.CommandNotice{"Already at this point"}),
+      _ => do IO<Unit>:
+        treeReady(queue,failure,session,id))(Unit{})
+def chosenSelection(input: TreeSelectInput,choice: Selector.Choice) -> IO(Unit):
   match input choice:
-    case SelectInput{queue,failure,redraw} Selector.Choice{mode,id}:
-      do IO<Unit>:
-        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitSelection(queue,selectionJob(mode,id))
-        Interactive.submittedResult(failure,result)
+    case TreeSelectInput{queue,session,failure} Selector.Choice{Selector.TreeMode{},id}: treeChosen(queue,session,failure,id)
+    case TreeSelectInput{queue,_,failure} Selector.Choice{mode,id}: submitSelection(queue,failure,mode,id)
 def chosenModel(input: SelectInput,choice: ModelPicker.Choice) -> IO(Unit):
   match input choice:
     case SelectInput{queue,failure,_} ModelPicker.Choice{chosen,persist}:
@@ -3449,7 +3477,7 @@ def withCustomEditor(borrowed: CustomEditor.Owner & Component.Component,live: Li
   match borrowed:
     case (custom,component):
       do IO<Result<&2,&2,Error,Unit>>:
-        +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~SelectInput,~Selector.Choice,~Unit,~chosenSelection,SelectInput{queue,contextStatus(context),redraw})
+        +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~TreeSelectInput,~Selector.Choice,~Unit,~chosenSelection,TreeSelectInput{queue,contextSession(context),contextStatus(context)})
         +treeEvents : Callback.Callback<TreePicker.Action,Unit> <- Callback.create(~TreeActionInput,~TreePicker.Action,~Unit,~treeAction,TreeActionInput{contextSession(context),contextTranscript(context)})
         +request : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~workingRedraw,redraw)
         dialog : ExtensionDialog.Owner <- ExtensionDialog.create(component,contextTheme(context),words,contextBindings(context),Keys.defaults(),rows,request)
