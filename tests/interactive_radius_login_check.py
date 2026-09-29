@@ -11,6 +11,7 @@ import struct
 import subprocess
 import tempfile
 import termios
+import threading
 import time
 
 from radius_check import FRESH, Gateway
@@ -20,8 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = Path(os.environ.get("PI_BEND_CLI", ROOT / "build/pi-cli")).resolve()
 
 
-def scenario(threads):
-    gateway = Gateway(FRESH)
+def scenario(threads, stalled=False):
+    gate = threading.Event() if stalled else None
+    gateway = Gateway(FRESH, config_wait=gate)
     try:
         with tempfile.TemporaryDirectory(prefix="pi-radius-login-") as place:
             home = Path(place)
@@ -71,16 +73,26 @@ def scenario(threads):
                 until(b"Enter Radius API key", start)
                 start = len(output)
                 os.write(master, b"radius-test-key\r")
-                until(b"Selected balanced", start)
+                until(b"Saved API key for radius", start)
+                if stalled:
+                    deadline = time.monotonic() + 10
+                    while not gateway.requests and time.monotonic() < deadline:
+                        time.sleep(.05)
+                    assert gateway.requests, "catalog request never started"
+                else:
+                    until(b"Selected balanced", start)
                 assert any(request["path"] == "/v1/config" and
                            request["headers"].get("authorization") == "Bearer radius-test-key"
                            for request in gateway.requests), gateway.requests
                 auth = json.loads((agent / "auth.json").read_text())
                 assert auth["radius"]["key"] == "radius-test-key"
                 os.write(master, b"/quit\r")
-                assert process.wait(timeout=10) == 0
-                print(f"Radius login: native {threads} thread(s) selected balanced and exited")
+                assert process.wait(timeout=5) == 0
+                print(f"Radius login: native {threads} thread(s) " +
+                      ("quit during stalled refresh" if stalled else "selected balanced and exited"))
             finally:
+                if gate is not None:
+                    gate.set()
                 if process.poll() is None:
                     process.kill()
                     process.wait()
@@ -92,3 +104,4 @@ def scenario(threads):
 if __name__ == "__main__":
     for count in (1, 4):
         scenario(count)
+        scenario(count, stalled=True)

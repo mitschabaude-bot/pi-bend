@@ -38,7 +38,7 @@ FRESH = {"baseUrl": "https://radius.example/v1", "models": [
 
 
 class Gateway:
-    def __init__(self, config, discovery=None):
+    def __init__(self, config, discovery=None, config_wait=None):
         self.requests = []
         outer = self
 
@@ -51,11 +51,16 @@ class Gateway:
                 self.send_header("content-type", "application/json")
                 self.send_header("content-length", str(len(data)))
                 self.end_headers()
-                self.wfile.write(data)
+                try:
+                    self.wfile.write(data)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
 
             def do_GET(self):
                 outer.requests.append({"method": "GET", "path": self.path, "headers": {k.lower(): v for k, v in self.headers.items()}})
                 if self.path == "/v1/config":
+                    if config_wait is not None:
+                        config_wait.wait(20)
                     return self.reply(config)
                 if self.path == "/v1/oauth":
                     return self.reply(discovery or {"issuer": "https://radius-ui.example"})
