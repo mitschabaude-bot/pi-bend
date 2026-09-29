@@ -116,6 +116,13 @@ def noticeAppended(state: State,text: String) -> IO(State & Unit):
 def notice(handle: Handle,text: String) -> IO(Unit):
   match handle:
     case Handle{resource,_}: Serial.run(State,Unit,resource,state => noticeAppended(state,text))
+def spacerAppended(state: State) -> IO(State & Unit):
+  do IO<State & Unit>:
+    pair : State & Bool <- append(state,Messages.SpacerBody{},False{})
+    return appendedUnit(pair)
+def spacer(handle: Handle) -> IO(Unit):
+  match handle:
+    case Handle{resource,_}: Serial.run(State,Unit,resource,spacerAppended)
 def errorAppended(state: State,message: String) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,+theme,styles,expanded,hidden,pad}:

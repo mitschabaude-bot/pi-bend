@@ -376,7 +376,7 @@ type Changelog is Data:
   WhatsNew{markdown: String,spaced: Bool}
   UpdatedTo{version: String,spaced: Bool}
 type Note is Data: Note{label: String,brief: Maybe<&2,String>,content: String,expanded: Bool,theme: Theme.Theme,styles: Markdown.MarkdownTheme,hint: String}
-type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} NoteBody{value: Note} StatusBody{text: String,theme: Theme.Theme} NewSessionBody{theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme,label: Bool} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme} SessionInfoBody{value: SessionInfo.SessionInfo,theme: Theme.Theme} HotkeysBody{markdown: String,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
+type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} NoteBody{value: Note} StatusBody{text: String,theme: Theme.Theme} SpacerBody{} NewSessionBody{theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme,label: Bool} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme} SessionInfoBody{value: SessionInfo.SessionInfo,theme: Theme.Theme} HotkeysBody{markdown: String,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
 def expandedBody(body: Body,expanded: Bool) -> Body:
   match body:
     case BashBody{value}: BashBody{bashExpanded(value,expanded)}
@@ -390,6 +390,7 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
     case BashBody{value}: BashBody{bashTheme(value,theme)}
     case NoteBody{Note{label,brief,content,expanded,_,styles,hint}}: NoteBody{Note{label,brief,content,expanded,theme,styles,hint}}
     case StatusBody{text,_}: StatusBody{text,theme}
+    case SpacerBody{}: SpacerBody{}
     case NewSessionBody{_}: NewSessionBody{theme}
     case ErrorBody{text,_}: ErrorBody{text,theme}
     case WarningBody{text,_,label}: WarningBody{text,theme,label}
@@ -505,6 +506,7 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
         colored : String <- foregroundText(theme,"dim",text)
         lines : List<&2,String> <- textLines(colored,1n,width)
         return "" <> lines
+    case SpacerBody{}: IO.pure(List<&2,String>,"" <> Nil{})
     case NewSessionBody{theme}:
       do IO<List<&2,String>>:
         colored : String <- foregroundText(theme,"accent","✓ New session started")

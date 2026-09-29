@@ -240,6 +240,7 @@ type StatusChange is Data:
   KeepStatus{}
 type WorkingMutation is Data:
   ApplyStatus{change: StatusChange}
+  ShowBranchSummary{}
   UpdateWorkingMessage{message: String}
   UpdateWorkingIndicator{indicator: Maybe<&2,Loader.Indicator>}
 def workingActive(working: Working) -> Ref.Ref<Maybe<&2,Loader.Handle>>:
@@ -366,9 +367,10 @@ def workingRetained(pair: Maybe<&1,Status.Owner> & Maybe<&2,Loader.Handle>,appea
       do IO<Unit>:
         Ref.write(Maybe<&2,Loader.Handle>,active,handle)
         Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{indicator,appearance,request,cancel}})
-def mutateStatus(previous: Maybe<&1,Status.Owner>,appearance: Status.Appearance,mutation: WorkingMutation) -> IO(Maybe<&1,Status.Owner>):
+def mutateStatus(previous: Maybe<&1,Status.Owner>,appearance: Status.Appearance,cancel: String,mutation: WorkingMutation) -> IO(Maybe<&1,Status.Owner>):
   match mutation previous:
     case ApplyStatus{change} retained: changeStatus(retained,appearance,change)
+    case ShowBranchSummary{} retained: changeStatus(retained,appearance,ShowStatus{Status.BranchSummaryStatusIndicator{cancel}})
     case UpdateWorkingMessage{_} None{}: IO.pure(Maybe<&1,Status.Owner>,None{})
     case UpdateWorkingMessage{message} Some{owner}:
       do IO<Maybe<&1,Status.Owner>>:
@@ -388,7 +390,7 @@ def workingMutated(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loa
     case None{}: IO.pure(Unit,Unit{})
     case Some{WorkingOwned{indicator,+appearance,+request,+cancel}}:
       do IO<Unit>:
-        next : Maybe<&1,Status.Owner> <- mutateStatus(indicator,appearance,mutation)
+        next : Maybe<&1,Status.Owner> <- mutateStatus(indicator,appearance,cancel,mutation)
         workingRetained(retainedStatus(next),appearance,request,cancel,active,owned)
         Bool.pick(Unit -> IO(Unit),mutationChanged(mutation),_ => Callback.call(Unit,Unit,request,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def workingEventApplied(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,config: WorkingPreferences,event: Session.AgentSessionEvent) -> IO(Unit):
@@ -2224,11 +2226,13 @@ type KeyInput is Data:
 type ControlSink is Data:
   ControlSink{editor: Ref.Ref<Maybe<&2,Live.Handle>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type SelectionSink is Data:
-  SelectionSink{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footerRef: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>}
+  SelectionSink{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footerRef: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>,working: Working,selector: Ref.Ref<Maybe<&2,Selector.Host>>}
 def selectionText(result: Controller.SelectionResult) -> Maybe<&2,String>:
   match result:
     case Controller.Navigated{Session.Navigation{text,_}}: text
     case Controller.Forked{text}: text
+    case Controller.NavigationAborted{_}: None{}
+    case Controller.NavigationCancelled{}: None{}
     case Controller.SelectionFailed{_}: None{}
 def setSelectedDraft(target: Maybe<&2,Live.Handle>,value: String) -> IO(Unit):
   match target:
@@ -2243,7 +2247,7 @@ def updateSelectionEditor(editor: Ref.Ref<Maybe<&2,Live.Handle>>,text: Maybe<&2,
         setSelectedDraft(target,value)
 def refreshSelection(sink: SelectionSink,result: Controller.SelectionResult) -> IO(Unit):
   match sink:
-    case SelectionSink{+session,+transcript,editor,footerRef,failure,redraw,cwd,home}:
+    case SelectionSink{+session,+transcript,editor,footerRef,failure,redraw,cwd,home,_,_}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         +messages : List<&2,Session.Message()> <- Session.messages(live)
@@ -2257,14 +2261,34 @@ def refreshSelection(sink: SelectionSink,result: Controller.SelectionResult) -> 
         Interactive.requestRender(redraw)
 def failedSelection(sink: SelectionSink,message: String) -> IO(Unit):
   match sink:
-    case SelectionSink{_,_,_,_,failure,redraw,_,_}:
+    case SelectionSink{_,_,_,_,failure,redraw,_,_,_,_}:
       do IO<Unit>:
         Interactive.report(failure,Interactive.PromptFailure{message})
 def forkSelectionNotice(sink: SelectionSink) -> IO(Unit):
-  match sink: case SelectionSink{_,_,_,_,failure,_,_,_}: selectorNotice(failure,"Forked to new session")
+  match sink: case SelectionSink{_,_,_,_,failure,_,_,_,_,_}: selectorNotice(failure,"Forked to new session")
 def navigationNotice(sink: SelectionSink) -> IO(Unit):
-  match sink: case SelectionSink{_,_,_,_,failure,_,_,_}: selectorNotice(failure,"Navigated to selected point")
-def selectionResult(sink: SelectionSink,result: Controller.SelectionResult) -> IO(Unit):
+  match sink: case SelectionSink{_,_,_,_,failure,_,_,_,_,_}: selectorNotice(failure,"Navigated to selected point")
+def reopenedTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,result: Result<&2,&2,Tree.Error,List<&2,TreePicker.Node()>>,leaf: Maybe<&2,String>,filter: TreePicker.Filter,id: String) -> IO(Unit):
+  match result:
+    case Fail{_}: selectorNotice(failure,"Cannot load session tree")
+    case Done{nodes}: openCandidate(selector,failure,TreePicker.selectId(TreePicker.createWithFilter(nodes,leaf,24n,filter),id),"No entries in session")
+def reopenTree(+session: Session.AgentSession,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String) -> IO(Unit):
+  do IO<Unit>:
+    current : Session.Session() <- Session.sessionOf(session)
+    settings : Settings.SettingsManager <- Session.getSettings(session)
+    +state : Session.State() = Session.stateOf(current)
+    reopenedTree(selector,failure,Tree.getTree(Schema.Value,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Schema.Value,Tools.ToolDetails,Schema.Value,state),selectorFilter(Settings.getTreeFilterMode(settings)),id)
+    Interactive.requestRender(redraw)
+def abortedNavigation(sink: SelectionSink,id: String) -> IO(Unit):
+  match sink:
+    case SelectionSink{session,_,_,_,+failure,redraw,_,_,_,selector}:
+      do IO<Unit>:
+        current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        selectorNotice(failure,"Branch summarization cancelled")
+        reopenTree(current,selector,failure,redraw,id)
+def cancelledNavigation(sink: SelectionSink) -> IO(Unit):
+  match sink: case SelectionSink{_,_,_,_,failure,_,_,_,_,_}: selectorNotice(failure,"Navigation cancelled")
+def selectionOutcome(sink: SelectionSink,result: Controller.SelectionResult) -> IO(Unit):
   match result:
     case Controller.Navigated{navigation}:
       +target = {sink: SelectionSink}
@@ -2276,12 +2300,20 @@ def selectionResult(sink: SelectionSink,result: Controller.SelectionResult) -> I
       do IO<Unit>:
         refreshSelection(target,Controller.Forked{text})
         forkSelectionNotice(target)
+    case Controller.NavigationAborted{id}: abortedNavigation(sink,id)
+    case Controller.NavigationCancelled{}: cancelledNavigation(sink)
     case Controller.SelectionFailed{message}: failedSelection(sink,message)
+def selectionResult(sink: SelectionSink,result: Controller.SelectionResult) -> IO(Unit):
+  match sink:
+    case SelectionSink{session,transcript,editor,footerRef,failure,redraw,cwd,home,+working,selector}:
+      do IO<Unit>:
+        applyWorkingMutation(working,ApplyStatus{ClearStatus{Status.BranchSummary{}}})
+        selectionOutcome(SelectionSink{session,transcript,editor,footerRef,failure,redraw,cwd,home,working,selector},result)
 type SelectInput is Data: SelectInput{queue: Controller.Handle,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type TreeDialogs is Data:
   TreeDialogs{ui: Ref.Ref<Maybe<&2,Ctx.ExtensionUIContext>>,task: Ref.Ref<Maybe<&2,Chan(Unit)>>}
 type TreeSelectInput is Data:
-  TreeSelectInput{queue: Controller.Handle,session: Ref.Ref<Session.AgentSession>,failure: Interactive.StatusSink,dialogs: TreeDialogs,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+  TreeSelectInput{queue: Controller.Handle,session: Ref.Ref<Session.AgentSession>,failure: Interactive.StatusSink,dialogs: TreeDialogs,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,working: Working}
 type ScopeInput is Data:
   ScopeInput{session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 def selectionJob(mode: Selector.Mode,id: String) -> Controller.Selection:
@@ -2296,13 +2328,30 @@ def atLeaf(leaf: Maybe<&2,String>,id: String) -> Bool:
   match leaf:
     case Some{current}: String.eq(current,id)
     case None{}: False{}
-def treeReady(queue: Controller.Handle,+failure: Interactive.StatusSink,session: Session.AgentSession,id: String,options: Session.NavigateTreeOptions) -> IO(Unit):
+def statusTranscript(status: Interactive.StatusSink) -> Transcript.Handle:
+  match status:
+    case Interactive.StatusSink{transcript,_}: transcript
+    case Interactive.SessionStatusSink{transcript,_,_}: transcript
+def beginBranchStatus(working: Working,failure: Interactive.StatusSink,options: Session.NavigateTreeOptions) -> IO(Unit):
+  match options:
+    case Session.NavigateTreeOptions{True{},_,_,_}:
+      do IO<Unit>:
+        Transcript.spacer(statusTranscript(failure))
+        applyWorkingMutation(working,ShowBranchSummary{})
+    case _: IO.pure(Unit,Unit{})
+def failedBranchSubmission(working: Working,result: Result<&2,&2,Controller.SubmitError,Unit>) -> IO(Unit):
+  match result:
+    case Done{_}: IO.pure(Unit,Unit{})
+    case Fail{_}: applyWorkingMutation(working,ApplyStatus{ClearStatus{Status.BranchSummary{}}})
+def treeReady(queue: Controller.Handle,+failure: Interactive.StatusSink,session: Session.AgentSession,id: String,+options: Session.NavigateTreeOptions,+working: Working) -> IO(Unit):
   do IO<Unit>:
     compacting : Bool <- Session.isCompacting(session)
     Bool.pick(Unit -> IO(Unit),compacting,
       _ => Interactive.report(failure,Interactive.PromptFailure{"Wait for the current compaction or tree navigation to finish before navigating the session tree."}),
       _ => do IO<Unit>:
-        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitSelection(queue,Controller.Navigate{id,options})
+        beginBranchStatus(working,failure,options)
+        +result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitSelection(queue,Controller.Navigate{id,options})
+        failedBranchSubmission(working,result)
         Interactive.submittedResult(failure,result))(Unit{})
 type SummaryStep is Data: AskSummary{} ChosenSummary{answer: Maybe<&2,String>} EditedSummary{instructions: Maybe<&2,String>}
 @unsafe def askSummary(+ui: Maybe<&2,Ctx.ExtensionUIContext>,step: SummaryStep) -> IO(Maybe<&2,Session.NavigateTreeOptions>):
@@ -2320,31 +2369,20 @@ type SummaryStep is Data: AskSummary{} ChosenSummary{answer: Maybe<&2,String>} E
     case ChosenSummary{_}: IO.pure(Maybe<&2,Session.NavigateTreeOptions>,None{})
     case EditedSummary{Some{text}}: IO.pure(Maybe<&2,Session.NavigateTreeOptions>,Some{Session.NavigateTreeOptions{True{},Some{text},None{},None{}}})
     case EditedSummary{None{}}: askSummary(ui,AskSummary{})
-def reopenedTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,result: Result<&2,&2,Tree.Error,List<&2,TreePicker.Node()>>,leaf: Maybe<&2,String>,filter: TreePicker.Filter,id: String) -> IO(Unit):
-  match result:
-    case Fail{_}: selectorNotice(failure,"Cannot load session tree")
-    case Done{nodes}: openCandidate(selector,failure,TreePicker.selectId(TreePicker.createWithFilter(nodes,leaf,24n,filter),id),"No entries in session")
-def reopenTree(+session: Session.AgentSession,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String) -> IO(Unit):
-  do IO<Unit>:
-    current : Session.Session() <- Session.sessionOf(session)
-    settings : Settings.SettingsManager <- Session.getSettings(session)
-    +state : Session.State() = Session.stateOf(current)
-    reopenedTree(selector,failure,Tree.getTree(Schema.Value,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Schema.Value,Tools.ToolDetails,Schema.Value,state),selectorFilter(Settings.getTreeFilterMode(settings)),id)
-    Interactive.requestRender(redraw)
-def treeChoiceResult(queue: Controller.Handle,session: Session.AgentSession,failure: Interactive.StatusSink,uiRef: Ref.Ref<Maybe<&2,Ctx.ExtensionUIContext>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String,chosen: Maybe<&2,Session.NavigateTreeOptions>) -> IO(Unit):
+def treeChoiceResult(queue: Controller.Handle,session: Session.AgentSession,failure: Interactive.StatusSink,uiRef: Ref.Ref<Maybe<&2,Ctx.ExtensionUIContext>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String,chosen: Maybe<&2,Session.NavigateTreeOptions>,working: Working) -> IO(Unit):
   match chosen:
-    case Some{options}: treeReady(queue,failure,session,id,options)
+    case Some{options}: treeReady(queue,failure,session,id,options,working)
     case None{}:
       do IO<Unit>:
         active : Maybe<&2,Ctx.ExtensionUIContext> <- Ref.read(Maybe<&2,Ctx.ExtensionUIContext>,uiRef)
         Bool.pick(Unit -> IO(Unit),Maybe.is_some(&2,Ctx.ExtensionUIContext,active),_ => reopenTree(session,selector,failure,redraw,id),_ => IO.pure(Unit,Unit{}))(Unit{})
-def treeChoiceTask(queue: Controller.Handle,session: Session.AgentSession,failure: Interactive.StatusSink,+dialogs: TreeDialogs,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String) -> IO(Unit):
+def treeChoiceTask(queue: Controller.Handle,session: Session.AgentSession,failure: Interactive.StatusSink,+dialogs: TreeDialogs,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String,working: Working) -> IO(Unit):
   match dialogs:
     case TreeDialogs{+uiRef,_}:
       do IO<Unit>:
         ui : Maybe<&2,Ctx.ExtensionUIContext> <- Ref.read(Maybe<&2,Ctx.ExtensionUIContext>,uiRef)
         chosen : Maybe<&2,Session.NavigateTreeOptions> <- askSummary(ui,AskSummary{})
-        treeChoiceResult(queue,session,failure,uiRef,selector,redraw,id,chosen)
+        treeChoiceResult(queue,session,failure,uiRef,selector,redraw,id,chosen,working)
 def joinedTreeTask(task: Maybe<&2,Chan(Unit)>) -> IO(Unit):
   match task:
     case None{}: IO.pure(Unit,Unit{})
@@ -2368,17 +2406,17 @@ def closeTreeDialogs(dialogs: TreeDialogs,dialog: ExtensionDialog.Owner) -> IO(U
         ExtensionDialog.dispose(dialog)
         task : Maybe<&2,Chan(Unit)> <- Ref.swap(Maybe<&2,Chan(Unit)>,taskRef,None{})
         joinedTreeTask(task)
-def startTreeChoice(queue: Controller.Handle,session: Session.AgentSession,failure: Interactive.StatusSink,+dialogs: TreeDialogs,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String) -> IO(Unit):
+def startTreeChoice(queue: Controller.Handle,session: Session.AgentSession,failure: Interactive.StatusSink,+dialogs: TreeDialogs,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String,working: Working) -> IO(Unit):
   match dialogs:
     case TreeDialogs{_,taskRef}:
       do IO<Unit>:
         previous : Maybe<&2,Chan(Unit)> <- Ref.swap(Maybe<&2,Chan(Unit)>,taskRef,None{})
         joinedTreeTask(previous)
-        task : Chan(Unit) <- IO.fork(Unit,treeChoiceTask(queue,session,failure,dialogs,selector,redraw,id))
+        task : Chan(Unit) <- IO.fork(Unit,treeChoiceTask(queue,session,failure,dialogs,selector,redraw,id,working))
         Ref.write(Maybe<&2,Chan(Unit)>,taskRef,Some{task})
 def treeChosen(input: TreeSelectInput,+id: String) -> IO(Unit):
   match input:
-    case TreeSelectInput{+queue,sessionRef,+failure,+dialogs,+selector,+redraw}:
+    case TreeSelectInput{+queue,sessionRef,+failure,+dialogs,+selector,+redraw,+working}:
       do IO<Unit>:
         +session : Session.AgentSession <- Ref.read(Session.AgentSession,sessionRef)
         current : Session.Session() <- Session.sessionOf(session)
@@ -2388,12 +2426,12 @@ def treeChosen(input: TreeSelectInput,+id: String) -> IO(Unit):
           _ => do IO<Unit>:
             settings : Settings.SettingsManager <- Session.getSettings(session)
             Bool.pick(Unit -> IO(Unit),Settings.getBranchSummarySkipPrompt(settings),
-              _ => treeReady(queue,failure,session,id,Session.noSummary()),
-              _ => startTreeChoice(queue,session,failure,dialogs,selector,redraw,id))(Unit{}))(Unit{})
+              _ => treeReady(queue,failure,session,id,Session.noSummary(),working),
+              _ => startTreeChoice(queue,session,failure,dialogs,selector,redraw,id,working))(Unit{}))(Unit{})
 def chosenSelection(input: TreeSelectInput,choice: Selector.Choice) -> IO(Unit):
   match input choice:
     case input Selector.Choice{Selector.TreeMode{},id}: treeChosen(input,id)
-    case TreeSelectInput{queue,_,failure,_,_,_} Selector.Choice{mode,id}: submitSelection(queue,failure,mode,id)
+    case TreeSelectInput{queue,_,failure,_,_,_,_} Selector.Choice{mode,id}: submitSelection(queue,failure,mode,id)
 def chosenModel(input: SelectInput,choice: ModelPicker.Choice) -> IO(Unit):
   match input choice:
     case SelectInput{queue,failure,_} ModelPicker.Choice{chosen,persist}:
@@ -3563,7 +3601,7 @@ def withCustomEditor(borrowed: CustomEditor.Owner & Component.Component,live: Li
         +uiRef : Ref.Ref<Maybe<&2,Ctx.ExtensionUIContext>> <- Ref.new(Maybe<&2,Ctx.ExtensionUIContext>,None{})
         +taskRef : Ref.Ref<Maybe<&2,Chan(Unit)>> <- Ref.new(Maybe<&2,Chan(Unit)>,None{})
         +dialogs : TreeDialogs = TreeDialogs{uiRef,taskRef}
-        +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~TreeSelectInput,~Selector.Choice,~Unit,~chosenSelection,TreeSelectInput{queue,contextSession(context),contextStatus(context),dialogs,selectorRefOf(contextInteraction(context)),redraw})
+        +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~TreeSelectInput,~Selector.Choice,~Unit,~chosenSelection,TreeSelectInput{queue,contextSession(context),contextStatus(context),dialogs,selectorRefOf(contextInteraction(context)),redraw,workingOf(contextInteraction(context))})
         +treeEvents : Callback.Callback<TreePicker.Action,Unit> <- Callback.create(~TreeActionInput,~TreePicker.Action,~Unit,~treeAction,TreeActionInput{contextSession(context),contextTranscript(context)})
         +request : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~workingRedraw,redraw)
         dialog : ExtensionDialog.Owner <- ExtensionDialog.create(component,contextTheme(context),words,contextBindings(context),Keys.defaults(),rows,request)
@@ -3775,7 +3813,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),status,redraw,cwd,builtinDir,importStateOf(mode,extensionDialogHost,status,redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,status,redraw,bashActivity},settingsSelectorRef,TrustContext{trustSelectorRef,Trust.create(Path.normalize(customDir ++ "/..")),autoTrustOnReloadOf(mode)},View.headerHandle(viewHandle),bindings,autocomplete,ExportTheme{liveTheme,customDir}})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
-        selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home})
+        selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home,working,selectorRef})
         controlObserver : Callback.Callback<Controller.ControlResult,Unit> <- Callback.create(~ControlSink,~Controller.ControlResult,~Unit,~controlResult,ControlSink{editorHandle,status,redraw})
         renderers : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(session)
         Transcript.setExtensions(transcriptHandle,renderers)

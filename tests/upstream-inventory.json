@@ -3247,7 +3247,7 @@
         "tests/parity/scenarios.py"
       ],
       "sha256": "4a69fe761643e2c71649a9333b048d59ac91a100c3c59d1f6fb948d8432c055d",
-      "notes": "Mounted one/four-thread tree scenarios cover selecting the current leaf, active-response abort, summary choice, Escape return to the same tree selection, summary and custom-prompt navigation. Dialog-time compaction races remain untested."
+      "notes": "Mounted one/four-thread tree scenarios cover selecting the current leaf, active-response abort, summary choice, Escape return to the same tree selection, summary and custom-prompt navigation, and aborting a held branch summary with the progress indicator and tree reopening. Dialog-time compaction races remain untested."
     },
     {
       "source": "packages/coding-agent/test/interactive-tui.test.ts",
