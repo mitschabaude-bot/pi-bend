@@ -1199,13 +1199,13 @@
     },
     "packages/coding-agent/src/core/package-manager.ts": {
       "state": "partial",
-      "note": "Ported: resolve for local settings entries and auto-discovered skills, prompts and themes (patterns, overrides, ignore files, precedence, canonical dedupe); parseSource/parseNpmSpec/isExactNpmVersion, getPackageIdentity, addSourceToSettings/removeSourceFromSettings with settings normalization, getBaseDirForScope with the project-trust check, resolveManagedPath, getExtensionTempFolder, getTemporaryDir, getGitInstallPath and getManagedNpmInstallPath. Managed Git update clones missing sources, checks out pinned refs, installs manifest dependencies, fetches tracked branches with force-refspec reconciliation, and resets/cleans changed checkouts with an interruption marker; removal deletes the checkout and marker. Public install/remove dispatch Git and local sources; updateConfigured matches user/project package identities, updates configured Git sources, skips local sources and honors PI_OFFLINE. Native local-Git and package-command tests cover clone, no-op, marker cleanup, advance, rewritten history, pins, named/all updates, offline skip, no-match and removal against upstream pi. Missing: package sources in resolve (install on missing, manifests, package filters, dedupePackages), extensions, npm lifecycle, missing-dependency repair, failed-clone cleanup and parent pruning, update checks, legacy global npm paths, progress events, listConfiguredPackages and getInstalledPath; NpmSource has no `range` until semver ranges are ported.",
+      "note": "Local and auto resource resolution plus configured local/Git/npm install-path package discovery for skills, prompts and themes are ported. Package manifests, convention directories, positive file/directory globs, manifest overrides and package filters match the focused upstream differential fixture. Managed Git install/update/remove and public package commands are ported. Missing: native extension discovery/loading, install of missing configured sources during resolve, full autoload:false delta and package-identity deduplication, npm lifecycle, update checks and remaining package-management APIs.",
       "ports": [
         "packages/coding-agent/src/core/package-manager.bend"
       ],
       "source_sha256": "e2fdd18093dc69cb8fe82bb6bef674f20f8a5093d0d13fd1b7180f49dbe751fd",
       "port_sha256": {
-        "packages/coding-agent/src/core/package-manager.bend": "f4c62f18731be020d1d28933ecc6fa924031daad2bee7d4bd9c89ca391039a1d"
+        "packages/coding-agent/src/core/package-manager.bend": "3f02e23c893559557869c346c5ddc9eee75d9e6505f6b7ff6ea292f9d0bdf330"
       }
     },
     "packages/ai/src/providers/faux.ts": {
@@ -1638,10 +1638,10 @@
     },
     "packages/coding-agent/src/core/resource-loader.ts": {
       "state": "partial",
-      "note": "Native ResourceLoader exposes extensions, skills, prompts, themes, context files, system/append prompt content and sources, extendResources and reload. DefaultResourceLoader assembles local package-manager discovery and injected compiled Bend extension factories; sdk-skills validates default discovery and injected empty/custom skill results. Remaining: reload re-execution of affine extension factories, resources_discover, project-trust resolution, override hooks and package-source support; broader loader lifecycle and diagnostics need coverage. JS extension discovery is excluded.",
+      "note": "Native ResourceLoader exposes skills, prompts, themes, context files, prompt content, extendResources and reload. It now accepts package-origin skill paths from PackageManager.resolve as well as local/auto paths; focused package discovery is checked differentially. Injected compiled Bend extension factories work. Remaining: native extension discovery/loading, reload re-execution of affine extension factories, resources_discover, project-trust resolution, override hooks and broader lifecycle diagnostics.",
       "source_sha256": "60e8b49790ab7ab7997dcaa647bef5eaaabdb8273c317c72b1f9567d78e99620",
       "port_sha256": {
-        "packages/coding-agent/src/core/resource-loader.bend": "936a463c2dfe2ffa22763dd5c1670194a7b2798e391dc5fd1c34a5bb62283e15"
+        "packages/coding-agent/src/core/resource-loader.bend": "3bc8946d43df58b30c511b0b7854dc907bcd5d7f02341ad37967f4a5bc69dac4"
       }
     },
     "packages/coding-agent/src/core/provider-composer.ts": {
@@ -1854,6 +1854,17 @@
       "source_sha256": "a8a47f1de6405a0a61a2659e8b761c8f9e561d8ff4448390c93d80f5970ac860",
       "port_sha256": {
         "packages/coding-agent/src/cli/list-models.bend": "e520d599784cee9276da79de6e2ffa6b8129eebc1a07a82ac1f503bb6b967cc6"
+      }
+    },
+    "packages/coding-agent/src/core/pi-manifest.ts": {
+      "state": "partial",
+      "note": "The package.json pi object and string-array resource fields are read within package-manager.bend for installed resource discovery. A standalone exported readPiManifest API and its direct tests remain to be ported.",
+      "ports": [
+        "packages/coding-agent/src/core/package-manager.bend"
+      ],
+      "source_sha256": "cdeed96fef83e03043bb25081ad4b7abd26e739dfa464a0e1763c6473330bac3",
+      "port_sha256": {
+        "packages/coding-agent/src/core/package-manager.bend": "3f02e23c893559557869c346c5ddc9eee75d9e6505f6b7ff6ea292f9d0bdf330"
       }
     }
   }

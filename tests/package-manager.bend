@@ -12,6 +12,7 @@ def sourceName(source: PM.Source) -> String:
   match source:
     case PM.Local{}: "local"
     case PM.Auto{}: "auto"
+    case PM.Package{source}: source
 
 def scopeName(scope: PM.Scope) -> String:
   match scope:

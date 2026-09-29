@@ -44,10 +44,22 @@ def fixture(base):
     write(base / 'extra-prompts/x.md'); write(base / 'extra-prompts/deeper/y.md'); write(base / 'extra-prompts/z.txt')
     skill(agent / 'skills/globbed/SKILL.md', 'globbed'); skill(agent / 'skills/other/SKILL.md', 'other')
     write(base / 'extra-prompts/keep-a.md'); write(base / 'extra-prompts/drop-b.md')
+    manifest_pkg = base / 'manifest-pkg'
+    skill(manifest_pkg / 'skills/m/SKILL.md', 'manifest')
+    write(manifest_pkg / 'prompts/a.md', 'prompt a')
+    write(manifest_pkg / 'prompts/b.md', 'prompt b')
+    write(manifest_pkg / 'themes/a.json', '{}')
+    write(manifest_pkg / 'package.json', json.dumps({'pi': {'skills': ['skills/*'], 'prompts': ['prompts/*.md', '!**/b.md'], 'themes': ['themes/a.json']}}))
+    convention_pkg = base / 'convention-pkg'
+    skill(convention_pkg / 'skills/c/SKILL.md', 'convention')
+    write(convention_pkg / 'prompts/c.md', 'prompt c')
+    write(convention_pkg / 'themes/c.json', '{}')
+    write(convention_pkg / 'package.json', json.dumps({'pi': {'prompts': ['prompts/c.md']}}))
     write(agent / 'settings.json', json.dumps({
         'skills': [str(base / 'extra/set'), '~/tilde', 'skills/one/SKILL.md', '-skills/nested/deep', '+skills/one', '!glob*', '!**/tilde/t1', '+skills/globbed/SKILL.md', '!e?'],
         'prompts': [str(base / 'extra-prompts'), '*.md', '!drop-*', '!deeper/**'],
-        'themes': [str(agent / 'themes/t.json')]}))
+        'themes': [str(agent / 'themes/t.json')],
+        'packages': [str(manifest_pkg), {'source': str(convention_pkg), 'prompts': [], 'themes': ['*.json']}]}))
     write(project / '.pi/settings.json', json.dumps({'skills': ['-skills/ps', '!{r,s}'], 'prompts': ['-prompts/pp.md'], 'themes': ['!*.json']}))
     return home, agent, project
 

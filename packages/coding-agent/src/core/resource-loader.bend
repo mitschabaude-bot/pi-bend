@@ -230,6 +230,7 @@ def skillSourceName(source: PackageManager.Source) -> String:
   match source:
     case PackageManager.Local{}: "local"
     case PackageManager.Auto{}: "auto"
+    case PackageManager.Package{source}: source
 
 def skillScope(scope: PackageManager.Scope) -> Skills.SourceScope:
   match scope:
