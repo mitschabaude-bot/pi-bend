@@ -74,3 +74,4 @@ bend-conversion-identity.patch
 bend-deep-indent.patch
 bend-native-string-equality.patch
 bend-process-group-suspend.patch
+bend-intrinsic-string-equality-layout.patch

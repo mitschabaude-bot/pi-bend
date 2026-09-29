@@ -1209,7 +1209,7 @@
     },
     {
       "source": "packages/ai/test/google-thinking-disable.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/coding-agent/test/live-replay.bend",
         "tests/live_replay_check.py",
@@ -1217,7 +1217,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "dc899136ae7d5c367b846aa68fc693cbe20fe12a85dfd8b41ff97fb8e6f22b10",
-      "notes": "The live loopback replay compares thinking-disable requests and messages with pinned pi-mono on Bun and native one/four threads. Google Vertex ADC and the other provider rows match. Two native Vertex API-key rows currently issue /token before the expected model request; the Bun rows pass. tests/google_generative_ai_check.py separately compares request shapes."
+      "notes": "All nine rows compare requests and messages with pinned pi-mono on Bun and native one/four threads through tests/live_replay_check.py, including Google Vertex API-key and ADC authentication. tests/google_generative_ai_check.py separately compares request shapes."
     },
     {
       "source": "packages/ai/test/google-thinking-level-map.test.ts",
@@ -1931,7 +1931,7 @@
     },
     {
       "source": "packages/ai/test/responseid.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/coding-agent/test/live-replay.bend",
         "tests/live_replay_check.py",
@@ -1939,7 +1939,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "86ee611befd27221de3183c568b0534603efdfd378d4783e940e93ff6b55f8e4",
-      "notes": "The live loopback replay compares responseId and requests with pinned pi-mono on Bun and native one/four threads. The Google Vertex API-key row fails natively because /token precedes the expected model request; its Bun and ADC rows, and the other provider rows, pass."
+      "notes": "All 11 rows compare responseId and requests with pinned pi-mono on Bun and native one/four threads through tests/live_replay_check.py, including Google Vertex API-key and ADC authentication."
     },
     {
       "source": "packages/ai/test/retry.test.ts",
@@ -1976,7 +1976,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "9b0f81e7aa6433bee0589345bf327d8c93c71e6c0ab1d901c9f6dc3aaa68bc42",
-      "notes": "tests/live_replay_check.py compares upstream stream cases against pinned pi-mono on Bun and native one/four threads, including requests, event order and final messages. The native Google Vertex API-key basic-text row currently issues /token before the expected model request. The Bedrock adaptive-thinking assertion fails against pinned pi-mono itself because its catalog maps xhigh to high for that model. Codex WebSocket and local-server cases remain pending."
+      "notes": "tests/live_replay_check.py compares upstream stream cases against pinned pi-mono on Bun and native one/four threads, including requests, event order and final messages. All seven Google Vertex rows pass with API-key and ADC authentication. The Bedrock adaptive-thinking assertion fails against pinned pi-mono itself because its catalog maps xhigh to high for that model. Codex WebSocket and local-server cases remain pending."
     },
     {
       "source": "packages/ai/test/supports-xhigh.test.ts",

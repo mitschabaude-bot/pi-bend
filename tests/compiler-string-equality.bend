@@ -8,7 +8,7 @@ def unbox(-A: Data,value: Box<A>) -> A:
   match value: case Box{value}: value
 def apply(f: Unit -> String) -> String: f(Unit{})
 def report(+a: String,+b: String) -> String:
-  U32.show(Bool.to_u32(String.eq(a,b))) ++ ":" ++ Nat.show(String.length(a)) ++ ":" ++ Nat.show(String.length(b)) ++ ":" ++ U32.show(Bool.to_u32(String.eq(a,a)))
+  U32.show(Bool.to_u32(String.eq(a,b))) ++ ":" ++ Nat.show(String.length(a)) ++ ":" ++ Nat.show(String.length(b)) ++ ":" ++ U32.show(Bool.to_u32(String.eq(a,a))) ++ ":" ++ U32.show(Bool.to_u32(False{} || String.eq(a,b))) ++ ":" ++ U32.show(Bool.to_u32(String.eq(a,b) || False{}))
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "nul" <> rest:

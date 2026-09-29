@@ -1,0 +1,10 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -2588,7 +2588,7 @@
+   // expects (an argument of another intrinsic is emitted untyped).
+   const ret = lay_of(fl.book,
+     tele_unbind(fl.book, (fl.book.tlds[k] as Bend.Def).T).ret);
+-  const lay = word && !lay_box(ret) ? ret : lay_of(fl.book, ty);
++  const lay = (word || op === "string_eq") && !lay_box(ret) ? ret : lay_of(fl.book, ty);
+   return val_new([out], lay.ks.length === 1 ? lay : BOX);
+ }
