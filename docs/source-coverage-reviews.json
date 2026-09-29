@@ -962,7 +962,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "4210ea08f3f5230e0309eced64111772cb13f00f4259a99675330d6289570534",
         "packages/coding-agent/src/modes/interactive/commands.bend": "dc44029e5b58c1710514d951bf85e9ea822ab11553590fb4fae0a403effba086",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
-        "packages/coding-agent/src/main.bend": "8a173c1873afda616cf5146179c1beac70f331765b6eeebc30fbf70918c5579f",
+        "packages/coding-agent/src/main.bend": "cfdd635b3e361a052244e33b5258f8e1f9ba45e6b7eb594019c6e2ebae78df3d",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "2953a0fd626f212d3e94cd4ee387462307e710be9590551e69ac362997c7f6f8",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "32cccab2dde6e9413d1ea84f1e471a0774e1a2a261d971be689fa3e8af147546",
@@ -1553,7 +1553,7 @@
         "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
         "packages/coding-agent/src/core/agent-runtime.bend": "d3602be64b905faa253cc7f9404040db59c5a53582638b6eed655933822f364b",
-        "packages/coding-agent/src/main.bend": "8a173c1873afda616cf5146179c1beac70f331765b6eeebc30fbf70918c5579f"
+        "packages/coding-agent/src/main.bend": "cfdd635b3e361a052244e33b5258f8e1f9ba45e6b7eb594019c6e2ebae78df3d"
       }
     },
     "packages/coding-agent/src/core/crash-log.ts": {
@@ -1747,7 +1747,7 @@
     },
     "packages/coding-agent/src/main.ts": {
       "state": "partial",
-      "note": "Reviewed the extension startup path: upstream combines built-in and injected inline factories, resolves explicit extension paths, passes factories to session services and reports load errors. Native RPC startup now loads the settings-selected global theme with the terminal color mode and dark fallback, and supplies it to extension UI; custom and missing-theme RPC startup smoke checks pass. Native main selects named linked Bend factories through --extension and effective settings; --no-extensions suppresses settings discovery but retains explicit selections, and project settings follow trust. The loopback CLI check covers global and project settings, trust switches, de-duplication, explicit selection and a delegated model request. Arbitrary Bend source-file discovery, package commands and broader main behavior remain incomplete or unreviewed. Missing-cwd Continue reopens the selected session file after the prompt, so concurrent edits are included as upstream does.",
+      "note": "Reviewed the extension startup path: upstream combines built-in and injected inline factories, resolves explicit extension paths, passes factories to session services and reports load errors. Native RPC startup now loads the settings-selected global theme with the terminal color mode and dark fallback, and supplies it to extension UI; custom and missing-theme RPC startup smoke checks pass. Native main selects named linked Bend factories through --extension and effective settings; --no-extensions suppresses settings discovery but retains explicit selections, and project settings follow trust. The loopback CLI check covers global and project settings, trust switches, de-duplication, explicit selection and a delegated model request. Arbitrary Bend source-file discovery, package commands and broader main behavior remain incomplete or unreviewed. Missing-cwd Continue reopens the selected session file after the prompt, so concurrent edits are included as upstream does. Plain help and model metadata remain on stdout; explicit print/JSON/RPC mode routes them to stderr so machine output stays clean.",
       "source_sha256": "d5f38460ed5ff89a8822a56bb40d279c08fe00b4d1d501e83cce0faf0b99addd",
       "ports": [
         "packages/coding-agent/src/main.bend",
@@ -1755,7 +1755,7 @@
         "packages/coding-agent/src/core/agent-runtime.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/main.bend": "8a173c1873afda616cf5146179c1beac70f331765b6eeebc30fbf70918c5579f",
+        "packages/coding-agent/src/main.bend": "cfdd635b3e361a052244e33b5258f8e1f9ba45e6b7eb594019c6e2ebae78df3d",
         "packages/coding-agent/src/extensions/index.bend": "cac66e23a500ff2bbd041ab89114ad74c7fc09a599fbb4d982dbc77bf502d3d8",
         "packages/coding-agent/src/core/agent-runtime.bend": "d3602be64b905faa253cc7f9404040db59c5a53582638b6eed655933822f364b"
       }
@@ -1833,6 +1833,14 @@
       "port_sha256": {
         "packages/coding-agent/src/utils/clipboard.bend": "e44595aa90f67824122ab27f1030208be9c5449ac75c941d67ce103880396f8a",
         "packages/coding-agent/src/utils/clipboard-image.bend": "b4fa2ffa5778774223d53f126888164d0fc871d91084f3165f0a8b19e4c35f6e"
+      }
+    },
+    "packages/coding-agent/src/cli/list-models.ts": {
+      "state": "partial",
+      "note": "Native ModelRuntime selection, fuzzy filtering, provider/id order, token-count formatting and aligned model rows are present; warnings and errors use stderr. The main CLI routes normal rows to stderr in explicit print/JSON/RPC mode and stdout for plain metadata. Upstream optional AbortSignal support is not wired through this module, and broader locale-sensitive sorting and fuzzy-query parity remain unverified.",
+      "source_sha256": "a8a47f1de6405a0a61a2659e8b761c8f9e561d8ff4448390c93d80f5970ac860",
+      "port_sha256": {
+        "packages/coding-agent/src/cli/list-models.bend": "e520d599784cee9276da79de6e2ffa6b8129eebc1a07a82ac1f503bb6b967cc6"
       }
     }
   }

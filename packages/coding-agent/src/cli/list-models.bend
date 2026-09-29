@@ -12,6 +12,11 @@ import ../../../runtime/src/stable-sort.bend as Sort
 # presents its entries, as pi's cli/list-models.ts does.
 type Row is Data:
   Row{provider: String, model: String, context: String, maxOut: String, thinking: String, images: String}
+type Output is Data: Stdout{} Stderr{}
+def printLine(output: Output,text: String) -> IO(Unit):
+  match output:
+    case Stdout{}: IO.print(text)
+    case Stderr{}: IO.print_err(text)
 
 def searchText(model: Models.Model()) -> String:
   match model:
@@ -98,32 +103,32 @@ def line(item: Row,widths: Widths) -> String:
     case Row{a,b,c,d,e,f} Widths{wa,wb,wc,wd,we,wf}:
       pad(a,wa) ++ "  " ++ pad(b,wb) ++ "  " ++ pad(c,wc) ++ "  " ++ pad(d,wd) ++ "  " ++ pad(e,we) ++ "  " ++ pad(f,wf)
 
-def lines(rows: List<&2,Row>,+widths: Widths) -> IO(Unit):
+def lines(rows: List<&2,Row>,+widths: Widths,+output: Output) -> IO(Unit):
   match rows:
     case Nil{}: IO.pure(Unit,Unit{})
     case item <> rest:
       do IO<Unit>:
-        IO.print(line(item,widths))
-        lines(rest,widths)
+        printLine(output,line(item,widths))
+        lines(rest,widths,output)
 
-def displaySelected(matching: List<&2,Models.Model()>,search: Maybe<&2,String>) -> IO(Unit):
+def displaySelected(matching: List<&2,Models.Model()>,search: Maybe<&2,String>,+output: Output) -> IO(Unit):
   match matching:
-    case Nil{}: IO.print("No models matching \"" ++ Maybe.default(&2,String,search,"") ++ "\"")
+    case Nil{}: printLine(output,"No models matching \"" ++ Maybe.default(&2,String,search,"") ++ "\"")
     case matches:
       +rendered = rows(matches)
       +width = widths(rendered,Widths{8n,5n,7n,7n,8n,6n})
       do IO<Unit>:
-        IO.print(line(Row{"provider","model","context","max-out","thinking","images"},width))
-        lines(rendered,width)
+        printLine(output,line(Row{"provider","model","context","max-out","thinking","images"},width))
+        lines(rendered,width,output)
 
-def display(models: List<&2,Models.Model()>,+search: Maybe<&2,String>) -> IO(Unit):
+def display(models: List<&2,Models.Model()>,+search: Maybe<&2,String>,output: Output) -> IO(Unit):
   match models:
-    case Nil{}: IO.print("No models available. Use /login to log into a provider via OAuth or API key.")
-    case values: displaySelected(selected(values,search),search)
+    case Nil{}: printLine(output,"No models available. Use /login to log into a provider via OAuth or API key.")
+    case values: displaySelected(selected(values,search),search,output)
 
-def displayResult(result: AiModels.AvailableResult(), search: Maybe<&2,String>) -> IO(Unit):
+def displayResult(result: AiModels.AvailableResult(), search: Maybe<&2,String>,output: Output) -> IO(Unit):
   match result:
-    case Done{available}: display(available, search)
+    case Done{available}: display(available, search,output)
     case Fail{error}: IO.print_err("Error: " ++ Resolve.errorMessage(error))
 
 def reportError(error: Maybe<&2, String>) -> IO(Unit):
@@ -131,9 +136,11 @@ def reportError(error: Maybe<&2, String>) -> IO(Unit):
     case Some{message}: IO.print_err("Warning: errors loading models.json:\n" ++ message)
     case None{}: IO.pure(Unit, Unit{})
 
-def listModels(+runtime: Models.ModelRuntime,search: Maybe<&2,String>) -> IO(Unit):
+def listModelsTo(+runtime: Models.ModelRuntime,search: Maybe<&2,String>,output: Output) -> IO(Unit):
   do IO<Unit>:
     error : Maybe<&2, String> <- Models.getError(runtime)
     reportError(error)
     available : AiModels.AvailableResult() <- Models.getAvailable(runtime, None{}, None{})
-    displayResult(available,search)
+    displayResult(available,search,output)
+def listModels(runtime: Models.ModelRuntime,search: Maybe<&2,String>) -> IO(Unit):
+  listModelsTo(runtime,search,Stdout{})

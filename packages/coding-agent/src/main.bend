@@ -1417,15 +1417,15 @@ def listSearch(parsed: Args.Args) -> Maybe<&2,Maybe<&2,String>>:
         case Some{Args.AllModels{}}: Some{None{}}
         case Some{Args.SearchModels{pattern}}: Some{Some{pattern}}
 
-def listed(+runtime: Models.ModelRuntime,store: Auth.CredentialStore,storage: AuthStorage.AuthStorageOwner,transport: Runtime.Transport,search: Maybe<&2,String>) -> IO(Unit):
+def listed(+runtime: Models.ModelRuntime,store: Auth.CredentialStore,storage: AuthStorage.AuthStorageOwner,transport: Runtime.Transport,search: Maybe<&2,String>,output: ModelList.Output) -> IO(Unit):
   do IO<Unit>:
-    ModelList.listModels(runtime,search)
+    ModelList.listModelsTo(runtime,search,output)
     Models.dispose(runtime)
     Auth.disposeStore(store)
     AuthStorage.dispose(storage)
     Runtime.disposeTransport(transport)
 
-def listWithStore(transport: Runtime.Transport,storage: AuthStorage.AuthStorageOwner,view: AuthStorage.AuthStorage,search: Maybe<&2,String>) -> IO(Unit):
+def listWithStore(transport: Runtime.Transport,storage: AuthStorage.AuthStorageOwner,view: AuthStorage.AuthStorage,search: Maybe<&2,String>,output: ModelList.Output) -> IO(Unit):
   match transport:
     case Runtime.Transport{+authorizer,runtime,+fetch,codexSessions}:
       do IO<Unit>:
@@ -1433,25 +1433,25 @@ def listWithStore(transport: Runtime.Transport,storage: AuthStorage.AuthStorageO
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch,Runtime.urlContext())
         anthropic : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch,Runtime.urlContext())
         models : Models.ModelRuntime <- Models.createWithAnthropic(store,oauth,Some{anthropic},Radius.RadiusTransport{fetch,Runtime.urlContext()})
-        listed(models,store,storage,Runtime.Transport{authorizer,runtime,fetch,codexSessions},search)
+        listed(models,store,storage,Runtime.Transport{authorizer,runtime,fetch,codexSessions},search,output)
 
-def listBorrowed(transport: Runtime.Transport,pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage,search: Maybe<&2,String>) -> IO(Unit):
+def listBorrowed(transport: Runtime.Transport,pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage,search: Maybe<&2,String>,output: ModelList.Output) -> IO(Unit):
   match pair:
-    case (owner,view): listWithStore(transport,owner,view,search)
+    case (owner,view): listWithStore(transport,owner,view,search,output)
 
-def listWithTransport(transport: Runtime.Transport,path: String,search: Maybe<&2,String>) -> IO(Unit):
+def listWithTransport(transport: Runtime.Transport,path: String,search: Maybe<&2,String>,output: ModelList.Output) -> IO(Unit):
   do IO<Unit>:
     storage : AuthStorage.AuthStorageOwner <- AuthStorage.create(path)
-    listBorrowed(transport,AuthStorage.borrow(storage),search)
+    listBorrowed(transport,AuthStorage.borrow(storage),search,output)
 
-def listReady(transport: Runtime.Outcome(Runtime.Transport),authPath: Result<&2,&2,FS.Error,String>,search: Maybe<&2,String>) -> IO(Unit):
+def listReady(transport: Runtime.Outcome(Runtime.Transport),authPath: Result<&2,&2,FS.Error,String>,search: Maybe<&2,String>,output: ModelList.Output) -> IO(Unit):
   match transport authPath:
     case Fail{error} _: fail(error)
     case Done{transport} Fail{_}:
       do IO<Unit>:
         Runtime.disposeTransport(transport)
         fail("Could not locate the auth file")
-    case Done{transport} Done{path}: listWithTransport(transport,path,search)
+    case Done{transport} Done{path}: listWithTransport(transport,path,search,output)
 
 # upstream main reports the startup settings diagnostics before --help and
 # --list-models output.
@@ -1478,27 +1478,40 @@ def reportStartupSettings() -> IO(Unit):
     settings : Maybe<&2,Settings.SettingsManager> <- loadStartupSettings()
     return Unit{}
 
-def listModels(search: Maybe<&2,String>) -> IO(Unit):
+def listModels(search: Maybe<&2,String>,output: ModelList.Output) -> IO(Unit):
   do IO<Unit>:
     settings : Maybe<&2,Settings.SettingsManager> <- loadStartupSettings()
     authPath : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
     bundle : Result<&1,&1,U32 & String,String> <- IO.get_env("SSL_CERT_FILE")
     transport : Runtime.Outcome(Runtime.Transport) <- Runtime.createTransportWith(envOr(bundle,"/etc/ssl/certs/ca-certificates.crt"),Maybe.bind(&2,Settings.SettingsManager,String,settings,Runtime.globalHttpProxy))
-    listReady(transport,authPath,search)
+    listReady(transport,authPath,search,output)
 
 def dispatchExport(+parsed: Args.Args,request: Maybe<&2,ExportRequest>,+stdinTty: Bool,stdoutTty: Bool) -> IO(Unit):
   match request:
     case Some{value}: exportFile(value)
     case None{}: runMode(parsed, resolveAppMode(modeOf(parsed), printFlag(parsed), stdinTty, stdoutTty), stdinTty)
 
+def metadataToStderr(mode: Maybe<&2,Args.Mode>,printed: Bool) -> Bool:
+  match mode printed:
+    case None{} False{}: False{}
+    case _ _: True{}
+def metadataOutput(+parsed: Args.Args) -> ModelList.Output:
+  Bool.pick(ModelList.Output,metadataToStderr(modeOf(parsed),printFlag(parsed)),ModelList.Stderr{},ModelList.Stdout{})
 def dispatchList(+parsed: Args.Args,search: Maybe<&2,Maybe<&2,String>>,stdinTty: Bool,stdoutTty: Bool) -> IO(Unit):
   match search:
-    case Some{pattern}: listModels(pattern)
+    case Some{pattern}: listModels(pattern,metadataOutput(parsed))
     case None{}: dispatchExport(parsed,exportRequest(parsed),stdinTty,stdoutTty)
+def helpOutput(toStderr: Bool) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit),toStderr,
+    _ => IO.print_err(Args.helpText(Config.appName())),
+    _ => IO.print(Args.helpText(Config.appName())))(Unit{})
 
 def dispatch(+parsed: Args.Args, help: Bool, version: Bool, invalid: Bool, +stdinTty: Bool, stdoutTty: Bool, flagError: Maybe<&2, String>) -> IO(Unit):
   match help version invalid flagError:
-    case True{} _ _ _: IO.bind(Unit, Unit, reportStartupSettings(), _ => IO.print(Args.helpText(Config.appName())))
+    case True{} _ _ _:
+      do IO<Unit>:
+        reportStartupSettings()
+        helpOutput(metadataToStderr(modeOf(parsed),printFlag(parsed)))
     case _ True{} _ _: IO.print(Config.version())
     case _ _ True{} _: IO.die(Unit, 1, "")
     case _ _ _ Some{message}: fail(message)

@@ -4013,9 +4013,12 @@
     },
     {
       "source": "packages/coding-agent/test/stdout-cleanliness.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6323757294b0a352aceb8a02a1782728681ee49e6c72ac9cb47356fbe525920a"
+      "status": "partial",
+      "ports": [
+        "tests/stdout_cleanliness_check.py"
+      ],
+      "sha256": "6323757294b0a352aceb8a02a1782728681ee49e6c72ac9cb47356fbe525920a",
+      "notes": "Both output-channel contracts are covered for plain help and explicit JSON help; the native one/four-thread process check also covers text/RPC/print help and plain/explicit-mode model listing. The upstream fake npm package chatter assertion remains unported because native package-source installation is not yet implemented."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-bash-persistence.test.ts",
