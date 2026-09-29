@@ -1976,79 +1976,128 @@ def getRegisteredProviderIds(runtime: ModelRuntime) -> IO(List<&2, String>):
     catalog : Catalog <- readCatalog(runtime)
     return builtinIds(nativesOf(catalog))
 
-# Provider-directed login (upstream ModelRuntime.login over Models.login):
-# the collection runs the provider's flow and persists its credential; the
-# runtime then refreshes the provider's availability.
-def loginDone(+runtime: ModelRuntime, +id: String, result: Auth.LoginOutcome()) -> IO(Auth.LoginOutcome()):
+# A committed credential change can alter a dynamic provider's cached models.
+# Refresh only that provider, without network access, then publish its new
+# availability. Errors leave the last complete snapshot intact.
+def synchronizationError(+id: String, +reason: String) -> Resolve.ModelsError:
+  Resolve.ModelsError{Resolve.AuthError{}, "Credential synchronization failed for " ++ id ++ ": " ++ reason}
+
+def synchronizationAborted(+id: String) -> Resolve.ModelsError:
+  synchronizationError(id, "This operation was aborted")
+
+def synchronizedChecked(+runtime: ModelRuntime, +id: String, signal: Auth.Signal(), entries: List<&2, AiModels.AvailabilityResult()>, available: AiModels.AvailableResult()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+  match available:
+    case Fail{error}: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{synchronizationError(id, Resolve.errorMessage(error))})
+    case Done{_}:
+      do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+        stopped : Bool <- signalAborted(signal)
+        Bool.pick(Unit -> IO(Result<&2, &2, Resolve.ModelsError, Unit>), stopped,
+          _ => IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{synchronizationAborted(id)}),
+          _ => do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+            all : List<&2, Model()> <- getModels(runtime)
+            Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (readied(catalog, id, availabilityEntries(entries), all), Unit{}))
+            return Done{Unit{}})(Unit{})
+
+def synchronizedSnapshot(+runtime: ModelRuntime, +id: String, signal: Auth.Signal(), +entries: List<&2, AiModels.AvailabilityResult()>) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+  synchronizedChecked(runtime, id, signal, entries, AiModels.availableOf(Done{entries}))
+
+def synchronizedAvailability(+runtime: ModelRuntime, +id: String, signal: Auth.Signal(), result: AiModels.AvailabilitiesResult()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+  match result:
+    case Fail{error}: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{synchronizationError(id, Resolve.errorMessage(error))})
+    case Done{entries}: synchronizedSnapshot(runtime, id, signal, entries)
+
+def synchronizedRefreshError(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal(), error: Maybe<&2, String>) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+  match error:
+    case Some{reason}: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{synchronizationError(id, reason)})
+    case None{}:
+      do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+        available : AiModels.AvailabilitiesResult() <- AiModels.getAvailabilities(modelsOf(runtime), Some{id}, signal)
+        synchronizedAvailability(runtime, id, signal, available)
+
+def synchronizedRefresh(+runtime: ModelRuntime, +id: String, signal: Auth.Signal(), result: AiModels.ModelsRefreshResult) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+  match result:
+    case AiModels.ModelsRefreshResult{True{}, _}: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{synchronizationAborted(id)})
+    case AiModels.ModelsRefreshResult{False{}, errors}: synchronizedRefreshError(runtime, id, signal, R.get(String, errors, id))
+
+def synchronizeCredentialState(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+  do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+    stopped : Bool <- signalAborted(signal)
+    Bool.pick(Unit -> IO(Result<&2, &2, Resolve.ModelsError, Unit>), stopped,
+      _ => IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{synchronizationAborted(id)}),
+      _ => do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+        refreshed : AiModels.ModelsRefreshResult <- AiModels.refresh(modelsOf(runtime), AiModels.ModelsRefreshOptions{Some{False{}}, Some{[id]}, None{}, signal})
+        synchronizedRefresh(runtime, id, signal, refreshed))(Unit{})
+
+# Provider-directed login persists its credential before local synchronization.
+def loginSynchronized(credential: Auth.Credential, result: Result<&2, &2, Resolve.ModelsError, Unit>) -> Auth.LoginOutcome():
+  match result:
+    case Done{_}: Done{credential}
+    case Fail{error}: Fail{"Credential saved; " ++ Resolve.errorMessage(error)}
+
+def loginDone(+runtime: ModelRuntime, +id: String, signal: Auth.Signal(), result: Auth.LoginOutcome()) -> IO(Auth.LoginOutcome()):
   match result:
     case Fail{error}: IO.pure(Auth.LoginOutcome(), Fail{error})
     case Done{credential}:
       do IO<Auth.LoginOutcome()>:
-        refreshProviderAvailability(runtime, id)
-        return Done{credential}
+        synchronized : Result<&2, &2, Resolve.ModelsError, Unit> <- synchronizeCredentialState(runtime, id, signal)
+        return loginSynchronized(credential, synchronized)
 
-def loginUnlessAborted(+runtime: ModelRuntime, +id: String, kind: Auth.CredentialType, interaction: Auth.AuthInteraction, aborted: Bool) -> IO(Auth.LoginOutcome()):
+def loginUnlessAborted(+runtime: ModelRuntime, +id: String, kind: Auth.CredentialType, interaction: Auth.AuthInteraction, signal: Auth.Signal(), aborted: Bool) -> IO(Auth.LoginOutcome()):
   match aborted:
     case True{}: IO.pure(Auth.LoginOutcome(), Fail{"Login cancelled"})
     case False{}:
       do IO<Auth.LoginOutcome()>:
         result : Auth.LoginOutcome() <- AiModels.login(modelsOf(runtime), id, kind, interaction)
-        loginDone(runtime, id, result)
+        loginDone(runtime, id, signal, result)
 
 def login(+runtime: ModelRuntime, +id: String, kind: Auth.CredentialType, interaction: Auth.AuthInteraction) -> IO(Auth.LoginOutcome()):
   match interaction:
     case Auth.AuthInteraction{+signal, prompt, notify}:
       do IO<Auth.LoginOutcome()>:
         aborted : Bool <- signalAborted(signal)
-        loginUnlessAborted(runtime, id, kind, Auth.AuthInteraction{signal, prompt, notify}, aborted)
+        loginUnlessAborted(runtime, id, kind, Auth.AuthInteraction{signal, prompt, notify}, signal, aborted)
 
-def logoutDone(+runtime: ModelRuntime, +id: String, result: Result<&2, &2, Resolve.ModelsError, Unit>) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+def logoutDone(+runtime: ModelRuntime, +id: String, signal: Auth.Signal(), result: Result<&2, &2, Resolve.ModelsError, Unit>) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
   match result:
     case Fail{error}: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{error})
     case Done{_}:
       do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
-        refreshProviderAvailability(runtime, id)
-        return Done{Unit{}}
+        synchronizeCredentialState(runtime, id, signal)
 
 # The credential store may be injected by an SDK caller. Its deletion and the
 # provider's availability update both settle before logout reports success.
-def logout(+runtime: ModelRuntime, +id: String, signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+def logout(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
   do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
     result : Result<&2, &2, Resolve.ModelsError, Unit> <- AiModels.logout(modelsOf(runtime), id, signal)
-    logoutDone(runtime, id, result)
+    logoutDone(runtime, id, signal, result)
 
-def overrideChanged(+runtime: ModelRuntime, +id: String) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
-  do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
-    refreshProviderAvailability(runtime, id)
-    return Done{Unit{}}
-
-def setRuntimeApiKeyReady(+runtime: ModelRuntime, +id: String, +key: String, provider: Maybe<&2, AiModels.Provider>) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+def setRuntimeApiKeyReady(+runtime: ModelRuntime, +id: String, +key: String, signal: Auth.Signal(), provider: Maybe<&2, AiModels.Provider>) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
   match provider:
     case None{}: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{unknownProvider(id)})
     case Some{_}:
       do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
         RuntimeCredentials.setRuntimeApiKey(runtimeCredentialsOf(runtime), id, key)
-        overrideChanged(runtime, id)
+        synchronizeCredentialState(runtime, id, signal)
 
 # Runtime keys mask stored credentials for this ModelRuntime only. The
 # provider's availability snapshot is updated before the operation returns.
-def setRuntimeApiKey(+runtime: ModelRuntime, +id: String, +key: String, signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+def setRuntimeApiKey(+runtime: ModelRuntime, +id: String, +key: String, +signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
   do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
     stopped : Bool <- signalAborted(signal)
     Bool.pick(Unit -> IO(Result<&2, &2, Resolve.ModelsError, Unit>), stopped,
       _ => IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{Resolve.ModelsError{Resolve.AuthError{}, "This operation was aborted"}}),
       _ => do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
         provider : Maybe<&2, AiModels.Provider> <- getProvider(runtime, id)
-        setRuntimeApiKeyReady(runtime, id, key, provider))(Unit{})
+        setRuntimeApiKeyReady(runtime, id, key, signal, provider))(Unit{})
 
-def removeRuntimeApiKey(+runtime: ModelRuntime, +id: String, signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+def removeRuntimeApiKey(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
   do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
     stopped : Bool <- signalAborted(signal)
     Bool.pick(Unit -> IO(Result<&2, &2, Resolve.ModelsError, Unit>), stopped,
       _ => IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{Resolve.ModelsError{Resolve.AuthError{}, "This operation was aborted"}}),
       _ => do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
         RuntimeCredentials.removeRuntimeApiKey(runtimeCredentialsOf(runtime), id)
-        overrideChanged(runtime, id))(Unit{})
+        synchronizeCredentialState(runtime, id, signal))(Unit{})
 
 # Creation
 # --------

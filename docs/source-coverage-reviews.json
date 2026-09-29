@@ -373,7 +373,7 @@
       "source_sha256": "84f2799b0bf45fb01237c5c2c19641b0da5d1245670b208c05bacb5cff36b96f",
       "port_sha256": {
         "packages/ai/src/models.bend": "7333f272bde65a1e306cde99c8c02b4527c3c3b2adfd877474b38f33063960b9",
-        "packages/coding-agent/src/core/model-runtime.bend": "b96f2f2757d1d62cb5813ea471416f54ca87c2bc0c8212c2f293bd5d4df3c129"
+        "packages/coding-agent/src/core/model-runtime.bend": "5a522430a5f408836366850c7e128f7b4cdb3bc1868f1d7808f2039338e06959"
       },
       "ports": [
         "packages/ai/src/models.bend",
@@ -583,13 +583,13 @@
     },
     "packages/coding-agent/src/core/model-runtime.ts": {
       "state": "partial",
-      "note": "ModelRuntime holds a pi-ai Models collection (AiModels.Models, upstream this.models) with the effective providers: the composition of built-in and models.json providers with native extension providers in place, in upstream providerIds() order; registering or unregistering an extension provider rebuilds the collection (every refresh in flight superseded, the replaced id's catalog dropped) and restores cached catalogs without network access. refresh, checkAuth, getAuth and login delegate to the collection; login then refreshes the provider's availability, and a pre-aborted login answers 'Login cancelled'. The availability snapshot (configured providers and available models, narrowed by filterModels) is computed by refreshAvailability and merged per provider by refreshProviderAvailability as upstream. getAuth(model) adds the configured models.json model headers over the collection's. Reviewed create(): CreateModelRuntimeOptions' modelsStore, modelsStorePath, allowModelNetwork (with PI_OFFLINE), catalogBaseUrl, signal and refreshOnCreate; the store is the injected one, else a FileModelsStore (models-store.json beside models.json), else in-memory without models.json; built-in providers other than Radius are wrapped with withRemoteCatalog; the create-time refresh restores cached catalogs (tests/remote-catalog.bend, tests/radius.bend). The runtime owns the file store's read state (a Serial owner in a Ref, retired in dispose after the store's callbacks), where upstream shares one module-level read state per path. Catalogs published by built-in providers composed with models.json pass through the entry and its modelOverrides (Composer.overlaidRefresh), as upstream's composed getModels (tests/models_json_check.py). Not ported: modelRefreshTimeoutMs, reloading models.json on refresh, models.json overlays on native extension providers, per-provider credential-operation serialization and complete synchronizeCredentialState behavior. Native/config extension registrations retain their optional streams and config fields alongside the collection; every registration or removal rebuilds the collection before availability refresh. ModelRuntime.streamSimple/complete resolves auth, applies header transforms and dispatches an extension stream or the runtime API transport. The custom compaction example checks the native stream path; config registration precedence and lifecycle remain unvalidated. Native isUsingOAuth/isUsingSubscription expose IO results because credential/provider reads are effectful; subscription requires configured OAuth and the provider OAuth isSubscription flag. Interactive source comparisons cover API-key versus OAuth subscription metadata; broader snapshot freshness and custom non-subscription OAuth cases remain unverified. Interactive all-catalog calls now share one runtime-owned request with independent caller cancellation; provider-specific refresh remains separate. Fresh getAvailable now supports provider-scoped credential reads and typed failure, while getAvailableSnapshot retains the cached view; a successful full read republishes availability and clears the reported error (tests/model-availability.bend). Concurrent stale-result suppression and the rest of the auth-options suite remain open. ModelRuntime.logout now deletes through its injected credential store and updates the affected provider in the availability snapshot before returning; interactive /logout uses that path. Per-provider credential-operation ordering, network-free synchronization of dynamic catalogs, and typed refresh-failure propagation remain open. Runtime API-key overrides now belong to ModelRuntime: set/remove update the provider availability snapshot without changing the injected persistent store; AgentRuntime and SDK pass their credential stores directly instead of nesting an extra overlay. The same-provider operation chain and refresh error semantics remain open.",
+      "note": "ModelRuntime holds a pi-ai Models collection (AiModels.Models, upstream this.models) with the effective providers: the composition of built-in and models.json providers with native extension providers in place, in upstream providerIds() order; registering or unregistering an extension provider rebuilds the collection (every refresh in flight superseded, the replaced id's catalog dropped) and restores cached catalogs without network access. refresh, checkAuth, getAuth and login delegate to the collection; login then refreshes the provider's availability, and a pre-aborted login answers 'Login cancelled'. The availability snapshot (configured providers and available models, narrowed by filterModels) is computed by refreshAvailability and merged per provider by refreshProviderAvailability as upstream. getAuth(model) adds the configured models.json model headers over the collection's. Reviewed create(): CreateModelRuntimeOptions' modelsStore, modelsStorePath, allowModelNetwork (with PI_OFFLINE), catalogBaseUrl, signal and refreshOnCreate; the store is the injected one, else a FileModelsStore (models-store.json beside models.json), else in-memory without models.json; built-in providers other than Radius are wrapped with withRemoteCatalog; the create-time refresh restores cached catalogs (tests/remote-catalog.bend, tests/radius.bend). The runtime owns the file store's read state (a Serial owner in a Ref, retired in dispose after the store's callbacks), where upstream shares one module-level read state per path. Catalogs published by built-in providers composed with models.json pass through the entry and its modelOverrides (Composer.overlaidRefresh), as upstream's composed getModels (tests/models_json_check.py). Not ported: modelRefreshTimeoutMs, reloading models.json on refresh, models.json overlays on native extension providers, per-provider credential-operation serialization and complete synchronizeCredentialState behavior. Native/config extension registrations retain their optional streams and config fields alongside the collection; every registration or removal rebuilds the collection before availability refresh. ModelRuntime.streamSimple/complete resolves auth, applies header transforms and dispatches an extension stream or the runtime API transport. The custom compaction example checks the native stream path; config registration precedence and lifecycle remain unvalidated. Native isUsingOAuth/isUsingSubscription expose IO results because credential/provider reads are effectful; subscription requires configured OAuth and the provider OAuth isSubscription flag. Interactive source comparisons cover API-key versus OAuth subscription metadata; broader snapshot freshness and custom non-subscription OAuth cases remain unverified. Interactive all-catalog calls now share one runtime-owned request with independent caller cancellation; provider-specific refresh remains separate. Fresh getAvailable now supports provider-scoped credential reads and typed failure, while getAvailableSnapshot retains the cached view; a successful full read republishes availability and clears the reported error (tests/model-availability.bend). Concurrent stale-result suppression and the rest of the auth-options suite remain open. ModelRuntime.logout now deletes through its injected credential store and updates the affected provider in the availability snapshot before returning; interactive /logout uses that path. Per-provider credential-operation ordering, network-free synchronization of dynamic catalogs, and typed refresh-failure propagation remain open. Runtime API-key overrides now belong to ModelRuntime: set/remove update the provider availability snapshot without changing the injected persistent store; AgentRuntime and SDK pass their credential stores directly instead of nesting an extra overlay. Credential changes now restore the affected provider's cached catalog without network access, publish availability only after successful checks, and return a synchronization error on cache or auth failure (tests/model-availability.bend). Same-provider operation ordering, cancellation-after-commit metadata and the upstream CredentialSynchronizationError type remain open.",
       "ports": [
         "packages/coding-agent/src/core/model-runtime.bend"
       ],
       "source_sha256": "20c1dbfa1dd757a594cf0b4ab6e401fc6c6155484a3f490096bc5328e3c33c2c",
       "port_sha256": {
-        "packages/coding-agent/src/core/model-runtime.bend": "b96f2f2757d1d62cb5813ea471416f54ca87c2bc0c8212c2f293bd5d4df3c129"
+        "packages/coding-agent/src/core/model-runtime.bend": "5a522430a5f408836366850c7e128f7b4cdb3bc1868f1d7808f2039338e06959"
       }
     },
     "packages/coding-agent/src/core/session-manager.ts": {
@@ -952,7 +952,7 @@
       "note": "Concurrent all-catalog requests on one runtime share an operation; each caller can stop waiting independently, the last cancellation aborts the operation, and a later caller starts a new one. The native runtime owns the coordinator instead of using a global WeakMap. The three upstream cases pass against a real Bend ModelRuntime on Bun and native one/four threads.",
       "source_sha256": "a7a10647deaba5036019737c376ab3f73eed12703dafeb8cb8920581ec8672e2",
       "port_sha256": {
-        "packages/coding-agent/src/core/model-runtime.bend": "b96f2f2757d1d62cb5813ea471416f54ca87c2bc0c8212c2f293bd5d4df3c129",
+        "packages/coding-agent/src/core/model-runtime.bend": "5a522430a5f408836366850c7e128f7b4cdb3bc1868f1d7808f2039338e06959",
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "04de785f8bfe086e0daa568d296d2965ff10fb4c13ef6482f147edd5de8394f3"
       },
       "ports": [
@@ -1528,7 +1528,7 @@
         "packages/coding-agent/src/core/http-dispatcher.bend": "ebdef30af7fff2fd0f4529bced421f752bc290f3b92698f5a173e29b90b9e6f8",
         "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
-        "packages/coding-agent/src/core/agent-runtime.bend": "887902c5ee29d2c972fe38da8b07c36f840f7a58c6275405aa89eb77c2524f26",
+        "packages/coding-agent/src/core/agent-runtime.bend": "39df29b9365ce400e5cf9f37e2e6577ef361dd3df9808e880d77b651aa557a19",
         "packages/coding-agent/src/main.bend": "6fbe689cd6a2447c1b1c80e19b5df46974e4095a9186180c8df786ceb9c0f0cf"
       }
     },
@@ -1733,7 +1733,7 @@
       "port_sha256": {
         "packages/coding-agent/src/main.bend": "6fbe689cd6a2447c1b1c80e19b5df46974e4095a9186180c8df786ceb9c0f0cf",
         "packages/coding-agent/src/extensions/index.bend": "cac66e23a500ff2bbd041ab89114ad74c7fc09a599fbb4d982dbc77bf502d3d8",
-        "packages/coding-agent/src/core/agent-runtime.bend": "887902c5ee29d2c972fe38da8b07c36f840f7a58c6275405aa89eb77c2524f26"
+        "packages/coding-agent/src/core/agent-runtime.bend": "39df29b9365ce400e5cf9f37e2e6577ef361dd3df9808e880d77b651aa557a19"
       }
     },
     "packages/coding-agent/src/cli/args.ts": {
@@ -1755,7 +1755,7 @@
         "packages/coding-agent/src/core/agent-runtime.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-runtime.bend": "887902c5ee29d2c972fe38da8b07c36f840f7a58c6275405aa89eb77c2524f26"
+        "packages/coding-agent/src/core/agent-runtime.bend": "39df29b9365ce400e5cf9f37e2e6577ef361dd3df9808e880d77b651aa557a19"
       }
     },
     "packages/coding-agent/src/core/session-export.ts": {

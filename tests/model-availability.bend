@@ -5,6 +5,7 @@ import ../packages/ai/src/auth/types.bend as Auth
 import ../packages/ai/src/auth/helpers.bend as Helpers
 import ../packages/ai/src/auth/context.bend as Context
 import ../packages/ai/src/auth/resolve.bend as Resolve
+import ../packages/ai/src/auth/credential-store.bend as MemoryCredentials
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/ref.bend as Ref
@@ -56,19 +57,48 @@ def credentials(+state: Ref.Ref<State>) -> IO(Auth.CredentialStore):
 def model(id: String) -> Ai.Model<Ai.JsonValue>:
   Ai.Model{"only", "Only", Ai.OpenAIResponsesApi{}, id, "https://faux.invalid", False{}, None{}, [Ai.InputText{}], None{}, Ai.ModelCost{U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), None{}}, None{}, U32.to_f64(1000), U32.to_f64(100), None{}, None{}, None{}}
 
-def provider(+id: String) -> IO(AiModels.Provider):
+def cachedModel(id: String) -> Ai.Model<Ai.JsonValue>:
+  Ai.Model{"cached", "Cached", Ai.OpenAIResponsesApi{}, id, "https://faux.invalid", False{}, None{}, [Ai.InputText{}], None{}, Ai.ModelCost{U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), None{}}, None{}, U32.to_f64(1000), U32.to_f64(100), None{}, None{}, None{}}
+
+def providerWithRefresh(+id: String, refresh: Maybe<&2, AiModels.RefreshModels()>) -> IO(AiModels.Provider):
   do IO<AiModels.Provider>:
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Test API key", ["PI_AVAILABILITY_TEST_UNUSED"])
-    return AiModels.Provider{id, id, "https://faux.invalid", Auth.ProviderAuth{Some{apiKey}, None{}}, [model(id)], AiModels.ApiStreams{}, None{}, None{}}
+    return AiModels.Provider{id, id, "https://faux.invalid", Auth.ProviderAuth{Some{apiKey}, None{}}, [model(id)], AiModels.ApiStreams{}, refresh, None{}}
 
-def updated(state: State, fail: Bool, enabled: Bool) -> State & Unit:
+def provider(+id: String) -> IO(AiModels.Provider): providerWithRefresh(id, None{})
+
+type RefreshState is Data:
+  RefreshState{calls: Nat, fail: Bool}
+
+def called(state: RefreshState) -> RefreshState & Bool:
   match state:
-    case State{_, _, _, first}: (State{Nil{}, fail, enabled, first}, Unit{})
+    case RefreshState{calls, +fail}: (RefreshState{calls + 1n, fail}, fail)
+
+def setRefreshFailure(state: RefreshState, fail: Bool) -> RefreshState & Unit:
+  match state:
+    case RefreshState{calls, _}: (RefreshState{calls, fail}, Unit{})
 
 def require(ok: Bool, label: String) -> IO(Unit):
   match ok:
     case True{}: IO.pure(Unit, Unit{})
     case False{}: IO.die(Unit, 1, label)
+
+def refreshCached(state: Ref.Ref<RefreshState>, context: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, Unit>):
+  match context:
+    case AiModels.RefreshModelsContext{_, _, _, True{}, _, _}: IO.die(Result<&2, &2, String, Unit>, 1, "credential synchronization used the network")
+    case AiModels.RefreshModelsContext{_, _, publish, False{}, _, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        fail : Bool <- Ref.modify(RefreshState, Bool, state, called)
+        Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), fail,
+          _ => IO.pure(Result<&2, &2, String, Unit>, Fail{"cache restore failed"}),
+          _ => do IO<Result<&2, &2, String, Unit>>:
+            accepted : Bool <- C.call(AiModels.ModelsPublication, Bool, publish, AiModels.ModelsPublication{AiModels.KeepStored{}, Some{[model("dynamic"), cachedModel("dynamic")]}})
+            require(accepted, "cached model publication was rejected")
+            return Done{Unit{}})(Unit{})
+
+def updated(state: State, fail: Bool, enabled: Bool) -> State & Unit:
+  match state:
+    case State{_, _, _, first}: (State{Nil{}, fail, enabled, first}, Unit{})
 
 def successfulCount(result: AiModels.AvailableResult(), count: Nat) -> Bool:
   match result:
@@ -109,6 +139,26 @@ def keyIs(result: Auth.StoreResult(Maybe<&2, Auth.Credential>), expected: String
     case Done{Some{Auth.ApiKeyCredential{Some{key}, _}}}: String.eq(key, expected)
     case _: False{}
 
+def synchronizationFailed(result: Result<&2, &2, Resolve.ModelsError, Unit>) -> Bool:
+  match result:
+    case Fail{error}: String.contains(Resolve.errorMessage(error), "cache restore failed")
+    case Done{_}: False{}
+
+def loginSyncFailed(result: Auth.LoginOutcome()) -> Bool:
+  match result:
+    case Fail{+message}: String.contains(message, "Credential saved") && String.contains(message, "cache restore failed")
+    case Done{_}: False{}
+
+def loginPrompt(_: Unit, _: Auth.AuthPrompt) -> IO(Result<&2, &2, String, String>):
+  IO.pure(Result<&2, &2, String, String>, Done{"login-key"})
+
+def loginNotice(_: Unit, _: Auth.AuthEvent) -> IO(Unit): IO.pure(Unit, Unit{})
+
+def noCredential(result: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> Bool:
+  match result:
+    case Done{None{}}: True{}
+    case _: False{}
+
 def check(+runtime: Models.ModelRuntime, +state: Ref.Ref<State>) -> IO(Unit):
   do IO<Unit>:
     Ref.modify(State, Unit, state, current => updated(current, False{}, False{}))
@@ -147,6 +197,54 @@ def check(+runtime: Models.ModelRuntime, +state: Ref.Ref<State>) -> IO(Unit):
     afterRemoval : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
     require(List.is_empty(&2, AiModels.Model(), afterRemoval), "runtime key removal did not publish availability")
 
+def fiveCalls(state: RefreshState) -> Bool:
+  match state:
+    case RefreshState{calls, _}: Nat.is_eq(calls, 5n)
+
+def checkDynamicSynchronization() -> IO(Unit):
+  do IO<Unit>:
+    +refreshState : Ref.Ref<RefreshState> <- Ref.new(RefreshState, RefreshState{0n, True{}})
+    +refresh : AiModels.RefreshModels() <- C.create(~Ref.Ref<RefreshState>, ~AiModels.RefreshModelsContext, ~Result<&2, &2, String, Unit>, ~refreshCached, refreshState)
+    +store : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    dynamic : AiModels.Provider <- providerWithRefresh("dynamic", Some{refresh})
+    +runtime : Models.ModelRuntime <- Models.fromProviders([dynamic], store, context)
+    failed : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(runtime, "dynamic", "runtime-key", None{})
+    require(synchronizationFailed(failed), "cache restore failure was swallowed")
+    unchanged : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
+    require(List.is_empty(&2, AiModels.Model(), unchanged), "failed synchronization published availability")
+    effective : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(Models.credentialsOf(runtime), "dynamic", None{})
+    require(keyIs(effective, "runtime-key"), "committed runtime key was lost after sync failure")
+    Ref.modify(RefreshState, Unit, refreshState, state => setRefreshFailure(state, False{}))
+    restored : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(runtime, "dynamic", "runtime-key", None{})
+    require(loggedOut(restored), "successful local refresh failed")
+    available : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
+    require(Nat.is_eq(List.length(&2, AiModels.Model(), available), 2n), "cached catalog did not reach availability")
+    removed : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.removeRuntimeApiKey(runtime, "dynamic", None{})
+    require(loggedOut(removed), "runtime key removal failed after local refresh")
+    unavailable : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
+    require(List.is_empty(&2, AiModels.Model(), unavailable), "removed key left cached models available")
+    Ref.modify(RefreshState, Unit, refreshState, state => setRefreshFailure(state, True{}))
+    +prompt : C.Callback<Auth.AuthPrompt, Result<&2, &2, String, String>> <- C.create(~Unit, ~Auth.AuthPrompt, ~Result<&2, &2, String, String>, ~loginPrompt, Unit{})
+    +notify : C.Callback<Auth.AuthEvent, Unit> <- C.create(~Unit, ~Auth.AuthEvent, ~Unit, ~loginNotice, Unit{})
+    login : Auth.LoginOutcome() <- Models.login(runtime, "dynamic", Auth.ApiKeyType{}, Auth.AuthInteraction{None{}, prompt, notify})
+    require(loginSyncFailed(login), "login did not report a committed credential and failed refresh")
+    persisted : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(store, "dynamic", None{})
+    require(keyIs(persisted, "login-key"), "failed synchronization lost the stored login credential")
+    C.dispose(Auth.AuthPrompt, Result<&2, &2, String, String>, prompt)
+    C.dispose(Auth.AuthEvent, Unit, notify)
+    Ref.modify(RefreshState, Unit, refreshState, state => setRefreshFailure(state, False{}))
+    logout : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.logout(runtime, "dynamic", None{})
+    require(loggedOut(logout), "logout did not synchronize cached catalog")
+    deleted : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(store, "dynamic", None{})
+    require(noCredential(deleted), "logout did not delete stored credential")
+    count : RefreshState <- Ref.read(RefreshState, refreshState)
+    require(fiveCalls(count), "credential operations skipped local cache refresh")
+    Models.dispose(runtime)
+    Auth.disposeStore(store)
+    previous : RefreshState <- Ref.dispose(RefreshState, refreshState)
+    return Unit{}
+
 def main() -> IO(Unit):
   do IO<Unit>:
     +state : Ref.Ref<State> <- Ref.new(State, State{Nil{}, False{}, True{}, True{}})
@@ -159,4 +257,5 @@ def main() -> IO(Unit):
     Models.dispose(runtime)
     Auth.disposeStore(store)
     previous : State <- Ref.dispose(State, state)
-    IO.print("model availability: scoped reads, errors, snapshots, and logout pass")
+    checkDynamicSynchronization()
+    IO.print("model availability: scoped reads, credential synchronization, and snapshots pass")

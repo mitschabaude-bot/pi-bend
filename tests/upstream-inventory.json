@@ -3365,7 +3365,7 @@
         "tests/interactive_login_run_check.py"
       ],
       "sha256": "275163af35dfa1e53393736c9c510607fc7b8121cd13e7101e347ae953c63103",
-      "notes": "Local logout deletes through the injected store and updates its provider snapshot before returning; runtime API-key set/remove now update that snapshot without persisting the override (native model-availability). Mounted Codex and Anthropic login/logout exercise the UI path. Same-provider operation ordering, concurrent providers, cancellation and dynamic refresh failure reporting remain pending."
+      "notes": "Injected-store logout and runtime API-key set/remove publish provider-local availability. Native model-availability exercises network-free cache restore, cached-model publication, committed credentials after refresh failure, error propagation and later recovery; mounted Codex/Anthropic login/logout cover the UI path. Same-provider operation ordering, concurrent-provider flows, cancellation after commit and upstream CredentialSynchronizationError metadata remain pending."
     },
     {
       "source": "packages/coding-agent/test/model-runtime-modify-models-compat.test.ts",
