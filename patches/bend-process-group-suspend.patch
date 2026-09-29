@@ -1,0 +1,23 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3272,0 +3273,5 @@
++  import "./effs/process.c"
++  import "./effs/process.js"
++
++# Stop the foreground process group after releasing the terminal; return on fg.
++def Process.suspendGroup() -> IO(Result<&1,&1,U32 & String,Unit>):
+--- a/effs/process.c
++++ b/effs/process.c
+@@ -263,0 +264,8 @@
++#endif
++
++#ifdef CID_PROCESS_SUSPENDGROUP
++Term process_suspend_group_run(Env e, Term* f, IoWork* w) {
++  if (kill(0,SIGTSTP)<0) return io_fail(e,errno,NULL);
++  return io_done(e,term_pak(CID_UNIT,0));
++}
++static void __attribute__((constructor)) process_suspend_group_use(void) { io_eff(CID_PROCESS_SUSPENDGROUP,process_suspend_group_run,0); }
+--- a/effs/process.js
++++ b/effs/process.js
+@@ -5,0 +6 @@
++function process_suspendgroup() { return io_fail(38); }

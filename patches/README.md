@@ -113,6 +113,7 @@ Evidence, measurements and history live in [docs/bend-issues.md](../docs/bend-is
 | `bend-file-lock-effects` | `Directory.create/remove`, `File.modified_time`, `File.set_times_milliseconds` |
 | `bend-filesystem-paths` | `Directory.ensure`, `File.realpath_bytes`, `Directory.current_bytes` |
 | `bend-process`, `bend-process-null-stdin`, `bend-process-tu` | `Process.spawn/wait/signal/close_checked`, `Pipe`, `IO.environment`, `Process.spawn_null_stdin` |
+| `bend-process-group-suspend` | `Process.suspendGroup`: send SIGTSTP to the foreground process group after the TUI releases its terminal lease; return when the shell resumes it with `fg` |
 | `bend-terminal-effects` | `Terminal.acquire/restore/dimensions` |
 | `bend-file-rename-chmod-unlink` | `File.rename/chmod/unlink/link_kind` |
 | `bend-tcp-readable` | `TCP.readable` |
@@ -122,4 +123,3 @@ Evidence, measurements and history live in [docs/bend-issues.md](../docs/bend-is
 ## Not installed
 
 `experimental/` holds candidates that are not in `series`: compiler-memory experiments that were rejected or superseded, and the IPv6 connect effect. See [experimental/README.md](experimental/README.md).
-

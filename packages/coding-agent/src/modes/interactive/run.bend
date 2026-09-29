@@ -2613,15 +2613,31 @@ def pasteClipboard(input: KeyInput,editor: Live.Handle) -> IO(Unit):
         ClipboardImage.disposeDependencies(deps)
         disposePasteTarget(target)
 def pasteKey(input: KeyInput,editor: Live.Handle) -> IO(Unit): IO.spawn(Unit,pasteClipboard(input,editor))
+def suspensionResult(failure: Interactive.StatusSink,result: Result<&1,&1,U32 & String,Unit>) -> IO(Unit):
+  match result:
+    case Done{_}: IO.pure(Unit,Unit{})
+    case Fail{(_,message)}: Interactive.report(failure,Interactive.CommandWarning{"Could not suspend: " ++ message})
+def suspendedGroup(failure: Interactive.StatusSink,_: Unit) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&1,&1,U32 & String,Unit> <- Process.stopProcessGroup()
+    suspensionResult(failure,result)
+def suspendKey(input: KeyInput) -> IO(Unit):
+  match input:
+    case KeyInput{_,_,failure,_,_,_,_,_,_,_,_,suspension}:
+      do IO<Unit>:
+        operation : Callback.Callback<Unit,Unit> <- Callback.create(~Interactive.StatusSink,~Unit,~Unit,~suspendedGroup,failure)
+        accepted : Bool <- Process.suspendWith(suspension,operation)
+        return Unit{}
 # upstream setupKeyHandlers: the app actions the editor intercepts, in
 # registration order.
 def APP_ACTIONS() -> List<&2,String>:
-  ["app.interrupt","app.clear","app.exit","app.thinking.cycle","app.model.cycleForward","app.model.cycleBackward","app.model.select","app.tools.expand","app.thinking.toggle","app.editor.external","app.message.copy","app.message.followUp","app.message.dequeue","app.session.new","app.session.tree","app.session.fork","app.session.resume"]
+  ["app.interrupt","app.clear","app.exit","app.suspend","app.thinking.cycle","app.model.cycleForward","app.model.cycleBackward","app.model.select","app.tools.expand","app.thinking.toggle","app.editor.external","app.message.copy","app.message.followUp","app.message.dequeue","app.session.new","app.session.tree","app.session.fork","app.session.resume"]
 def keyAction(input: KeyInput,action: CustomEditor.AppAction) -> IO(Unit):
   match action:
     case CustomEditor.AppAction{"app.interrupt",editor}: interruptKey(input,editor)
     case CustomEditor.AppAction{"app.clear",editor}: clearKey(input,editor)
     case CustomEditor.AppAction{"app.exit",_}: exited(input)
+    case CustomEditor.AppAction{"app.suspend",_}: suspendKey(input)
     case CustomEditor.AppAction{"app.thinking.cycle",_}: cycleThinking(input)
     case CustomEditor.AppAction{"app.model.cycleForward",_}: cycleModel(input,Session.Forward{})
     case CustomEditor.AppAction{"app.model.cycleBackward",_}: cycleModel(input,Session.Backward{})

@@ -3226,9 +3226,12 @@
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-suspend.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a98127e3c150d941cb452159b64526919c27760020226253be987ceb6522bd93"
+      "status": "partial",
+      "ports": [
+        "tests/interactive_suspend_check.py"
+      ],
+      "sha256": "a98127e3c150d941cb452159b64526919c27760020226253be987ceb6522bd93",
+      "notes": "Mounted native one/four-thread Bash job-control checks prove Ctrl+Z stops the foreground pi process group after restoring the shell terminal, fg redraws the same TUI, and /quit restores the shell. The upstream Windows status branch and injected signal-failure cleanup are not exercised on this Linux target."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-tree-navigation.test.ts",

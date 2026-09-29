@@ -1033,6 +1033,7 @@ def suspendWith(handle: SuspensionHandle,+operation: Callback.Callback<Unit,Unit
       do IO<Bool>:
         wake : Maybe<&2,Deferred.Deferred<Unit>> <- Ref.modify(SuspensionState,Maybe<&2,Deferred.Deferred<Unit>>,state,current => requestedSuspension(current,operation))
         wakeSuspension(wake,operation)
+def stopProcessGroup() -> IO(Result<&1,&1,U32 & String,Unit>): Process.suspendGroup()
 def pendingSuspension(current: SuspensionState) -> Bool:
   match current:
     case Running{_,Some{_}}: True{}
