@@ -4558,10 +4558,12 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6999-models-json-hot-reload.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/models-json-hot-reload.bend"
+      ],
       "sha256": "f06a2e4cd202a21854d1b652eeeb202adc4645189f74191725e30ec7e021eadc",
-      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
+      "notes": "Native ModelRuntime.refresh reloads changed models.json and replaces provider/model visibility. Focused old-provider/new-provider regression passes on Bun and native; interactive /model selector scenario remains unported."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7027-credential-refresh-hang.test.ts",

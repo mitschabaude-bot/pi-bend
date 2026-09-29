@@ -65,13 +65,10 @@ type AvailabilityStatus is Data:
 # in-memory stores have none.
 def StoreState() -> Data: Ref.Ref<Maybe<&1, Files.FileModelsReadState>>
 
-# `providers` is the composition of built-in and models.json providers;
-# `builtins` are the built-in ids among them. `retained` owns the built-in
-# auth parts and refresh wrappers that composed providers use. `models` holds
-# the effective providers (the composition with extension providers in
-# place) and owns the models store and auth context; the credential store is
-# borrowed. Extension providers are owned by the extensions that registered
-# them.
+# A definition combines built-in and models.json providers. Each generation
+# owns only the callbacks created by that composition; the baseline providers
+# own their original callbacks. The collection owns the models store and auth
+# context; extension providers belong to their registrations.
 # Extension providers' own parts: each registration's config (for
 # re-registration merges), its streamSimple, and the auth callbacks its
 # composition created (the base provider owns the rest); and the stream the
@@ -110,8 +107,16 @@ def newRefreshWork() -> IO(Ref.Ref<RefreshWork>):
     drained : Deferred.Deferred<Unit> <- Deferred.new(Unit)
     Ref.new(RefreshWork, RefreshWork{0n, False{}, drained})
 
+type SourceMark is Data: Untracked{} SourceBytes{bytes: List<&2, U32>} SourceError{message: String}
+type DefinitionSource is Data:
+  StaticSource{baseline: List<&2, AiModels.Provider>}
+  FileSource{path: String, baseline: List<&2, AiModels.Provider>, radius: Radius.RadiusTransport, mark: SourceMark}
+type Generation is Data:
+  Generation{owned: List<&2, OwnedAuth>, radius: List<&2, AiModels.Provider>, refreshes: List<&2, Composer.Retained>}
+type Definition is Data:
+  Definition{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, config: Config.ModelConfig, errors: List<&2, String>, generation: Generation, source: DefinitionSource, retired: List<&2, Generation>}
 type ModelRuntime is Data:
-  ModelRuntime{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>, credentials: RuntimeCredentials.RuntimeCredentials, refreshWork: Ref.Ref<RefreshWork>}
+  ModelRuntime{definition: Ref.Ref<Definition>, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>, credentials: RuntimeCredentials.RuntimeCredentials, refreshWork: Ref.Ref<RefreshWork>}
 
 # Composition (recomposeProvider/rebuildProviders)
 # -----------------------------------------------
@@ -125,13 +130,38 @@ def base(provider: Maybe<&2, AiModels.Provider>) -> Maybe<&2, Composer.Base>:
     case None{}: None{}
     case Some{AiModels.Provider{_, name, url, auth, models, _, _, _}}: Some{Composer.Base{name, url, auth, models}}
 
+def maybeProviderAuth(provider: Maybe<&2, AiModels.Provider>) -> Auth.ProviderAuth:
+  match provider:
+    case Some{AiModels.Provider{_, _, _, auth, _, _, _, _}}: auth
+    case None{}: Auth.ProviderAuth{None{}, None{}}
+
+def sameResolve(left: Auth.ApiKeyAuth, right: Auth.ApiKeyAuth) -> Bool:
+  match left right:
+    case Auth.ApiKeyAuth{_, _, a, _} Auth.ApiKeyAuth{_, _, b, _}: C.same(Auth.ResolveInput, Auth.AuthOutcome(), a, b)
+
+def ownedKey(composed: Maybe<&2, Auth.ApiKeyAuth>, base: Maybe<&2, Auth.ApiKeyAuth>) -> List<&2, OwnedAuth>:
+  match composed base:
+    case None{} _: Nil{}
+    case Some{+auth} Some{inherited}: Bool.pick(List<&2, OwnedAuth>, sameResolve(auth, inherited), Nil{}, [OwnedApiKey{auth}])
+    case Some{auth} None{}: [OwnedApiKey{auth}]
+
+def ownedToAuth(composed: Maybe<&2, Auth.OAuthAuth>, base: Maybe<&2, Auth.OAuthAuth>) -> List<&2, OwnedAuth>:
+  match composed base:
+    case Some{Auth.OAuthAuth{_, _, _, _, _, +mine}} Some{Auth.OAuthAuth{_, _, _, _, _, theirs}}: Bool.pick(List<&2, OwnedAuth>, C.same(Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>, mine, theirs), Nil{}, [OwnedToAuth{mine}])
+    case _ _: Nil{}
+
+# The callbacks a composition created over its base's auth.
+def ownedAuth(composed: Auth.ProviderAuth, base: Auth.ProviderAuth) -> List<&2, OwnedAuth>:
+  match composed base:
+    case Auth.ProviderAuth{key, oauth} Auth.ProviderAuth{baseKey, baseOAuth}: List.append(&2, OwnedAuth, ownedKey(key, baseKey), ownedToAuth(oauth, baseOAuth))
+
 type Composition is Data:
-  Composition{providers: List<&2, AiModels.Provider>, errors: List<&2, String>, retained: List<&2, Composer.Retained>}
+  Composition{providers: List<&2, AiModels.Provider>, errors: List<&2, String>, refreshes: List<&2, Composer.Retained>, owned: List<&2, OwnedAuth>}
 
 def added(provider: Maybe<&2, AiModels.Provider>, composition: Composition) -> Composition:
   match provider composition:
     case None{} composition: composition
-    case Some{provider} Composition{providers, errors, retained}: Composition{provider <> providers, errors, retained}
+    case Some{provider} Composition{providers, errors, refreshes, owned}: Composition{provider <> providers, errors, refreshes, owned}
 
 def baseFilter(builtin: Maybe<&2, AiModels.Provider>) -> Maybe<&2, AiModels.FilterModels()>:
   match builtin:
@@ -151,13 +181,14 @@ def composedRefresh(+id: String, entry: Config.ModelsJsonProvider, +models: List
 
 def composedProvider(+id: String, +builtin: Maybe<&2, AiModels.Provider>, composed: Composer.Composed, refreshing: Maybe<&2, AiModels.RefreshModels()> & List<&2, Composer.Retained>, composition: Composition) -> Composition:
   match composed refreshing composition:
-    case Composer.Composed{name, url, auth, models, owned} Tuple{refresher, wrappers} Composition{providers, errors, retained}: Composition{AiModels.Provider{id, name, url, auth, models, AiModels.inheritedStreams(builtin), refresher, baseFilter(builtin)} <> providers, errors, List.concat(&2, Composer.Retained, [owned, wrappers, retained])}
+    case Composer.Composed{name, url, +auth, models, _} Tuple{refresher, wrappers} Composition{providers, errors, refreshes, owned}:
+      Composition{AiModels.Provider{id, name, url, auth, models, AiModels.inheritedStreams(builtin), refresher, baseFilter(builtin)} <> providers, errors, List.append(&2, Composer.Retained, wrappers, refreshes), List.append(&2, OwnedAuth, ownedAuth(auth, maybeProviderAuth(builtin)), owned)}
 
 # A failed composition keeps the built-in provider untouched (or omits a
 # custom one) and records the error.
 def recomposed(+id: String, +builtin: Maybe<&2, AiModels.Provider>, +entry: Config.ModelsJsonProvider, result: Result<&2, &2, String, Composer.Composed>, composition: Composition) -> IO(Composition):
   match result composition:
-    case Fail{error} Composition{providers, errors, retained}: IO.pure(Composition, added(builtin, Composition{providers, ("Provider \"" ++ id ++ "\": " ++ error) <> errors, retained}))
+    case Fail{error} Composition{providers, errors, refreshes, owned}: IO.pure(Composition, added(builtin, Composition{providers, ("Provider \"" ++ id ++ "\": " ++ error) <> errors, refreshes, owned}))
     case Done{Composer.Composed{name, url, auth, +models, owned}} composition:
       do IO<Composition>:
         refreshing : Maybe<&2, AiModels.RefreshModels()> & List<&2, Composer.Retained> <- composedRefresh(id, entry, models, builtin)
@@ -198,9 +229,12 @@ def rebuildProviders(ids: List<&2, String>, +builtins: List<&2, AiModels.Provide
         next : Composition <- recomposeProvider(id, findProvider(builtins, id), Config.getProvider(config, id), composition)
         rebuildProviders(rest, builtins, config, next)
 
-def assembled(composition: Composition, builtins: List<&2, String>, config: Config.ModelConfig, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>, credentials: RuntimeCredentials.RuntimeCredentials, refreshWork: Ref.Ref<RefreshWork>) -> ModelRuntime:
+def assembled(composition: Composition, builtins: List<&2, String>, config: Config.ModelConfig, source: DefinitionSource, radiusOwned: List<&2,AiModels.Provider>, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>, credentials: RuntimeCredentials.RuntimeCredentials, refreshWork: Ref.Ref<RefreshWork>) -> IO(ModelRuntime):
   match composition:
-    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), builtins, config, List.reverse(&2, String, errors), retained, models, catalog, storeState, extensions, sharedRefresh, availability, credentials, refreshWork}
+    case Composition{providers, errors, refreshes, owned}:
+      do IO<ModelRuntime>:
+        definition : Ref.Ref<Definition> <- Ref.new(Definition, Definition{List.reverse(&2,AiModels.Provider,providers), builtins, config, List.reverse(&2,String,errors), Generation{owned,radiusOwned,refreshes}, source, Nil{}})
+        return ModelRuntime{definition, models, catalog, storeState, extensions, sharedRefresh, availability, credentials, refreshWork}
 
 def unknownProvider(id: String) -> Resolve.ModelsError:
   Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ id}
@@ -210,13 +244,17 @@ def unknownProvider(id: String) -> Resolve.ModelsError:
 
 def modelsOf(runtime: ModelRuntime) -> AiModels.Models:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, models, _, _, _, _, _, _, _}: models
+    case ModelRuntime{_, models, _, _, _, _, _, _, _}: models
+
+def definitionRef(runtime: ModelRuntime) -> Ref.Ref<Definition>:
+  match runtime:
+    case ModelRuntime{definition, _, _, _, _, _, _, _, _}: definition
 
 def credentialsOf(runtime: ModelRuntime) -> Auth.CredentialStore: AiModels.credentialsOf(modelsOf(runtime))
 
 def runtimeCredentialsOf(runtime: ModelRuntime) -> RuntimeCredentials.RuntimeCredentials:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, _, _, _, _, credentials, _}: credentials
+    case ModelRuntime{_, _, _, _, _, _, _, credentials, _}: credentials
 
 def contextOf(runtime: ModelRuntime) -> Auth.AuthContext: AiModels.authContextOf(modelsOf(runtime))
 
@@ -224,7 +262,7 @@ def storeOf(runtime: ModelRuntime) -> Store.ModelsStore: AiModels.modelsStoreOf(
 
 def catalogRef(runtime: ModelRuntime) -> Ref.Ref<Catalog>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, catalog, _, _, _, _, _, _}: catalog
+    case ModelRuntime{_, _, catalog, _, _, _, _, _, _}: catalog
 
 def readCatalog(runtime: ModelRuntime) -> IO(Catalog):
   Ref.read(Catalog, catalogRef(runtime))
@@ -258,16 +296,21 @@ def nativesOf(catalog: Catalog) -> List<&2, AiModels.Provider>:
   match catalog:
     case Catalog{natives, _, _}: natives
 
-def providersWith(runtime: ModelRuntime, +natives: List<&2, AiModels.Provider>) -> List<&2, AiModels.Provider>:
-  match runtime:
-    case ModelRuntime{providers, builtins, _, _, _, _, _, _, _, _, _, _, _}: effectiveProviders(providers, builtins, natives)
+def definitionProviders(definition: Definition,natives: List<&2,AiModels.Provider>) -> List<&2,AiModels.Provider>:
+  match definition:
+    case Definition{providers,builtins,_,_,_,_,_}: effectiveProviders(providers,builtins,natives)
+def providersWith(runtime: ModelRuntime, +natives: List<&2, AiModels.Provider>) -> IO(List<&2, AiModels.Provider>):
+  do IO<List<&2,AiModels.Provider>>:
+    definition : Definition <- Ref.read(Definition,definitionRef(runtime))
+    return definitionProviders(definition,natives)
 
 # upstream rebuildProviders on the collection after the provider of `changed`
 # was registered, replaced or removed.
 def rebuildCollection(+runtime: ModelRuntime, changed: List<&2, String>) -> IO(Unit):
   do IO<Unit>:
     catalog : Catalog <- readCatalog(runtime)
-    AiModels.rebuildProviders(modelsOf(runtime), providersWith(runtime, nativesOf(catalog)), changed)
+    providers : List<&2,AiModels.Provider> <- providersWith(runtime,nativesOf(catalog))
+    AiModels.rebuildProviders(modelsOf(runtime), providers, changed)
 
 def getProviders(+runtime: ModelRuntime) -> IO(List<&2, AiModels.Provider>):
   AiModels.getProviders(modelsOf(runtime))
@@ -289,9 +332,13 @@ def getAuth(+runtime: ModelRuntime, +id: String, overrides: Resolve.AuthResoluti
     provider : Maybe<&2, AiModels.Provider> <- getProvider(runtime, id)
     resolveFor(runtime, id, provider, overrides)
 
-def getModelConfig(runtime: ModelRuntime) -> Config.ModelConfig:
-  match runtime:
-    case ModelRuntime{_, _, config, _, _, _, _, _, _, _, _, _, _}: config
+def configOfDefinition(definition: Definition) -> Config.ModelConfig:
+  match definition:
+    case Definition{_,_,config,_,_,_,_}: config
+def getModelConfig(runtime: ModelRuntime) -> IO(Config.ModelConfig):
+  do IO<Config.ModelConfig>:
+    definition : Definition <- Ref.read(Definition,definitionRef(runtime))
+    return configOfDefinition(definition)
 
 def checkFailure(result: AiModels.CheckResult()) -> Result<&2, &2, String, Maybe<&2, Auth.AuthCheck>>:
   match result:
@@ -391,6 +438,63 @@ def configureRadiusProviders(ids: List<&2, String>, +builtins: List<&2, AiModels
         next : List<&2, AiModels.Provider> <- configuredRadius(builtins, radius, radiusEntry(id, Config.getProvider(config, id)))
         configureRadiusProviders(rest, next, config, radius)
 
+def includedRadius(entry: Maybe<&2, Radius.RadiusProviderOptions>, provider: Maybe<&2, AiModels.Provider>, +tail: List<&2, AiModels.Provider>) -> List<&2, AiModels.Provider>:
+  match entry:
+    case None{}: tail
+    case Some{_}: Maybe.default(&2, List<&2, AiModels.Provider>, Maybe.map(&2, AiModels.Provider, List<&2, AiModels.Provider>, value => value <> tail, provider), tail)
+
+def radiusOwners(ids: List<&2, String>, +config: Config.ModelConfig, +builtins: List<&2, AiModels.Provider>) -> List<&2, AiModels.Provider>:
+  match ids:
+    case Nil{}: Nil{}
+    case +id <> rest:
+      +tail = radiusOwners(rest, config, builtins)
+      includedRadius(radiusEntry(id, Config.getProvider(config, id)), findProvider(builtins, id), tail)
+
+def compositionProviders(composition: Composition) -> List<&2, AiModels.Provider>:
+  match composition:
+    case Composition{providers, _, _, _}: List.reverse(&2, AiModels.Provider, providers)
+
+def composedDefinition(composition: Composition, +builtins: List<&2, AiModels.Provider>, +config: Config.ModelConfig, source: DefinitionSource, retired: List<&2, Generation>) -> Definition:
+  match composition:
+    case Composition{providers, errors, refreshes, owned}:
+      Definition{List.reverse(&2, AiModels.Provider, providers), builtinIds(builtins), config, List.reverse(&2, String, errors), Generation{owned, radiusOwners(Config.getProviderIds(config), config, builtins), refreshes}, source, retired}
+
+def sameBytes(left: List<&2, U32>, right: List<&2, U32>) -> Bool:
+  match left right:
+    case Nil{} Nil{}: True{}
+    case a <> restA b <> restB: U32.is_eq(a, b) && sameBytes(restA, restB)
+    case _ _: False{}
+
+def sameMark(left: SourceMark, right: SourceMark) -> Bool:
+  match left right:
+    case Untracked{} Untracked{}: True{}
+    case SourceBytes{a} SourceBytes{b}: sameBytes(a, b)
+    case SourceError{a} SourceError{b}: String.eq(a, b)
+    case _ _: False{}
+
+def marked(result: Result<&2, &2, FS.Error, List<&2, U32>>) -> SourceMark:
+  match result:
+    case Done{bytes}: SourceBytes{bytes}
+    case Fail{error}: SourceError{FS.errorMessage(error)}
+
+def sourceMark(path: Maybe<&2, String>) -> IO(SourceMark):
+  match path:
+    case None{}: IO.pure(SourceMark, Untracked{})
+    case Some{value}:
+      do IO<SourceMark>:
+        result : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(value)
+        return marked(result)
+
+def sourceFromPath(path: Maybe<&2, String>, baseline: List<&2, AiModels.Provider>, radius: Radius.RadiusTransport, mark: SourceMark) -> DefinitionSource:
+  match path:
+    case None{}: StaticSource{baseline}
+    case Some{value}: FileSource{value, baseline, radius, mark}
+
+def configFromMark(mark: SourceMark, path: String) -> IO(Config.ModelConfig):
+  match mark:
+    case SourceBytes{bytes}: IO.pure(Config.ModelConfig, Config.loaded(Done{bytes}, path))
+    case _: Config.load(Some{path})
+
 # upstream CreateModelRuntimeOptions, the fields that choose the models store
 # and the create-time refresh (credentials, OAuth handlers, transport and the
 # models path are the create functions' arguments). An injected modelsStore
@@ -465,11 +569,6 @@ def disposeProviders(providers: List<&2, AiModels.Provider>) -> IO(Unit):
         AiModels.disposeProvider(provider)
         disposeProviders(rest)
 
-def retireStoreState(state: Maybe<&1, Files.FileModelsReadState>) -> IO(Unit):
-  match state:
-    case None{}: IO.pure(Unit, Unit{})
-    case Some{owner}: Files.disposeReadState(owner)
-
 def disposeOwned(items: List<&2, OwnedAuth>) -> IO(Unit):
   match items:
     case Nil{}: IO.pure(Unit, Unit{})
@@ -481,6 +580,40 @@ def disposeOwned(items: List<&2, OwnedAuth>) -> IO(Unit):
       do IO<Unit>:
         C.dispose(Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>, toAuth)
         disposeOwned(rest)
+
+def disposeGeneration(generation: Generation) -> IO(Unit):
+  match generation:
+    case Generation{owned, radius, refreshes}:
+      do IO<Unit>:
+        disposeOwned(owned)
+        Composer.disposeRetained(refreshes)
+        disposeProviders(radius)
+
+def disposeGenerations(generations: List<&2, Generation>) -> IO(Unit):
+  match generations:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case generation <> rest:
+      do IO<Unit>:
+        disposeGeneration(generation)
+        disposeGenerations(rest)
+
+def baselineOf(source: DefinitionSource) -> List<&2, AiModels.Provider>:
+  match source:
+    case StaticSource{baseline}: baseline
+    case FileSource{_, baseline, _, _}: baseline
+
+def disposeDefinition(definition: Definition) -> IO(Unit):
+  match definition:
+    case Definition{_, _, _, _, generation, source, retired}:
+      do IO<Unit>:
+        disposeGeneration(generation)
+        disposeGenerations(retired)
+        disposeProviders(baselineOf(source))
+
+def retireStoreState(state: Maybe<&1, Files.FileModelsReadState>) -> IO(Unit):
+  match state:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{owner}: Files.disposeReadState(owner)
 
 def disposeEntries(entries: List<&2, ExtensionEntry>) -> IO(Unit):
   match entries:
@@ -505,7 +638,7 @@ def disposeApiStreamsOf(streams: Maybe<&2, Composer.ProviderStream()>) -> IO(Uni
 
 def extensionsRef(runtime: ModelRuntime) -> Ref.Ref<ExtensionState>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, _, extensions, _, _, _, _}: extensions
+    case ModelRuntime{_, _, _, _, extensions, _, _, _, _}: extensions
 
 def entryId(entry: ExtensionEntry) -> String:
   match entry:
@@ -530,7 +663,7 @@ def joinedErrors(configError: Maybe<&2, String>, errors: List<&2, String>) -> Ma
 
 def availabilityRef(runtime: ModelRuntime) -> Ref.Ref<AvailabilityStatus>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, _, _, _, availability, _, _}: availability
+    case ModelRuntime{_, _, _, _, _, _, availability, _, _}: availability
 
 def errorWithAvailability(base: Maybe<&2, String>, status: AvailabilityStatus) -> Maybe<&2, String>:
   match status base:
@@ -538,12 +671,14 @@ def errorWithAvailability(base: Maybe<&2, String>, status: AvailabilityStatus) -
     case AvailabilityStatus{_, Some{error}} None{}: Some{"Availability refresh: " ++ error}
     case AvailabilityStatus{_, Some{error}} Some{previous}: Some{previous ++ "\n\nAvailability refresh: " ++ error}
 
-def getError(runtime: ModelRuntime) -> IO(Maybe<&2, String>):
-  match runtime:
-    case ModelRuntime{_, _, config, errors, _, _, _, _, _, _, availability, _, _}:
-      do IO<Maybe<&2, String>>:
-        status : AvailabilityStatus <- Ref.read(AvailabilityStatus, availability)
-        return errorWithAvailability(joinedErrors(Config.getError(config), errors), status)
+def definitionError(definition: Definition) -> Maybe<&2,String>:
+  match definition:
+    case Definition{_,_,config,errors,_,_,_}: joinedErrors(Config.getError(config),errors)
+def getError(+runtime: ModelRuntime) -> IO(Maybe<&2, String>):
+  do IO<Maybe<&2,String>>:
+    definition : Definition <- Ref.read(Definition,definitionRef(runtime))
+    status : AvailabilityStatus <- Ref.read(AvailabilityStatus,availabilityRef(runtime))
+    return errorWithAvailability(definitionError(definition),status)
 
 # Catalog
 # -------
@@ -591,18 +726,12 @@ def getModel(+runtime: ModelRuntime, +provider: String, +id: String) -> IO(Maybe
     models : List<&2, Model()> <- getModels(runtime)
     return findModel(models, provider, id)
 
-def baseModels(runtime: ModelRuntime) -> List<&2, Model()>:
-  match runtime:
-    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _, _, _, _}: allModels(providers)
+# Cache statistics price the currently published model catalog.
+def cacheReadPrice(models: List<&2, Model()>, provider: String) -> String -> Maybe<&2, F64>:
+  id => Maybe.map(&2, Model(), F64, modelCacheRead, findModel(models, provider, id))
 
 # Auth
 # ----
-
-# upstream ModelPriceSource (cache-stats): a model's cache-read price, $ per
-# million tokens. The price source is synchronous, so it prices the built-in
-# and models.json catalog; extension and refreshed catalogs are not consulted.
-def cacheReadPrice(runtime: ModelRuntime, provider: String) -> String -> Maybe<&2, F64>:
-  id => Maybe.map(&2, Model(), F64, modelCacheRead, findModel(baseModels(runtime), provider, id))
 
 def presentHeaders(values: List<&2, R.Property<String>>) -> List<&2, R.Property<Ai.Nullable<String>>>:
   match values:
@@ -659,7 +788,8 @@ def getModelAuth(+runtime: ModelRuntime, +model: Model(), +overrides: Resolve.Au
     provider : Maybe<&2, AiModels.Provider> <- getProvider(runtime, Ai.modelProvider(model))
     resolution : Resolve.Resolution() <- modelAuthFor(runtime, model, overrides, provider)
     state : ExtensionState <- Ref.read(ExtensionState, extensionsRef(runtime))
-    withModelHeaders(model, Config.getProvider(getModelConfig(runtime), Ai.modelProvider(model)), entryConfig(findEntry(extensionEntries(state), Ai.modelProvider(model))), resolution, overrideEnv(overrides))
+    config : Config.ModelConfig <- getModelConfig(runtime)
+    withModelHeaders(model, Config.getProvider(config, Ai.modelProvider(model)), entryConfig(findEntry(extensionEntries(state), Ai.modelProvider(model))), resolution, overrideEnv(overrides))
 
 def withoutId(ids: List<&2, String>, +id: String) -> List<&2, String>:
   match ids:
@@ -1412,6 +1542,34 @@ def networkEnabled(offline: Result<&1, &1, U32 & String, String>) -> Bool:
     case Done{_}: False{}
     case Fail{_}: True{}
 
+def recomposeFile(+runtime: ModelRuntime, +oldProviders: List<&2, AiModels.Provider>, previous: Generation, retired: List<&2, Generation>, +path: String, +baseline: List<&2, AiModels.Provider>, +radius: Radius.RadiusTransport, +mark: SourceMark) -> IO(Definition & Bool):
+  do IO<Definition & Bool>:
+    +config : Config.ModelConfig <- configFromMark(mark, path)
+    +builtins : List<&2, AiModels.Provider> <- configureRadiusProviders(Config.getProviderIds(config), baseline, config, radius)
+    +composition : Composition <- rebuildProviders(composedIds(builtins, config), builtins, config, Composition{Nil{}, Nil{}, Nil{}, Nil{}})
+    +providers : List<&2, AiModels.Provider> = compositionProviders(composition)
+    catalog : Catalog <- readCatalog(runtime)
+    AiModels.rebuildProviders(modelsOf(runtime), effectiveProviders(providers, builtinIds(builtins), nativesOf(catalog)), List.append(&2, String, AiModels.providerIds(oldProviders), AiModels.providerIds(providers)))
+    return (composedDefinition(composition, builtins, config, FileSource{path, baseline, radius, mark}, previous <> retired), True{})
+
+def reloadIfChanged(runtime: ModelRuntime, definition: Definition, observed: SourceMark, same: Bool) -> IO(Definition & Bool):
+  match definition same:
+    case definition True{}: IO.pure(Definition & Bool, (definition, False{}))
+    case Definition{providers, _, _, _, generation, FileSource{path, baseline, radius, _}, retired} False{}:
+      recomposeFile(runtime, providers, generation, retired, path, baseline, radius, observed)
+    case definition False{}: IO.pure(Definition & Bool, (definition, False{}))
+
+def reloadDefinition(runtime: ModelRuntime, +definition: Definition) -> IO(Definition & Bool):
+  match definition:
+    case Definition{_, _, _, _, _, StaticSource{_}, _}: IO.pure(Definition & Bool, (definition, False{}))
+    case Definition{_, _, _, _, _, FileSource{path, _, _, +mark}, _}:
+      do IO<Definition & Bool>:
+        +observed : SourceMark <- sourceMark(Some{path})
+        reloadIfChanged(runtime, definition, observed, sameMark(mark, observed))
+
+def reloadConfig(+runtime: ModelRuntime) -> IO(Bool):
+  Ref.update(Definition, Bool, definitionRef(runtime), definition => reloadDefinition(runtime, definition))
+
 # upstream ModelRuntime.refresh: the collection refreshes the dynamic
 # providers (all, or the selected ones) with the network allowed by default
 # unless PI_OFFLINE is set; then availability is checked again.
@@ -1419,6 +1577,7 @@ def refresh(+runtime: ModelRuntime, options: ModelsRefreshOptions) -> IO(ModelsR
   match options:
     case ModelsRefreshOptions{allowNetwork, +filter, force, +signal}:
       do IO<ModelsRefreshResult>:
+        changed : Bool <- reloadConfig(runtime)
         offline : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_OFFLINE")
         result : AiModels.ModelsRefreshResult <- AiModels.refresh(modelsOf(runtime), AiModels.ModelsRefreshOptions{Some{Maybe.default(&2, Bool, allowNetwork, networkEnabled(offline))}, filter, force, signal})
         refreshedAvailability(runtime, filter)
@@ -1441,11 +1600,11 @@ def admitRefresh(state: SharedRefresh, +candidate: Abort.AbortController<Unit>, 
 
 def sharedRef(runtime: ModelRuntime) -> Ref.Ref<SharedRefresh>:
   match runtime:
-    case ModelRuntime{_,_,_,_,_,_,_,_,_,sharedRefresh,_, _, _}: sharedRefresh
+    case ModelRuntime{_,_,_,_,_,sharedRefresh,_,_,_}: sharedRefresh
 
 def workRef(runtime: ModelRuntime) -> Ref.Ref<RefreshWork>:
   match runtime:
-    case ModelRuntime{_,_,_,_,_,_,_,_,_,_,_,_,work}: work
+    case ModelRuntime{_,_,_,_,_,_,_,_,work}: work
 
 def workStarted(state: RefreshWork) -> RefreshWork & Bool:
   match state:
@@ -1706,14 +1865,14 @@ def disposeSharedRefresh(+state: Ref.Ref<SharedRefresh>,+work: Ref.Ref<RefreshWo
 
 def dispose(runtime: ModelRuntime) -> IO(Unit):
   match runtime:
-    case ModelRuntime{providers, _, _, _, retained, +models, catalog, storeState, extensions, sharedRefresh, availability, credentials, refreshWork}:
+    case ModelRuntime{definition, +models, catalog, storeState, extensions, sharedRefresh, availability, credentials, refreshWork}:
       do IO<Unit>:
         disposeSharedRefresh(sharedRefresh,refreshWork)
         +registered : ExtensionState <- Ref.dispose(ExtensionState, extensions)
         disposeEntries(extensionEntries(registered))
         disposeApiStreamsOf(apiStreamsOf(registered))
-        disposeProviders(providers)
-        Composer.disposeRetained(retained)
+        current : Definition <- Ref.dispose(Definition,definition)
+        disposeDefinition(current)
         credentialStore : Auth.CredentialStore <- IO.pure(Auth.CredentialStore, AiModels.credentialsOf(models))
         AiModels.disposeModels(models)
         Auth.disposeStore(credentialStore)
@@ -1790,34 +1949,13 @@ def configOf(entry: Maybe<&2, ExtensionEntry>) -> Composer.ProviderConfigInput:
     case Some{ExtensionEntry{_, Some{config}, _, _}}: config
     case _: Composer.providerConfig()
 
-def baseProvider(runtime: ModelRuntime, +id: String) -> Maybe<&2, AiModels.Provider>:
-  match runtime:
-    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _, _, _, _}: findProvider(providers, id)
-
-def maybeProviderAuth(provider: Maybe<&2, AiModels.Provider>) -> Auth.ProviderAuth:
-  match provider:
-    case Some{AiModels.Provider{_, _, _, auth, _, _, _, _}}: auth
-    case None{}: Auth.ProviderAuth{None{}, None{}}
-
-def sameResolve(left: Auth.ApiKeyAuth, right: Auth.ApiKeyAuth) -> Bool:
-  match left right:
-    case Auth.ApiKeyAuth{_, _, a, _} Auth.ApiKeyAuth{_, _, b, _}: C.same(Auth.ResolveInput, Auth.AuthOutcome(), a, b)
-
-def ownedKey(composed: Maybe<&2, Auth.ApiKeyAuth>, base: Maybe<&2, Auth.ApiKeyAuth>) -> List<&2, OwnedAuth>:
-  match composed base:
-    case None{} _: Nil{}
-    case Some{+auth} Some{inherited}: Bool.pick(List<&2, OwnedAuth>, sameResolve(auth, inherited), Nil{}, [OwnedApiKey{auth}])
-    case Some{auth} None{}: [OwnedApiKey{auth}]
-
-def ownedToAuth(composed: Maybe<&2, Auth.OAuthAuth>, base: Maybe<&2, Auth.OAuthAuth>) -> List<&2, OwnedAuth>:
-  match composed base:
-    case Some{Auth.OAuthAuth{_, _, _, _, _, +mine}} Some{Auth.OAuthAuth{_, _, _, _, _, theirs}}: Bool.pick(List<&2, OwnedAuth>, C.same(Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>, mine, theirs), Nil{}, [OwnedToAuth{mine}])
-    case _ _: Nil{}
-
-# The callbacks a composition created over its base's auth.
-def ownedAuth(composed: Auth.ProviderAuth, base: Auth.ProviderAuth) -> List<&2, OwnedAuth>:
-  match composed base:
-    case Auth.ProviderAuth{key, oauth} Auth.ProviderAuth{baseKey, baseOAuth}: List.append(&2, OwnedAuth, ownedKey(key, baseKey), ownedToAuth(oauth, baseOAuth))
+def definitionProvider(definition: Definition,id: String) -> Maybe<&2,AiModels.Provider>:
+  match definition:
+    case Definition{providers,_,_,_,_,_,_}: findProvider(providers,id)
+def baseProvider(runtime: ModelRuntime, +id: String) -> IO(Maybe<&2, AiModels.Provider>):
+  do IO<Maybe<&2,AiModels.Provider>>:
+    definition : Definition <- Ref.read(Definition,definitionRef(runtime))
+    return definitionProvider(definition,id)
 
 def modelsJsonOverrides(+config: Config.ModelConfig, +id: String) -> Maybe<&2, R.Record<Config.ModelsJsonModelOverride>>:
   Maybe.bind(&2, Config.ModelsJsonProvider, R.Record<Config.ModelsJsonModelOverride>, Config.getProvider(config, id), Composer.overridesOf)
@@ -1828,7 +1966,8 @@ def registeredConfig(+runtime: ModelRuntime, +id: String, +merged: Composer.Prov
     case Done{Composer.Composed{name, url, +auth, models, _}}:
       do IO<Result<&2, &2, String, Unit>>:
         # modelOverrides are the topmost layer (upstream getModels).
-        +provider : AiModels.Provider = AiModels.Provider{id, name, url, auth, Composer.applyOverrides(models, modelsJsonOverrides(getModelConfig(runtime), id)), AiModels.inheritedStreams(base), Maybe.bind(&2, AiModels.Provider, AiModels.RefreshModels(), base, AiModels.providerRefresh), baseFilter(base)}
+        config : Config.ModelConfig <- getModelConfig(runtime)
+        +provider : AiModels.Provider = AiModels.Provider{id, name, url, auth, Composer.applyOverrides(models, modelsJsonOverrides(config, id)), AiModels.inheritedStreams(base), Maybe.bind(&2, AiModels.Provider, AiModels.RefreshModels(), base, AiModels.providerRefresh), baseFilter(base)}
         setEntry(runtime, id, Some{ExtensionEntry{id, Some{merged}, Composer.configStream(merged), ownedAuth(auth, maybeProviderAuth(base))}})
         Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (registeredNative(provider, catalog), Unit{}))
         rebuildCollection(runtime, [id])
@@ -1837,7 +1976,7 @@ def registeredConfig(+runtime: ModelRuntime, +id: String, +merged: Composer.Prov
 
 def composedRegistration(+runtime: ModelRuntime, +id: String, +merged: Composer.ProviderConfigInput) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
-    +found : Maybe<&2, AiModels.Provider> = baseProvider(runtime, id)
+    +found : Maybe<&2, AiModels.Provider> <- baseProvider(runtime, id)
     result : Result<&2, &2, String, Composer.Composed> <- Composer.composeLayeredProvider(id, base(found), Composer.Layers{None{}, Some{merged}})
     registeredConfig(runtime, id, merged, found, result)
 
@@ -2177,7 +2316,8 @@ def fromProvidersWithStore(+providers: List<&2, AiModels.Provider>, credentials:
     sharedRefresh : Ref.Ref<SharedRefresh> <- Ref.new(SharedRefresh, RefreshIdle{0n})
     refreshWork : Ref.Ref<RefreshWork> <- newRefreshWork()
     availability : Ref.Ref<AvailabilityStatus> <- Ref.new(AvailabilityStatus, AvailabilityStatus{0n, None{}})
-    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, builtinIds(providers), Config.empty(), Nil{}, Nil{}, models, catalog, storeState, extensions, sharedRefresh, availability, runtimeCredentials, refreshWork})
+    definition : Ref.Ref<Definition> <- Ref.new(Definition, Definition{providers,builtinIds(providers),Config.empty(),Nil{},Generation{Nil{},Nil{},Nil{}},StaticSource{providers},Nil{}})
+    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{definition, models, catalog, storeState, extensions, sharedRefresh, availability, runtimeCredentials, refreshWork})
     refreshAvailability(runtime)
     return runtime
 
@@ -2204,7 +2344,7 @@ def initialRefresh(+runtime: ModelRuntime, options: CreateModelRuntimeOptions) -
         result : ModelsRefreshResult <- refresh(runtime, ModelsRefreshOptions{Some{enabled && allow}, None{}, None{}, signal})
         return Unit{}
 
-def assembledWith(composition: Composition, builtins: List<&2, String>, credentials: Auth.CredentialStore, config: Config.ModelConfig, choice: StoreChoice()) -> IO(ModelRuntime):
+def assembledWith(composition: Composition, builtins: List<&2, String>, credentials: Auth.CredentialStore, config: Config.ModelConfig, source: DefinitionSource, radiusOwned: List<&2,AiModels.Provider>, choice: StoreChoice()) -> IO(ModelRuntime):
   match choice:
     case (store, state):
       do IO<ModelRuntime>:
@@ -2218,7 +2358,7 @@ def assembledWith(composition: Composition, builtins: List<&2, String>, credenti
         sharedRefresh : Ref.Ref<SharedRefresh> <- Ref.new(SharedRefresh, RefreshIdle{0n})
         refreshWork : Ref.Ref<RefreshWork> <- newRefreshWork()
         availability : Ref.Ref<AvailabilityStatus> <- Ref.new(AvailabilityStatus, AvailabilityStatus{0n, None{}})
-        +runtime : ModelRuntime <- IO.pure(ModelRuntime, assembled(composition, builtins, config, models, catalog, storeState, extensions, sharedRefresh, availability, runtimeCredentials, refreshWork))
+        +runtime : ModelRuntime <- assembled(composition, builtins, config, source, radiusOwned, models, catalog, storeState, extensions, sharedRefresh, availability, runtimeCredentials, refreshWork)
         rebuildCollection(runtime, Nil{})
         return runtime
 
@@ -2235,11 +2375,12 @@ def catalogBaseUrlOf(options: CreateModelRuntimeOptions) -> String:
 def createWithProviders(credentials: Auth.CredentialStore, defaults: List<&2, AiModels.Provider>, +modelsPath: Maybe<&2, String>, +radius: Radius.RadiusTransport, +options: CreateModelRuntimeOptions) -> IO(ModelRuntime):
   do IO<ModelRuntime>:
     +config : Config.ModelConfig <- Config.load(modelsPath)
+    mark : SourceMark <- sourceMark(modelsPath)
     choice : StoreChoice() <- optionsStore(options, modelsPath)
-    remote : List<&2, AiModels.Provider> <- withRemoteCatalogs(defaults, remoteTransport(radius), catalogBaseUrlOf(options))
+    +remote : List<&2, AiModels.Provider> <- withRemoteCatalogs(defaults, remoteTransport(radius), catalogBaseUrlOf(options))
     +builtins : List<&2, AiModels.Provider> <- configureRadiusProviders(Config.getProviderIds(config), remote, config, radius)
-    composition : Composition <- rebuildProviders(composedIds(builtins, config), builtins, config, Composition{Nil{}, Nil{}, Nil{}})
-    +runtime : ModelRuntime <- assembledWith(composition, builtinIds(builtins), credentials, config, choice)
+    composition : Composition <- rebuildProviders(composedIds(builtins, config), builtins, config, Composition{Nil{}, Nil{}, Nil{}, Nil{}})
+    +runtime : ModelRuntime <- assembledWith(composition, builtinIds(builtins), credentials, config, sourceFromPath(modelsPath,remote,radius,mark), radiusOwners(Config.getProviderIds(config),config,builtins), choice)
     initialRefresh(runtime, options)
     return runtime
 

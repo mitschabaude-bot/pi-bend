@@ -125,7 +125,8 @@ def modelAuths(+runtime: Models.ModelRuntime, references: List<String>) -> IO(Li
 
 def report(+runtime: Models.ModelRuntime, references: List<String>) -> IO(String):
   do IO<String>:
-    configured : List<&2, V.Value> <- configuredValues(runtime, Config.getProviderIds(Models.getModelConfig(runtime)))
+    config : Config.ModelConfig <- Models.getModelConfig(runtime)
+    configured : List<&2, V.Value> <- configuredValues(runtime, Config.getProviderIds(config))
     auths : List<&2, R.Property<V.Value>> <- modelAuths(runtime, references)
     providers : List<&2, AiModels.Provider> <- Models.getProviders(runtime)
     error : Maybe<&2, String> <- Models.getError(runtime)

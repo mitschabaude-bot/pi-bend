@@ -1225,11 +1225,11 @@ def treeAction(input: TreeActionInput,action: TreePicker.Action) -> IO(Unit):
     case _ _: IO.pure(Unit,Unit{})
 # upstream handleSessionCommand: session stats, cache waste and the per-model
 # cost breakdown over every stored entry.
-def sessionInfoOf(stats: Stats.Stats,+state: Tree.SessionManager<Schema.Value,Tools.ToolDetails,Schema.Value>,models: Models.ModelRuntime,warming: SessionInfo.CacheWarmingInfo) -> SessionInfo.SessionInfo:
+def sessionInfoOf(stats: Stats.Stats,+state: Tree.SessionManager<Schema.Value,Tools.ToolDetails,Schema.Value>,models: List<&2,Models.Model()>,warming: SessionInfo.CacheWarmingInfo) -> SessionInfo.SessionInfo:
   match stats:
     case Stats.Stats{file,id,Stats.Totals{users,assistants,calls,results,messages,input,output,cacheRead,cacheWrite,cost},_}:
       +entries = Tree.getEntries(Schema.Value,Tools.ToolDetails,Schema.Value,state)
-      SessionInfo.SessionInfo{Tree.getSessionName(Schema.Value,Tools.ToolDetails,Schema.Value,state),file,id,messages,users,assistants,calls,results,input,output,cacheRead,cacheWrite,cost,warming,CacheStats.computeCacheWaste(~Models.ModelRuntime,~Models.cacheReadPrice,Schema.Value,Tools.ToolDetails,Schema.Value,models,entries),UsageTotals.getUsageCostBreakdown(Schema.Value,Tools.ToolDetails,Schema.Value,entries)}
+      SessionInfo.SessionInfo{Tree.getSessionName(Schema.Value,Tools.ToolDetails,Schema.Value,state),file,id,messages,users,assistants,calls,results,input,output,cacheRead,cacheWrite,cost,warming,CacheStats.computeCacheWaste(~(List<&2,Models.Model()>),~Models.cacheReadPrice,Schema.Value,Tools.ToolDetails,Schema.Value,models,entries),UsageTotals.getUsageCostBreakdown(Schema.Value,Tools.ToolDetails,Schema.Value,entries)}
 # upstream reads the cache-warming mode from the settings and the status
 # from the session, formatted at the time of the command.
 def cacheWarmingInfo(+live: Session.AgentSession) -> IO(SessionInfo.CacheWarmingInfo):
@@ -1245,7 +1245,8 @@ def sessionInfoShown(transcript: Transcript.Handle,+live: Session.AgentSession,s
       do IO<Unit>:
         stored : Session.Session() <- Session.sessionOf(live)
         warming : SessionInfo.CacheWarmingInfo <- cacheWarmingInfo(live)
-        Transcript.sessionInfo(transcript,sessionInfoOf(value,Session.stateOf(stored),Session.modelRuntime(live),warming))
+        models : List<&2,Models.Model()> <- Models.getModels(Session.modelRuntime(live))
+        Transcript.sessionInfo(transcript,sessionInfoOf(value,Session.stateOf(stored),models,warming))
 def sessionInfoObserved(input: CommandObservation) -> IO(Unit):
   match input:
     case CommandObservation{_,session,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_,_}:
