@@ -1192,10 +1192,12 @@ def runChecked(parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage
 # upstream main: a stored session whose cwd no longer exists asks, in
 # interactive mode, whether to continue in the current cwd (Cancel exits);
 # other modes report MissingSessionCwdError.
-def continued(proceed: Bool, issue: SessionCwd.SessionCwdIssue, session: Session()) -> IO(Selected()):
+def continued(proceed: Bool, issue: SessionCwd.SessionCwdIssue, +session: Session()) -> IO(Selected()):
   match proceed issue:
-    case True{} SessionCwd.SessionCwdIssue{Some{_}, _, fallback}:
-      IO.pure(Selected(), Done{Sessions.withCwd(V.Value, Tools.ToolDetails, V.Value, session, fallback)})
+    case True{} SessionCwd.SessionCwdIssue{Some{file}, _, fallback}:
+      do IO<Selected()>:
+        reopened : Sessions.Outcome(Session()) <- AgentSession.openSessionInCwd(Sessions.getIdGenerator(V.Value, Tools.ToolDetails, V.Value, session), file, Some{Sessions.getSessionDir(V.Value, Tools.ToolDetails, V.Value, session)}, fallback)
+        return selected(reopened)
     case _ _: IO.pure(Selected(), Fail{Aborted{""}})
 def chosen(choice: Maybe<&2, String>) -> Bool:
   match choice:

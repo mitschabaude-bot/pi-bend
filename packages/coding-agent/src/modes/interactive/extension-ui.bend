@@ -189,6 +189,10 @@ def bind(owner: Owner,+runner: Maybe<&2,Runner.ExtensionRunner>,hook: Maybe<&2,R
         switchRunner(ui,current,runner)
         previous : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- installHook(hook,ui,current,widgets)
         return Owner{ui,border,accent,muted,current,widgets,previous}
+def context(owner: Owner) -> Owner & Ctx.ExtensionUIContext:
+  match owner:
+    case Owner{+ui,border,accent,muted,current,widgets,previous}:
+      (Owner{ui,border,accent,muted,current,widgets,previous},ui)
 def disposePrevious(previous: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>) -> IO(Unit):
   match previous:
     case None{}: IO.pure(Unit,Unit{})

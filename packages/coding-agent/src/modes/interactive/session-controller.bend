@@ -21,7 +21,7 @@ type Control is Data:
   Dequeue{draft: String}
 type ControlResult is Data:
   ControlResult{text: String,count: Nat,announce: Bool}
-type Selection is Data: Navigate{id: String} Fork{id: String}
+type Selection is Data: Navigate{id: String,options: Session.NavigateTreeOptions} Fork{id: String}
 type SelectionResult is Data: Navigated{navigation: Session.Navigation} Forked{text: Maybe<&2,String>} SelectionFailed{message: String}
 # upstream runtimeHost: starting and forking sessions replace the session.
 type Replacement is Data:
@@ -294,12 +294,12 @@ def forkCompleted(observer: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,re
 def performSelection(session: Maybe<&2,Session.AgentSession>,observer: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,replacement: Maybe<&2,Replacement>,selection: Selection) -> IO(Result<&2,&2,String,Unit>):
   match session replacement selection:
     case None{} _ _: IO.pure(Result<&2,&2,String,Unit>,Fail{"Selection requires an active session"})
-    case Some{+value} _ Navigate{id}:
+    case Some{+value} _ Navigate{id,options}:
       do IO<Result<&2,&2,String,Unit>>:
         streaming : Bool <- Session.isStreaming(value)
         Bool.pick(Unit -> IO(Unit),streaming,_ => Session.abort(value),_ => IO.pure(Unit,Unit{}))(Unit{})
-        outcome : Result<&2,&2,String,Session.Navigation> <- Session.navigateTree(value,id)
-        notifySelection(observer,navigationResult(outcome))
+        result : Session.TreeResult() <- Session.navigateTreeWith(value,id,options)
+        notifySelection(observer,navigationResult(Session.plainNavigation(result)))
         return Done{Unit{}}
     case Some{_} Some{Replacement{_,fork}} Fork{id}:
       do IO<Result<&2,&2,String,Unit>>:

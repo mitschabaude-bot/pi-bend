@@ -89,6 +89,9 @@ def createSession(ids: Uuid.Generator, cwd: String, sessionDir: Maybe<&2, String
 def openSession(ids: Uuid.Generator, path: String, sessionDir: Maybe<&2, String>, cwd: String) -> IO(Sessions.Outcome(Session())):
   Sessions.open(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, ~readRaw, ~readDetails, ~readRaw, ids, path, sessionDir, None{}, cwd)
 
+def openSessionInCwd(ids: Uuid.Generator, path: String, sessionDir: Maybe<&2, String>, +cwd: String) -> IO(Sessions.Outcome(Session())):
+  Sessions.open(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, ~readRaw, ~readDetails, ~readRaw, ids, path, sessionDir, Some{cwd}, cwd)
+
 def continueSession(ids: Uuid.Generator, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Sessions.Outcome(Session())):
   Sessions.continueRecent(~V.Value, ~Tools.ToolDetails, ~V.Value, ~rawValue, ~Tools.detailsValue, ~rawValue, ~readRaw, ~readDetails, ~readRaw, ids, cwd, sessionDir, agentDir)
 
@@ -4034,8 +4037,7 @@ def generatedSummary(summary: BranchSummary.Summary) -> TreeSummary:
   match summary:
     case BranchSummary.Summary{text, usage, details}: TreeSummary{text, usage, Some{details}, False{}}
 
-# The branch summarizer: the agent's stream function, the session's thinking
-# level, the settings' branch-summary reserve and retry policy, and retry
+# The branch summarizer: the agent's stream function, the settings' branch-summary reserve and retry policy, and retry
 # notices with the branch-summary source (upstream generateBranchSummary).
 def summarizeBranch(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +model: Ai.Model<Ai.JsonValue>, entries: List<&2, Entry()>, +options: NavigateTreeOptions, +signal: A.AbortSignal<Unit>) -> IO(Result<&2, &2, String, BranchSummary.Summary>):
   match options:
@@ -4046,7 +4048,7 @@ def summarizeBranch(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: 
         current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +state : Shared <- R.read(Shared, shared)
         generated : Result<&2, &2, Uuid.Error, String> <- Uuid.uuidv7(sessionIds(state), None{})
-        +summarizer : Compaction.Summarizer(V.Value, Tools.ToolDetails) <- C.create(~SummarizerEnv, ~Compaction.SummaryRequest<V.Value, Tools.ToolDetails>, ~Ai.AssistantMessage<V.Value, V.Value>, ~summarizeWith, SummarizerEnv{stream, config, model, stateThinking(current), signal, requestIdOf(generated)})
+        +summarizer : Compaction.Summarizer(V.Value, Tools.ToolDetails) <- C.create(~SummarizerEnv, ~Compaction.SummaryRequest<V.Value, Tools.ToolDetails>, ~Ai.AssistantMessage<V.Value, V.Value>, ~summarizeWith, SummarizerEnv{stream, config, model, Ai.Off{}, signal, requestIdOf(generated)})
         +callbacks : Retry.RetryCallbacks() <- C.create(~RetryNotifier, ~Retry.RetryNotice, ~Unit, ~notifyRetry, RetryNotifier{shared, BranchSummarySource{}})
         result : Result<&2, &2, String, BranchSummary.Summary> <- BranchSummary.generate(~V.Value, ~Tools.ToolDetails, summarizer, entries, model, branchReserve(Settings.getBranchSummarySettings(settings)), signal, custom, Maybe.default(&2, Bool, replace, False{}), Some{policyOf(state)}, Some{callbacks})
         C.dispose(Compaction.SummaryRequest<V.Value, Tools.ToolDetails>, Ai.AssistantMessage<V.Value, V.Value>, summarizer)

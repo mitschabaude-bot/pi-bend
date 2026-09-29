@@ -341,6 +341,11 @@ def createWithFilter(nodes: List<&2,Node()>,+leaf: Maybe<&2,String>,height: Nat,
   TreeList{all,visible,index,filter,"",leaf,Nil{},Nat.max(5n,height / 2n),Maybe.map(&2,Row,String,rowId,List.get(&2,Row,visible,index)),graph}
 def create(nodes: List<&2,Node()>,leaf: Maybe<&2,String>,height: Nat) -> TreeList:
   createWithFilter(nodes,leaf,height,Default{})
+def selectId(state: TreeList,+id: String) -> TreeList:
+  match state:
+    case TreeList{all,+visible,+selected,filter,search,leaf,folded,height,_,graph}:
+      +index = Maybe.default(&2,Nat,indexOf(visible,id,0n),selected)
+      TreeList{all,visible,index,filter,search,leaf,folded,height,Some{id},graph}
 
 def hasRows(state: TreeList) -> Bool:
   match state: case TreeList{_,visible,_,_,_,_,_,_,_,graph}: Bool.not(List.is_empty(&2,Row,visible))

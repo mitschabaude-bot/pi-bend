@@ -2278,12 +2278,15 @@ def selectionResult(sink: SelectionSink,result: Controller.SelectionResult) -> I
         forkSelectionNotice(target)
     case Controller.SelectionFailed{message}: failedSelection(sink,message)
 type SelectInput is Data: SelectInput{queue: Controller.Handle,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
-type TreeSelectInput is Data: TreeSelectInput{queue: Controller.Handle,session: Ref.Ref<Session.AgentSession>,failure: Interactive.StatusSink}
+type TreeDialogs is Data:
+  TreeDialogs{ui: Ref.Ref<Maybe<&2,Ctx.ExtensionUIContext>>,task: Ref.Ref<Maybe<&2,Chan(Unit)>>}
+type TreeSelectInput is Data:
+  TreeSelectInput{queue: Controller.Handle,session: Ref.Ref<Session.AgentSession>,failure: Interactive.StatusSink,dialogs: TreeDialogs,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type ScopeInput is Data:
   ScopeInput{session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 def selectionJob(mode: Selector.Mode,id: String) -> Controller.Selection:
   match mode:
-    case Selector.TreeMode{}: Controller.Navigate{id}
+    case Selector.TreeMode{}: Controller.Navigate{id,Session.noSummary()}
     case Selector.ForkMode{}: Controller.Fork{id}
 def submitSelection(queue: Controller.Handle,failure: Interactive.StatusSink,mode: Selector.Mode,id: String) -> IO(Unit):
   do IO<Unit>:
@@ -2293,25 +2296,104 @@ def atLeaf(leaf: Maybe<&2,String>,id: String) -> Bool:
   match leaf:
     case Some{current}: String.eq(current,id)
     case None{}: False{}
-def treeReady(queue: Controller.Handle,+failure: Interactive.StatusSink,session: Session.AgentSession,id: String) -> IO(Unit):
+def treeReady(queue: Controller.Handle,+failure: Interactive.StatusSink,session: Session.AgentSession,id: String,options: Session.NavigateTreeOptions) -> IO(Unit):
   do IO<Unit>:
     compacting : Bool <- Session.isCompacting(session)
     Bool.pick(Unit -> IO(Unit),compacting,
       _ => Interactive.report(failure,Interactive.PromptFailure{"Wait for the current compaction or tree navigation to finish before navigating the session tree."}),
-      _ => submitSelection(queue,failure,Selector.TreeMode{},id))(Unit{})
-def treeChosen(queue: Controller.Handle,sessionRef: Ref.Ref<Session.AgentSession>,+failure: Interactive.StatusSink,+id: String) -> IO(Unit):
-  do IO<Unit>:
-    +session : Session.AgentSession <- Ref.read(Session.AgentSession,sessionRef)
-    current : Session.Session() <- Session.sessionOf(session)
-    +leaf : Maybe<&2,String> = Tree.getLeafId(Schema.Value,Tools.ToolDetails,Schema.Value,Session.stateOf(current))
-    Bool.pick(Unit -> IO(Unit),atLeaf(leaf,id),
-      _ => Interactive.report(failure,Interactive.CommandNotice{"Already at this point"}),
       _ => do IO<Unit>:
-        treeReady(queue,failure,session,id))(Unit{})
+        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitSelection(queue,Controller.Navigate{id,options})
+        Interactive.submittedResult(failure,result))(Unit{})
+type SummaryStep is Data: AskSummary{} ChosenSummary{answer: Maybe<&2,String>} EditedSummary{instructions: Maybe<&2,String>}
+@unsafe def askSummary(+ui: Maybe<&2,Ctx.ExtensionUIContext>,step: SummaryStep) -> IO(Maybe<&2,Session.NavigateTreeOptions>):
+  match step:
+    case AskSummary{}:
+      do IO<Maybe<&2,Session.NavigateTreeOptions>>:
+        answer : Maybe<&2,String> <- Ctx.selectWith(ui,Ctx.SelectRequest{"Summarize branch?",["No summary","Summarize","Summarize with custom prompt"],Ctx.DialogOptions{None{},None{}}})
+        askSummary(ui,ChosenSummary{answer})
+    case ChosenSummary{Some{"No summary"}}: IO.pure(Maybe<&2,Session.NavigateTreeOptions>,Some{Session.noSummary()})
+    case ChosenSummary{Some{"Summarize"}}: IO.pure(Maybe<&2,Session.NavigateTreeOptions>,Some{Session.NavigateTreeOptions{True{},None{},None{},None{}}})
+    case ChosenSummary{Some{"Summarize with custom prompt"}}:
+      do IO<Maybe<&2,Session.NavigateTreeOptions>>:
+        instructions : Maybe<&2,String> <- Ctx.editorWith(ui,Ctx.EditorRequest{"Custom summarization instructions",None{}})
+        askSummary(ui,EditedSummary{instructions})
+    case ChosenSummary{_}: IO.pure(Maybe<&2,Session.NavigateTreeOptions>,None{})
+    case EditedSummary{Some{text}}: IO.pure(Maybe<&2,Session.NavigateTreeOptions>,Some{Session.NavigateTreeOptions{True{},Some{text},None{},None{}}})
+    case EditedSummary{None{}}: askSummary(ui,AskSummary{})
+def reopenedTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,result: Result<&2,&2,Tree.Error,List<&2,TreePicker.Node()>>,leaf: Maybe<&2,String>,filter: TreePicker.Filter,id: String) -> IO(Unit):
+  match result:
+    case Fail{_}: selectorNotice(failure,"Cannot load session tree")
+    case Done{nodes}: openCandidate(selector,failure,TreePicker.selectId(TreePicker.createWithFilter(nodes,leaf,24n,filter),id),"No entries in session")
+def reopenTree(+session: Session.AgentSession,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String) -> IO(Unit):
+  do IO<Unit>:
+    current : Session.Session() <- Session.sessionOf(session)
+    settings : Settings.SettingsManager <- Session.getSettings(session)
+    +state : Session.State() = Session.stateOf(current)
+    reopenedTree(selector,failure,Tree.getTree(Schema.Value,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Schema.Value,Tools.ToolDetails,Schema.Value,state),selectorFilter(Settings.getTreeFilterMode(settings)),id)
+    Interactive.requestRender(redraw)
+def treeChoiceResult(queue: Controller.Handle,session: Session.AgentSession,failure: Interactive.StatusSink,uiRef: Ref.Ref<Maybe<&2,Ctx.ExtensionUIContext>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String,chosen: Maybe<&2,Session.NavigateTreeOptions>) -> IO(Unit):
+  match chosen:
+    case Some{options}: treeReady(queue,failure,session,id,options)
+    case None{}:
+      do IO<Unit>:
+        active : Maybe<&2,Ctx.ExtensionUIContext> <- Ref.read(Maybe<&2,Ctx.ExtensionUIContext>,uiRef)
+        Bool.pick(Unit -> IO(Unit),Maybe.is_some(&2,Ctx.ExtensionUIContext,active),_ => reopenTree(session,selector,failure,redraw,id),_ => IO.pure(Unit,Unit{}))(Unit{})
+def treeChoiceTask(queue: Controller.Handle,session: Session.AgentSession,failure: Interactive.StatusSink,+dialogs: TreeDialogs,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String) -> IO(Unit):
+  match dialogs:
+    case TreeDialogs{+uiRef,_}:
+      do IO<Unit>:
+        ui : Maybe<&2,Ctx.ExtensionUIContext> <- Ref.read(Maybe<&2,Ctx.ExtensionUIContext>,uiRef)
+        chosen : Maybe<&2,Session.NavigateTreeOptions> <- askSummary(ui,AskSummary{})
+        treeChoiceResult(queue,session,failure,uiRef,selector,redraw,id,chosen)
+def joinedTreeTask(task: Maybe<&2,Chan(Unit)>) -> IO(Unit):
+  match task:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{handle}:
+      do IO<Unit>:
+        finished : Unit <- IO.join(Unit,handle)
+        return Unit{}
+def setTreeUI(dialogs: TreeDialogs,ui: Ctx.ExtensionUIContext) -> IO(Unit):
+  match dialogs: case TreeDialogs{uiRef,_}: Ref.write(Maybe<&2,Ctx.ExtensionUIContext>,uiRef,Some{ui})
+def registeredTreeUI(dialogs: TreeDialogs,pair: ExtensionUI.Owner & Ctx.ExtensionUIContext) -> IO(ExtensionUI.Owner):
+  match pair:
+    case (owner,ui):
+      do IO<ExtensionUI.Owner>:
+        setTreeUI(dialogs,ui)
+        return owner
+def closeTreeDialogs(dialogs: TreeDialogs,dialog: ExtensionDialog.Owner) -> IO(Unit):
+  match dialogs:
+    case TreeDialogs{uiRef,taskRef}:
+      do IO<Unit>:
+        Ref.write(Maybe<&2,Ctx.ExtensionUIContext>,uiRef,None{})
+        ExtensionDialog.dispose(dialog)
+        task : Maybe<&2,Chan(Unit)> <- Ref.swap(Maybe<&2,Chan(Unit)>,taskRef,None{})
+        joinedTreeTask(task)
+def startTreeChoice(queue: Controller.Handle,session: Session.AgentSession,failure: Interactive.StatusSink,+dialogs: TreeDialogs,selector: Ref.Ref<Maybe<&2,Selector.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,id: String) -> IO(Unit):
+  match dialogs:
+    case TreeDialogs{_,taskRef}:
+      do IO<Unit>:
+        previous : Maybe<&2,Chan(Unit)> <- Ref.swap(Maybe<&2,Chan(Unit)>,taskRef,None{})
+        joinedTreeTask(previous)
+        task : Chan(Unit) <- IO.fork(Unit,treeChoiceTask(queue,session,failure,dialogs,selector,redraw,id))
+        Ref.write(Maybe<&2,Chan(Unit)>,taskRef,Some{task})
+def treeChosen(input: TreeSelectInput,+id: String) -> IO(Unit):
+  match input:
+    case TreeSelectInput{+queue,sessionRef,+failure,+dialogs,+selector,+redraw}:
+      do IO<Unit>:
+        +session : Session.AgentSession <- Ref.read(Session.AgentSession,sessionRef)
+        current : Session.Session() <- Session.sessionOf(session)
+        +leaf : Maybe<&2,String> = Tree.getLeafId(Schema.Value,Tools.ToolDetails,Schema.Value,Session.stateOf(current))
+        Bool.pick(Unit -> IO(Unit),atLeaf(leaf,id),
+          _ => Interactive.report(failure,Interactive.CommandNotice{"Already at this point"}),
+          _ => do IO<Unit>:
+            settings : Settings.SettingsManager <- Session.getSettings(session)
+            Bool.pick(Unit -> IO(Unit),Settings.getBranchSummarySkipPrompt(settings),
+              _ => treeReady(queue,failure,session,id,Session.noSummary()),
+              _ => startTreeChoice(queue,session,failure,dialogs,selector,redraw,id))(Unit{}))(Unit{})
 def chosenSelection(input: TreeSelectInput,choice: Selector.Choice) -> IO(Unit):
   match input choice:
-    case TreeSelectInput{queue,session,failure} Selector.Choice{Selector.TreeMode{},id}: treeChosen(queue,session,failure,id)
-    case TreeSelectInput{queue,_,failure} Selector.Choice{mode,id}: submitSelection(queue,failure,mode,id)
+    case input Selector.Choice{Selector.TreeMode{},id}: treeChosen(input,id)
+    case TreeSelectInput{queue,_,failure,_,_,_} Selector.Choice{mode,id}: submitSelection(queue,failure,mode,id)
 def chosenModel(input: SelectInput,choice: ModelPicker.Choice) -> IO(Unit):
   match input choice:
     case SelectInput{queue,failure,_} ModelPicker.Choice{chosen,persist}:
@@ -3440,7 +3522,7 @@ def extensionRebindHook(mode: Maybe<&2,Binding>) -> Maybe<&2,Ref.Ref<Maybe<&2,Ca
   match mode:
     case None{}: None{}
     case Some{Binding{_,_,hook,_,_,_,_,_,_,_,_}}: Some{hook}
-def runWidgetHosted(borrowed: ExtensionWidgets.Owner & ExtensionWidgets.Host & Component.Component,dialog: ExtensionDialog.Owner,+dialogHost: ExtensionDialog.Host,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,+chosen: Callback.Callback<Selector.Choice,Unit>,treeEvents: Callback.Callback<TreePicker.Action,Unit>) -> IO(Result<&2,&2,Error,Unit>):
+def runWidgetHosted(borrowed: ExtensionWidgets.Owner & ExtensionWidgets.Host & Component.Component,dialog: ExtensionDialog.Owner,+dialogHost: ExtensionDialog.Host,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,+dialogs: TreeDialogs,+chosen: Callback.Callback<Selector.Choice,Unit>,treeEvents: Callback.Callback<TreePicker.Action,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (widgetOwner,widgetHost,widgetComponent):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -3449,7 +3531,8 @@ def runWidgetHosted(borrowed: ExtensionWidgets.Owner & ExtensionWidgets.Host & C
         +workingMessage : Callback.Callback<Maybe<&2,String>,Unit> <- Callback.create(~Working,~Maybe<&2,String>,~Unit,~workingMessageCallback,working)
         +workingVisible : Callback.Callback<Bool,Unit> <- Callback.create(~WorkingVisibility,~Bool,~Unit,~workingVisibleCallback,WorkingVisibility{working,contextSession(context)})
         +workingIndicator : Callback.Callback<Maybe<&2,Ctx.WorkingIndicatorOptions>,Unit> <- Callback.create(~Working,~Maybe<&2,Ctx.WorkingIndicatorOptions>,~Unit,~workingIndicatorCallback,working)
-        ui : ExtensionUI.Owner <- ExtensionUI.create(ExtensionUI.BaseEnv{dialogHost,editorRefOf(contextInteraction(context)),footerState(foot),contextTranscript(context),redraw,workingTerminal(working),contextTheme(context),widgetHost,Ctx.WorkingControls{workingMessage,workingVisible,workingIndicator}})
+        created : ExtensionUI.Owner <- ExtensionUI.create(ExtensionUI.BaseEnv{dialogHost,editorRefOf(contextInteraction(context)),footerState(foot),contextTranscript(context),redraw,workingTerminal(working),contextTheme(context),widgetHost,Ctx.WorkingControls{workingMessage,workingVisible,workingIndicator}})
+        ui : ExtensionUI.Owner <- registeredTreeUI(dialogs,ExtensionUI.context(created))
         current : Session.AgentSession <- Ref.read(Session.AgentSession,contextSession(context))
         runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(current)
         bound : ExtensionUI.Owner <- ExtensionUI.bind(ui,runner,extensionRebindHook(contextBinding(context)))
@@ -3459,29 +3542,34 @@ def runWidgetHosted(borrowed: ExtensionWidgets.Owner & ExtensionWidgets.Host & C
         result : Result<&2,&2,Error,Unit> <- runHosted(Selector.borrowHost(host),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen)
         retiredDialog : Maybe<&2,ExtensionDialog.Host> <- Ref.dispose(Maybe<&2,ExtensionDialog.Host>,resumeDialogRef(contextResume(context)))
         ExtensionDialog.bindExternal(dialogHost,None{})
+        closeTreeDialogs(dialogs,dialog)
         Callback.dispose(ExtensionDialog.ExternalRequest,Unit,external)
         ExtensionUI.dispose(bound)
         Callback.dispose(Maybe<&2,String>,Unit,workingMessage)
         Callback.dispose(Bool,Unit,workingVisible)
         Callback.dispose(Maybe<&2,Ctx.WorkingIndicatorOptions>,Unit,workingIndicator)
         ExtensionWidgets.dispose(widgetOwner)
-        ExtensionDialog.dispose(dialog)
         return result
-def runExtensionDialog(borrowed: ExtensionDialog.Owner & ExtensionDialog.Host & Component.Component,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,+chosen: Callback.Callback<Selector.Choice,Unit>,treeEvents: Callback.Callback<TreePicker.Action,Unit>,request: Callback.Callback<Unit,Unit>) -> IO(Result<&2,&2,Error,Unit>):
+def runExtensionDialog(borrowed: ExtensionDialog.Owner & ExtensionDialog.Host & Component.Component,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,+dialogs: TreeDialogs,+chosen: Callback.Callback<Selector.Choice,Unit>,treeEvents: Callback.Callback<TreePicker.Action,Unit>,request: Callback.Callback<Unit,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (dialog,dialogHost,component):
       do IO<Result<&2,&2,Error,Unit>>:
         widgetOwner : ExtensionWidgets.Owner <- ExtensionWidgets.create(component,contextTheme(context),request)
-        runWidgetHosted(ExtensionWidgets.borrow(widgetOwner),dialog,dialogHost,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen,treeEvents)
+        runWidgetHosted(ExtensionWidgets.borrow(widgetOwner),dialog,dialogHost,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,dialogs,chosen,treeEvents)
 def withCustomEditor(borrowed: CustomEditor.Owner & Component.Component,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,+rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (custom,component):
       do IO<Result<&2,&2,Error,Unit>>:
-        +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~TreeSelectInput,~Selector.Choice,~Unit,~chosenSelection,TreeSelectInput{queue,contextSession(context),contextStatus(context)})
+        +uiRef : Ref.Ref<Maybe<&2,Ctx.ExtensionUIContext>> <- Ref.new(Maybe<&2,Ctx.ExtensionUIContext>,None{})
+        +taskRef : Ref.Ref<Maybe<&2,Chan(Unit)>> <- Ref.new(Maybe<&2,Chan(Unit)>,None{})
+        +dialogs : TreeDialogs = TreeDialogs{uiRef,taskRef}
+        +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~TreeSelectInput,~Selector.Choice,~Unit,~chosenSelection,TreeSelectInput{queue,contextSession(context),contextStatus(context),dialogs,selectorRefOf(contextInteraction(context)),redraw})
         +treeEvents : Callback.Callback<TreePicker.Action,Unit> <- Callback.create(~TreeActionInput,~TreePicker.Action,~Unit,~treeAction,TreeActionInput{contextSession(context),contextTranscript(context)})
         +request : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~workingRedraw,redraw)
         dialog : ExtensionDialog.Owner <- ExtensionDialog.create(component,contextTheme(context),words,contextBindings(context),Keys.defaults(),rows,request)
-        result : Result<&2,&2,Error,Unit> <- runExtensionDialog(ExtensionDialog.borrow(dialog),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen,treeEvents,request)
+        result : Result<&2,&2,Error,Unit> <- runExtensionDialog(ExtensionDialog.borrow(dialog),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,dialogs,chosen,treeEvents,request)
+        oldUi : Maybe<&2,Ctx.ExtensionUIContext> <- Ref.dispose(Maybe<&2,Ctx.ExtensionUIContext>,uiRef)
+        oldTask : Maybe<&2,Chan(Unit)> <- Ref.dispose(Maybe<&2,Chan(Unit)>,taskRef)
         Callback.dispose(Unit,Unit,request)
         CustomEditor.dispose(custom)
         return result
