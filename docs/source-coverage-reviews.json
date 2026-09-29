@@ -1866,6 +1866,20 @@
       "port_sha256": {
         "packages/coding-agent/src/core/package-manager.bend": "52c76af97251b68ada4cf3a6aef6dec68532dac683b898f4284565f193eff5a6"
       }
+    },
+    "packages/coding-agent/src/cli/config-selector.ts": {
+      "state": "missing",
+      "note": "Missing native command TUI lifecycle. Upstream starts a dedicated resource selector with theme, focus and terminal ownership; package settings and native extension resource discovery are prerequisites.",
+      "ports": [],
+      "source_sha256": "780107f9a3a23afbd56786dfd3dc361e6d0f3a7f41e5bef13d01abf734ea87e8",
+      "port_sha256": {}
+    },
+    "packages/coding-agent/src/modes/interactive/components/config-selector.ts": {
+      "state": "missing",
+      "note": "Missing resource selector. Upstream groups resolved extensions, skills, prompts and themes; supports search, keyboard navigation, global enable/disable, project inherit/load/unload overrides and scope switching. Native package resources exist for skills/prompts/themes, but native extension discovery/loading and the selector are not ported.",
+      "ports": [],
+      "source_sha256": "2a1f2594ff2f78aa2305f7128bacbd8c227d5bd4efa94b156f45a7d9268c0805",
+      "port_sha256": {}
     }
   }
 }
