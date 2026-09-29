@@ -35,6 +35,8 @@ type EditOperations is Data:
   EditOperations{readFile: Callback.Callback<String, ResultOf(List<&2, U32>)>, writeFile: Callback.Callback<(String & String), ResultOf(Unit)>, access: Callback.Callback<String, ResultOf(Unit)>}
 type EditToolOptions is Data:
   EditToolOptions{operations: Maybe<&2, EditOperations>}
+
+def description() -> String: "Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes."
 type Invocation is Data:
   Invocation{paths: Paths.Environment, cwd: String, queue: Queue.Queue, operations: EditOperations}
 type ToolOwner is Type:
@@ -304,7 +306,7 @@ def created(environment: Registered, owned: Maybe<&2, EditOperations>) -> IO(Too
   do IO<ToolOwner>:
     prepare : Callback.Callback<Value.Value, ResultOf(Value.Value)> <- Callback.create(~Unit, ~Value.Value, ~ResultOf(Value.Value), ~prepareArguments, Unit{})
     callback : Callback.Callback<Agent.ToolExecutionInput<EditToolDetails>, ToolResult()> <- Callback.create(~Registered, ~Agent.ToolExecutionInput<EditToolDetails>, ~ToolResult(), ~invoke, environment)
-    return ToolOwner{Agent.AgentTool{"edit", "Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes.", editSchema(), Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}}, "edit", Some{prepare}, callback, None{}, None{}}, owned}
+    return ToolOwner{Agent.AgentTool{"edit", description(), editSchema(), Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}}, "edit", Some{prepare}, callback, None{}, None{}}, owned}
 
 # Explicit native runtime dependencies; injected callbacks remain caller-owned.
 def createEditTool(environment: Paths.Environment, queue: Queue.Queue, cwd: String, options: EditToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):

@@ -449,7 +449,7 @@ def ToolExecute() -> Data: C.Callback<ToolCallInput, Tools.Output()>
 type ToolRenderShell is Data: DefaultShell{} SelfShell{} NativeBuiltin{name: String}
 
 type ToolDefinition is Data:
-  ToolDefinition{name: String, label: String, description: String, promptSnippet: Maybe<&2, String>, promptGuidelines: List<&2, String>, parameters: V.Value, constrainedSampling: Maybe<&2, Ai.ToolConstrainedSampling>, executionMode: Maybe<&2, Agent.ToolExecutionMode>, execute: ToolExecute(), renderShell: ToolRenderShell, renderCall: Maybe<&2,ToolRender.Renderer()>, renderResult: Maybe<&2,ToolRender.Renderer()>}
+  ToolDefinition{name: String, label: String, description: String, promptSnippet: Maybe<&2, String>, promptGuidelines: List<&2, String>, parameters: V.Value, constrainedSampling: Maybe<&2, Ai.ToolConstrainedSampling>, executionMode: Maybe<&2, Agent.ToolExecutionMode>, execute: ToolExecute(), renderShell: ToolRenderShell, renderCall: Maybe<&2,ToolRender.Renderer()>, renderResult: Maybe<&2,ToolRender.Renderer()>, prepareArguments: Maybe<&2,Tools.Prepare()>}
 
 # upstream RegisteredTool: a definition with the extension that registered it.
 type RegisteredTool is Data:

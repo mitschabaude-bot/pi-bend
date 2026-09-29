@@ -303,7 +303,7 @@ def styledShell(style: ExtensionTypes.ToolRenderShell,call: Maybe<&2,ToolRender.
 def registeredShellIn(registered: List<&2,ExtensionTypes.RegisteredTool>,+name: String,selected: Tool.Shell) -> Tool.Shell:
   match registered:
     case Nil{}: selected
-    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{toolName,_,_,_,_,_,_,_,_,style,call,result},_} <> +rest:
+    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{toolName,_,_,_,_,_,_,_,_,style,call,result,_},_} <> +rest:
       Bool.pick(Unit -> Tool.Shell,String.eq(toolName,name),
         _ => registeredShellIn(rest,name,styledShell(style,call,result)),
         _ => registeredShellIn(rest,name,selected))(Unit{})

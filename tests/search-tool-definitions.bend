@@ -31,7 +31,7 @@ def output(value: Tools.Output()) -> String:
 
 def checked(definition: Ext.ToolDefinition, +expected: String, +arguments: Value.Value, +needle: String, +context: Context.ExtensionContext) -> IO(Unit):
   match definition:
-    case Ext.ToolDefinition{name,label,_,Some{_},_,_,None{},None{},+execute,Ext.NativeBuiltin{renderName},None{},None{}}:
+    case Ext.ToolDefinition{name,label,_,Some{_},_,_,None{},None{},+execute,Ext.NativeBuiltin{renderName},None{},None{},None{}}:
       do IO<Unit>:
         result : Tools.Output() <- Callback.call(Ext.ToolCallInput,Tools.Output(),execute,Ext.ToolCallInput{Agent.ToolExecutionInput{"search-definition",arguments,None{},None{}},context})
         repeated : Tools.Output() <- Callback.call(Ext.ToolCallInput,Tools.Output(),execute,Ext.ToolCallInput{Agent.ToolExecutionInput{"search-definition-repeat",arguments,None{},None{}},context})
@@ -55,7 +55,7 @@ def exercised(+cwd: String,+paths: Paths.Environment,+manager: Manager.ToolsMana
   +context = {Context.ExtensionContext{cwd,runtime,bindings}: Context.ExtensionContext}
   do IO<Unit>:
     grep : Ext.ToolDefinition <- Loader.createGrepToolDefinition(paths,manager,cwd,Grep.GrepToolOptions{None{}})
-    checked(grep,"grep",args("pattern","def searchDefinition","path","packages/coding-agent/src/core/extensions/loader.bend"),"loader.bend",context)
+    checked(grep,"grep",args("pattern","def builtinDefinition","path","packages/coding-agent/src/core/extensions/loader.bend"),"loader.bend",context)
     find : Ext.ToolDefinition <- Loader.createFindToolDefinition(paths,manager,cwd,Find.FindToolOptions{None{}})
     checked(find,"find",args("pattern","search-tool-definitions.bend","path","tests"),"search-tool-definitions.bend",context)
     loaded : Result<&2,&2,Collation.LoadError,Collation.Collator> <- Collation.load(Path.join(cwd,"packages/runtime/data"))

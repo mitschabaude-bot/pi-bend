@@ -119,6 +119,8 @@ def execute(queue: Queue.Queue, operations: WriteOperations, +absolutePath: Stri
 type WriteToolOptions is Data:
   WriteToolOptions{operations: Maybe<&2, WriteOperations>}
 
+def description() -> String: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories."
+
 type Invocation is Data:
   Invocation{paths: Paths.Environment, cwd: String, queue: Queue.Queue, operations: WriteOperations}
 
@@ -186,7 +188,7 @@ def writeSchema() -> Value.Value:
 def created(environment: Registered, owned: Maybe<&2, WriteOperations>) -> IO(ToolOwner):
   do IO<ToolOwner>:
     callback : Callback.Callback<Agent.ToolExecutionInput<Unit>, ToolResult()> <- Callback.create(~Registered, ~Agent.ToolExecutionInput<Unit>, ~ToolResult(), ~invoke, environment)
-    return ToolOwner{Agent.AgentTool{"write", "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.", writeSchema(), Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}}, "write", None{}, callback, None{}, None{}}, owned}
+    return ToolOwner{Agent.AgentTool{"write", description(), writeSchema(), Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}}, "write", None{}, callback, None{}, None{}}, owned}
 
 # Environment and shared queue are explicit native runtime dependencies.
 def createWriteTool(environment: Paths.Environment, queue: Queue.Queue, cwd: String, options: WriteToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):

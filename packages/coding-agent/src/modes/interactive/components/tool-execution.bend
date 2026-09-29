@@ -259,10 +259,13 @@ def boxedBuiltinAs(+renderName: String,+state: ToolExecution,+width: Nat,elapsed
         return "" <> List.append(&2,String,top,List.append(&2,String,body,bottom))
 def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,+context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match state: case ToolExecution{name,_,_,_,_,_,_,_,_,_,_,_}: boxedBuiltinAs(name,state,width,elapsed,write,context)
+def editBuiltinAs(+state: ToolExecution,width: Nat,preview: Maybe<&2,Edits.Preview()>,context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
+  match state:
+    case ToolExecution{_,_,args,+result,_,images,_,_,_,theme,_,_}:
+      EditRenderer.renderWithPreview(args,textOutput(result,images,imageConfig(context)),resultDetails(result),preview,errorOutput(result),theme,width)
 def builtinWithPreview(+state: ToolExecution,width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,preview: Maybe<&2,Edits.Preview()>,context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match state:
-    case ToolExecution{"edit",_,args,+result,_,images,partial,_,_,theme,_,_}:
-      EditRenderer.renderWithPreview(args,textOutput(result,images,imageConfig(context)),resultDetails(result),preview,errorOutput(result),theme,width)
+    case ToolExecution{"edit",_,_,_,_,_,_,_,_,_,_,_}: editBuiltinAs(state,width,preview,context)
     case _: boxedBuiltin(state,width,elapsed,write,context)
 def builtinWithDuration(state: ToolExecution,width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>) -> IO(List<&2,String>):
   builtinWithPreview(state,width,elapsed,write,None{},None{})
@@ -489,6 +492,7 @@ def renderContent(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write
   match state:
     case ToolExecution{+name,_,_,_,_,_,_,_,_,_,Generic{},_}:
       Bool.pick(Unit -> IO(List<&2,String>),hasBuiltin(name),_ => builtinWithPreview(state,width,elapsed,write,preview,context),_ => generic(state,width,imageConfig(context)))(Unit{})
+    case ToolExecution{_,_,_,_,_,_,_,_,_,_,NativeBuiltin{"edit"},_}: editBuiltinAs(state,width,preview,context)
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,NativeBuiltin{name},_}: boxedBuiltinAs(name,state,width,elapsed,write,context)
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,Boxed{+call,+result},_}: boxed(state,call,result,width,context,mount)
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,SelfRendered{+call,+result},_}: selfRendered(state,call,result,width,context,mount)

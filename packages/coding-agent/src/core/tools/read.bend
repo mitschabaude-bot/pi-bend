@@ -115,6 +115,8 @@ type ProcessedImage is Data:
 type ReadToolOptions is Data:
   ReadToolOptions{autoResizeImages: Maybe<&2,Bool>, resizeOptions: Maybe<&2,Resize.ImageResizeOptions>, operations: Maybe<&2,ReadOperations>, imageProcessor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>}
 
+def description() -> String: "Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete."
+
 type ReadContext is Data:
   ReadContext{cwd: Maybe<&2,String>, supportsImages: Maybe<&2,Bool>, resizeOptions: Maybe<&2,Resize.ImageResizeOptions>}
 
@@ -348,7 +350,7 @@ def readSchema() -> Value.Value:
 def created(environment: Registered, owned: Maybe<&2,ReadOperations>) -> IO(ToolOwner):
   do IO<ToolOwner>:
     callback : Callback.Callback<Agent.ToolExecutionInput<ReadToolDetails>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<ReadToolDetails>,~ToolResult(),~invoke,environment)
-    return ToolOwner{Agent.AgentTool{"read","Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.",readSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"read",None{},callback,None{},None{}},owned}
+    return ToolOwner{Agent.AgentTool{"read",description(),readSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"read",None{},callback,None{},None{}},owned}
 
 def createReadTool(paths: Paths.Environment, cwd: String, options: ReadToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):
   match options:

@@ -2133,10 +2133,10 @@ def withGuidelines(+record: Rec.Record<List<&2, String>>, +name: String, +guidel
 def toolPromptsFrom(registered: List<&2, ExtensionTypes.RegisteredTool>, +snippets: Rec.Record<String>, +guidelines: Rec.Record<List<&2, String>>) -> Runtime.ToolPrompts:
   match registered:
     case Nil{}: Runtime.ToolPrompts{snippets, guidelines}
-    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{+name, _, _, snippet, rules, _, _, _, _, _, _, _}, _} <> rest:
+    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{+name, _, _, snippet, rules, _, _, _, _, _, _, _, _}, _} <> rest:
       toolPromptsFrom(rest, withSnippet(snippets, name, snippet), withGuidelines(guidelines, name, trimmedGuidelines(rules, Nil{})))
 def sdkToolName(definition: ExtensionTypes.ToolDefinition) -> String:
-  match definition: case ExtensionTypes.ToolDefinition{name,_,_,_,_,_,_,_,_,_,_,_}: name
+  match definition: case ExtensionTypes.ToolDefinition{name,_,_,_,_,_,_,_,_,_,_,_,_}: name
 def sdkNames(definitions: List<&2, ExtensionTypes.ToolDefinition>) -> List<&2, String>:
   match definitions:
     case Nil{}: Nil{}
@@ -2147,7 +2147,7 @@ def sdkRegistered(definitions: List<&2, ExtensionTypes.ToolDefinition>) -> List<
     case +definition <> rest: ExtensionTypes.RegisteredTool{definition,ExtensionLoader.createSourceInfo("<sdk:" ++ sdkToolName(definition) ++ ">")} <> sdkRegistered(rest)
 def registeredName(tool: ExtensionTypes.RegisteredTool) -> String:
   match tool:
-    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _, _}, _}: name
+    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _, _, _}, _}: name
 def withoutSdk(registered: List<&2, ExtensionTypes.RegisteredTool>, +names: List<&2, String>) -> List<&2, ExtensionTypes.RegisteredTool>:
   match registered:
     case Nil{}: Nil{}
@@ -4648,7 +4648,7 @@ def registeredInfo(tools: List<&2, ExtensionTypes.RegisteredTool>, +name: String
     case +tool <> +rest: Bool.pick(Unit -> Maybe<&2, ExtensionTypes.RegisteredTool>,String.eq(registeredName(tool),name),_ => registeredInfo(rest,name,Some{tool}),_ => registeredInfo(rest,name,found))(Unit{})
 def toolInfoWith(+name: String,description: String,parameters: V.Value,registered: Maybe<&2, ExtensionTypes.RegisteredTool>) -> ToolInfo():
   match registered:
-    case Some{ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{_,_,_,_,guidelines,_,_,_,_,_,_,_},source}}: ExtensionTypes.ToolInfo{name,description,parameters,guidelines,source}
+    case Some{ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{_,_,_,_,guidelines,_,_,_,_,_,_,_,_},source}}: ExtensionTypes.ToolInfo{name,description,parameters,guidelines,source}
     case None{}: ExtensionTypes.ToolInfo{name,description,parameters,Nil{},ExtensionLoader.createSourceInfo("<builtin:" ++ name ++ ">")}
 def toolInfo(tool: Tools.Tool(),registered: List<&2, ExtensionTypes.RegisteredTool>) -> ToolInfo():
   match tool:
@@ -4733,11 +4733,11 @@ def executeExtensionTool(env: ExtensionToolEnv, input: Tools.Input()) -> IO(Tool
 def wrappedTools(+runner: ExtensionRunner.ExtensionRunner, registered: List<&2, ExtensionTypes.RegisteredTool>) -> IO(List<&2, Tools.Tool()>):
   match registered:
     case Nil{}: IO.pure(List<&2, Tools.Tool()>, Nil{})
-    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, label, description, _, _, parameters, sampling, mode, execute, _, _, _}, _} <> rest:
+    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, label, description, _, _, parameters, sampling, mode, execute, _, _, _, prepare}, _} <> rest:
       do IO<List<&2, Tools.Tool()>>:
         executor : Tools.Execute() <- C.create(~ExtensionToolEnv, ~Tools.Input(), ~Tools.Output(), ~executeExtensionTool, ExtensionToolEnv{runner, execute})
         others : List<&2, Tools.Tool()> <- wrappedTools(runner, rest)
-        return T.AgentTool{name, description, parameters, sampling, label, None{}, executor, None{}, mode} <> others
+        return T.AgentTool{name, description, parameters, sampling, label, prepare, executor, None{}, mode} <> others
 
 def executorsIn(tools: List<&2, Tools.Tool()>) -> List<&2, Tools.Execute()>:
   match tools:

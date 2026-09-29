@@ -11,6 +11,9 @@ import ./types.bend as T
 import ./context.bend as Ctx
 import ./tool-context.bend as ToolContext
 import ../tools/bash.bend as Bash
+import ../tools/read.bend as Read
+import ../tools/write.bend as Write
+import ../tools/edit.bend as Edit
 import ../tools/grep.bend as Grep
 import ../tools/find.bend as Find
 import ../tools/ls.bend as Ls
@@ -22,6 +25,7 @@ import ../../../../runtime/src/schema-value.bend as V
 import ../../utils/paths.bend as Paths
 import ../../utils/tools-manager.bend as Manager
 import ../../../../runtime/src/collation.bend as Collation
+import ../tools/file-mutation-queue.bend as Queue
 
 # The part of upstream core/extensions/loader.ts that remains without a
 # module loader: the shared extension runtime (createExtensionRuntime), the
@@ -76,19 +80,33 @@ def createBashToolDefinition(+cwd: String, +options: Bash.BashToolOptions) -> IO
   +guidelines = Bool.pick(List<&2,String>,Tools.exposesSessionEnvironment(Some{options}),Tools.promptGuidelines(Tools.BashTool{}),Nil{})
   do IO<T.ToolDefinition>:
     execute : T.ToolExecute() <- C.create(~BashDefinition,~T.ToolCallInput,~Tools.Output(),~runBashDefinition,BashDefinition{cwd,options})
-    return T.ToolDefinition{"bash","bash",Bash.description(),Some{Tools.promptSnippet(Tools.BashTool{})},guidelines,Bash.bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},None{},execute,T.NativeBuiltin{"bash"},None{},None{}}
+    return T.ToolDefinition{"bash","bash",Bash.description(),Some{Tools.promptSnippet(Tools.BashTool{})},guidelines,Bash.bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},None{},execute,T.NativeBuiltin{"bash"},None{},None{},None{}}
 
-# Built-in search definitions share the tool's execution path, but each call
-# receives the extension's live context. The caller owns the rg/fd manager and
-# the preloaded ls collator; constructing a definition never shells out or
-# reloads collation data for every request.
-type SearchDefinition is Data:
+# Built-in definitions share the tool's execution path, but each call receives
+# the extension's live context. The caller owns the shared mutation queue,
+# rg/fd manager and preloaded ls collator.
+type BuiltinDefinition is Data:
+  ReadDefinition{paths: Paths.Environment, cwd: String, options: Read.ReadToolOptions}
+  WriteDefinition{paths: Paths.Environment, queue: Queue.Queue, cwd: String, options: Write.WriteToolOptions}
+  EditDefinition{paths: Paths.Environment, queue: Queue.Queue, cwd: String, options: Edit.EditToolOptions}
   GrepDefinition{paths: Paths.Environment, tools: Manager.ToolsManager, cwd: String, options: Grep.GrepToolOptions}
   FindDefinition{paths: Paths.Environment, tools: Manager.ToolsManager, cwd: String, options: Find.FindToolOptions}
   LsDefinition{collator: Collation.Collator, paths: Paths.Environment, cwd: String, options: Ls.LsToolOptions}
 
-def searchTool(definition: SearchDefinition, source: ToolContext.ContextSource()) -> IO(Tools.ToolOwner):
+def builtinTool(definition: BuiltinDefinition, source: ToolContext.ContextSource()) -> IO(Tools.ToolOwner):
   match definition:
+    case ReadDefinition{paths,cwd,options}:
+      do IO<Tools.ToolOwner>:
+        owner : Read.ToolOwner <- Read.createReadTool(paths,cwd,options,source)
+        Tools.bridgedRead(Read.borrowTool(owner))
+    case WriteDefinition{paths,queue,cwd,options}:
+      do IO<Tools.ToolOwner>:
+        owner : Write.ToolOwner <- Write.createWriteTool(paths,queue,cwd,options,source)
+        Tools.bridgedWrite(Write.borrowTool(owner))
+    case EditDefinition{paths,queue,cwd,options}:
+      do IO<Tools.ToolOwner>:
+        owner : Edit.ToolOwner <- Edit.createEditTool(paths,queue,cwd,options,source)
+        Tools.bridgedEdit(Edit.borrowTool(owner))
     case GrepDefinition{paths,tools,cwd,options}:
       do IO<Tools.ToolOwner>:
         owner : Grep.ToolOwner <- Grep.createGrepTool(paths,tools,cwd,options,source)
@@ -102,28 +120,43 @@ def searchTool(definition: SearchDefinition, source: ToolContext.ContextSource()
         owner : Ls.ToolOwner <- Ls.createLsTool(collator,paths,cwd,options,source)
         Tools.bridgedLs(Ls.borrowTool(owner))
 
-def runSearchDefinition(definition: SearchDefinition, call: T.ToolCallInput) -> IO(Tools.Output()):
+def runBuiltinDefinition(definition: BuiltinDefinition, call: T.ToolCallInput) -> IO(Tools.Output()):
   match call:
     case T.ToolCallInput{input,context}:
       do IO<Tools.Output()>:
         +reader : C.Callback<Unit,Maybe<&2,ToolContext.ContextView>> <- Ctx.createToolContext(context)
-        owner : Tools.ToolOwner <- searchTool(definition,Some{reader})
+        owner : Tools.ToolOwner <- builtinTool(definition,Some{reader})
         result : Tools.Output() <- runToolDefinitionOwned(Tools.borrowTool(owner),input)
         C.dispose(Unit,Maybe<&2,ToolContext.ContextView>,reader)
         return result
 
-def searchDefinition(+kind: Tools.ToolName, description: String, parameters: V.Value, definition: SearchDefinition) -> IO(T.ToolDefinition):
+def builtinDefinition(+kind: Tools.ToolName, description: String, parameters: V.Value, strict: Bool, prepare: Maybe<&2,Tools.Prepare()>, definition: BuiltinDefinition) -> IO(T.ToolDefinition):
   +name = Tools.toolName(kind)
+  +sampling = Bool.pick(Maybe<&2,Ai.ToolConstrainedSampling>,strict,Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},None{})
   do IO<T.ToolDefinition>:
-    execute : T.ToolExecute() <- C.create(~SearchDefinition,~T.ToolCallInput,~Tools.Output(),~runSearchDefinition,definition)
-    return T.ToolDefinition{name,name,description,Some{Tools.promptSnippet(kind)},Tools.promptGuidelines(kind),parameters,None{},None{},execute,T.NativeBuiltin{name},None{},None{}}
+    execute : T.ToolExecute() <- C.create(~BuiltinDefinition,~T.ToolCallInput,~Tools.Output(),~runBuiltinDefinition,definition)
+    return T.ToolDefinition{name,name,description,Some{Tools.promptSnippet(kind)},Tools.promptGuidelines(kind),parameters,sampling,None{},execute,T.NativeBuiltin{name},None{},None{},prepare}
+
+def prepareEditDefinition(_: Unit, arguments: V.Value) -> IO(Result<&2,&2,Tools.ToolError,V.Value>):
+  do IO<Result<&2,&2,Tools.ToolError,V.Value>>:
+    result : Edit.ResultOf(V.Value) <- Edit.prepareArguments(Unit{},arguments)
+    return Tools.prepared(result)
+
+def createReadToolDefinition(paths: Paths.Environment,cwd: String,options: Read.ReadToolOptions) -> IO(T.ToolDefinition):
+  builtinDefinition(Tools.ReadTool{},Read.description(),Read.readSchema(),True{},None{},ReadDefinition{paths,cwd,options})
+def createWriteToolDefinition(paths: Paths.Environment,queue: Queue.Queue,cwd: String,options: Write.WriteToolOptions) -> IO(T.ToolDefinition):
+  builtinDefinition(Tools.WriteTool{},Write.description(),Write.writeSchema(),True{},None{},WriteDefinition{paths,queue,cwd,options})
+def createEditToolDefinition(paths: Paths.Environment,queue: Queue.Queue,cwd: String,options: Edit.EditToolOptions) -> IO(T.ToolDefinition):
+  do IO<T.ToolDefinition>:
+    prepare : Tools.Prepare() <- C.create(~Unit,~V.Value,~Result<&2,&2,Tools.ToolError,V.Value>,~prepareEditDefinition,Unit{})
+    builtinDefinition(Tools.EditTool{},Edit.description(),Edit.editSchema(),True{},Some{prepare},EditDefinition{paths,queue,cwd,options})
 
 def createGrepToolDefinition(paths: Paths.Environment,tools: Manager.ToolsManager,cwd: String,options: Grep.GrepToolOptions) -> IO(T.ToolDefinition):
-  searchDefinition(Tools.GrepTool{},Grep.description(),Grep.grepSchema(),GrepDefinition{paths,tools,cwd,options})
+  builtinDefinition(Tools.GrepTool{},Grep.description(),Grep.grepSchema(),False{},None{},GrepDefinition{paths,tools,cwd,options})
 def createFindToolDefinition(paths: Paths.Environment,tools: Manager.ToolsManager,cwd: String,options: Find.FindToolOptions) -> IO(T.ToolDefinition):
-  searchDefinition(Tools.FindTool{},Find.description(),Find.findSchema(),FindDefinition{paths,tools,cwd,options})
+  builtinDefinition(Tools.FindTool{},Find.description(),Find.findSchema(),False{},None{},FindDefinition{paths,tools,cwd,options})
 def createLsToolDefinition(collator: Collation.Collator,paths: Paths.Environment,cwd: String,options: Ls.LsToolOptions) -> IO(T.ToolDefinition):
-  searchDefinition(Tools.LsTool{},Ls.description(),Ls.lsSchema(),LsDefinition{collator,paths,cwd,options})
+  builtinDefinition(Tools.LsTool{},Ls.description(),Ls.lsSchema(),False{},None{},LsDefinition{collator,paths,cwd,options})
 
 # Extension state
 # ---------------
@@ -237,7 +270,7 @@ def registerCommand(api: T.ExtensionAPI, name: String, options: T.CommandOptions
 
 def toolNameOf(definition: T.ToolDefinition) -> String:
   match definition:
-    case T.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _, _}: name
+    case T.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _, _, _}: name
 
 def definedTool(tools: List<&2, T.ToolDefinition>, +definition: T.ToolDefinition) -> List<&2, T.ToolDefinition>:
   match tools:
