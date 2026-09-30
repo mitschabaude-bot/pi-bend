@@ -1305,6 +1305,14 @@ def submitValue(+value: Editor) -> IO(Editor):
         +value : Editor <- notifyChange(value)
         changedCallback(submit,Text.trim(expandedEditingText(editing)))
         return value
+# App actions submit through onSubmit after setText, preserving programmatic undo.
+def submitProgrammatically(+value: Editor) -> IO(Editor):
+  match value:
+    case Editor{editing,_,_,EditorSettings{_,_,EditorCallbacks{_,submit,_},_,_},_,_,_}:
+      do IO<Editor>:
+        next : Editor <- setText(value,"")
+        changedCallback(submit,Text.trim(expandedEditingText(editing)))
+        return next
 def keyMatchParsed(keyboard: Keys.Context,data: String,key: Maybe<&2,Keys.KeyId>) -> Bool:
   match key:
     case None{}: False{}

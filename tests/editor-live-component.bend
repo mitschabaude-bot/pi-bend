@@ -15,7 +15,7 @@ def submitted(output: Ref.Ref<List<&2,String>>,value: String) -> IO(Unit):
   Ref.modify(List<&2,String>,Unit,output,values => (value <> values,Unit{}))
 def check(value: Bool,message: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),value,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,message))(Unit{})
-def run(owner: Live.Owner,+component: Component.Component,+handle: Live.Handle,rows: Ref.Ref<Nat>,output: Ref.Ref<List<&2,String>>,+bindings: Ref.Ref<Keybindings.KeybindingsManager>) -> IO(Unit):
+def run(owner: Live.Owner,+component: Component.Component,+handle: Live.Handle,rows: Ref.Ref<Nat>,+output: Ref.Ref<List<&2,String>>,+bindings: Ref.Ref<Keybindings.KeybindingsManager>) -> IO(Unit):
   do IO<Unit>:
     Component.setFocused(component,True{})
     initial : List<&2,String> <- Component.render(component,40n)
@@ -48,6 +48,11 @@ def run(owner: Live.Owner,+component: Component.Component,+handle: Live.Handle,r
     Component.handleInput(component,"\u{1b}[A")
     recalled : String <- Live.text(handle)
     check(String.eq(recalled,"previous prompt"),"explicit live history was not retained or generic submit recorded text itself")
+    Live.submit(handle)
+    submittedHistory : List<&2,String> <- Ref.read(List<&2,String>,output)
+    check(String.eq(Maybe.default(&2,String,List.get(&2,String,submittedHistory,0n),""),"previous prompt"),"live submission bypassed the editor callback")
+    empty : String <- Live.text(handle)
+    check(String.is_empty(empty),"live submission did not clear the editor")
     error : Maybe<&2,Editor.Error> <- Live.lastError(handle)
     check(Maybe.is_none(&2,Editor.Error,error),"editor input returned an error")
     Live.dispose(owner)

@@ -603,17 +603,34 @@ def seedContextEntries(entries: List<&2,Session.Entry()>,+transcript: Transcript
       do IO<Unit>:
         structuralEntry(transcript,showCost,entry)
         seedContextEntries(rest,transcript,showCost)
-def seedStoredEntries(+transcript: Transcript.Handle,messages: List<&2,Session.Message()>,result: Result<&2,&2,Tree.Error,List<&2,Session.Entry()>>) -> IO(Unit):
+def historyMessage(editor: Editor.Editor,text: Maybe<&2,String>) -> Editor.Editor:
+  match text:
+    case None{}: editor
+    case Some{text}: Editor.addToHistory(editor,text)
+def historyEntries(entries: List<&2,Session.Entry()>,editor: Editor.Editor) -> Editor.Editor:
+  match entries:
+    case Nil{}: editor
+    case Tree.SessionMessageEntry{_,message} <> rest: historyEntries(rest,historyMessage(editor,Session.userText(message)))
+    case _ <> rest: historyEntries(rest,editor)
+def seedEditorHistory(editor: Maybe<&2,Live.Handle>,entries: List<&2,Session.Entry()>) -> IO(Unit):
+  match editor:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{handle}: Live.modify(handle,value => historyEntries(entries,value))
+def seedStoredEntries(+transcript: Transcript.Handle,messages: List<&2,Session.Message()>,showCost: Bool,editor: Maybe<&2,Live.Handle>,result: Result<&2,&2,Tree.Error,List<&2,Session.Entry()>>) -> IO(Unit):
   match result:
-    case Done{entries}: seedContextEntries(entries,transcript,True{})
+    case Done{+entries}:
+      do IO<Unit>:
+        Bool.pick(Unit -> IO(Unit),showCost,_ => seedContextEntries(entries,transcript,True{}),_ => Transcript.seedSession(transcript,messages))(Unit{})
+        seedEditorHistory(editor,entries)
     case Fail{_}: Transcript.seedSession(transcript,messages)
-def seedStoredTranscript(+transcript: Transcript.Handle,+session: Session.AgentSession,+messages: List<&2,Session.Message()>) -> IO(Unit):
+def seedStoredTranscript(+transcript: Transcript.Handle,+session: Session.AgentSession,+messages: List<&2,Session.Message()>,+editor: Maybe<&2,Live.Handle>) -> IO(Unit):
   do IO<Unit>:
     settings : Settings.SettingsManager <- Session.getSettings(session)
-    Bool.pick(Unit -> IO(Unit),Settings.getShowCacheMissNotices(settings),
+    +showCost : Bool = Settings.getShowCacheMissNotices(settings)
+    Bool.pick(Unit -> IO(Unit),showCost || Maybe.is_some(&2,Live.Handle,editor),
       _ => do IO<Unit>:
         current : Session.Session() <- Session.sessionOf(session)
-        seedStoredEntries(transcript,messages,Tree.sessionContextEntries(Schema.Value,Tools.ToolDetails,Schema.Value,Persistence.stateOf(Schema.Value,Tools.ToolDetails,Schema.Value,current))),
+        seedStoredEntries(transcript,messages,showCost,editor,Tree.sessionContextEntries(Schema.Value,Tools.ToolDetails,Schema.Value,Persistence.stateOf(Schema.Value,Tools.ToolDetails,Schema.Value,current))),
       _ => Transcript.seedSession(transcript,messages))(Unit{})
 def compactedTranscript(result: Result<&2,&2,Tree.Error,List<&2,Session.Entry()>>,+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+showCost: Bool) -> IO(Unit):
   match result:
@@ -1435,7 +1452,7 @@ def reloadResult(+transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,
       do IO<Unit>:
         messages : List<&2,Session.Message()> <- Session.messages(session)
         Transcript.clear(transcript)
-        seedStoredTranscript(transcript,session,messages)
+        seedStoredTranscript(transcript,session,messages,None{})
         reloadListed(header,session)
         saved : Bool <- maybeSaveImplicitTrust(trust,cwd,session,transcript)
         Transcript.status(transcript,"Reloaded keybindings, extensions, skills, prompts, themes, and context files" ++ Bool.pick(String,saved,"; saved project trust",""))
@@ -2372,12 +2389,13 @@ def updateSelectionEditor(editor: Ref.Ref<Maybe<&2,Live.Handle>>,text: Maybe<&2,
         setSelectedDraft(target,value)
 def refreshSelection(sink: SelectionSink,result: Controller.SelectionResult) -> IO(Unit):
   match sink:
-    case SelectionSink{+session,+transcript,editor,footerRef,failure,redraw,cwd,home,_,_}:
+    case SelectionSink{+session,+transcript,+editor,footerRef,failure,redraw,cwd,home,_,_}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         +messages : List<&2,Session.Message()> <- Session.messages(live)
         Transcript.clear(transcript)
-        seedStoredTranscript(transcript,live,messages)
+        target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
+        seedStoredTranscript(transcript,live,messages,target)
         agentState : Session.AgentState() <- Session.state(live)
         settings : Settings.SettingsManager <- Session.getSettings(live)
         initialFooterState : Footer.State <- initialSessionFooter(live,agentState,messages,cwd,home,Settings.getCompactionEnabled(settings))
@@ -2876,11 +2894,22 @@ def clearKey(input: KeyInput,editor: Live.Handle) -> IO(Unit):
   do IO<Unit>:
     emptied(editor)
     cleared(input)
-def followUpKey(input: KeyInput,+editor: Live.Handle) -> IO(Unit):
+def followUpQueued(input: KeyInput,+editor: Live.Handle,+text: String) -> IO(Unit):
   do IO<Unit>:
-    text : String <- Live.expandedText(editor)
+    Live.addToHistory(editor,text)
     emptied(editor)
-    queuedFollowUp(input,Text.trim(text))
+    queuedFollowUp(input,text)
+def followUpKey(+input: KeyInput,+editor: Live.Handle) -> IO(Unit):
+  match input:
+    case KeyInput{_,_,_,_,_,_,session,_,_,_,_,_}:
+      do IO<Unit>:
+        +text : String <- Live.expandedText(editor)
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        streaming : Bool <- Session.isStreaming(live)
+        compacting : Bool <- Session.isCompacting(live)
+        Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(text)),_ => IO.pure(Unit,Unit{}),
+          _ => Bool.pick(Unit -> IO(Unit),streaming || compacting,
+            _ => followUpQueued(input,editor,Text.trim(text)),_ => Live.submit(editor))(Unit{}))(Unit{})
 def dequeueKey(input: KeyInput,editor: Live.Handle) -> IO(Unit):
   do IO<Unit>:
     text : String <- Live.text(editor)
@@ -3027,10 +3056,10 @@ def controlResult(sink: ControlSink,result: Controller.ControlResult) -> IO(Unit
         message : String <- IO.pure(String,Bool.pick(String,Nat.is_eq(total,0n),"No queued messages to restore","Restored " ++ Nat.show(total) ++ Bool.pick(String,Nat.is_eq(total,1n)," queued message"," queued messages") ++ " to editor"))
         Bool.pick(Unit -> IO(Unit),announce,_ => Interactive.report(failure,Interactive.CommandNotice{message}),_ => Interactive.requestRender(redraw))(Unit{})
 type RebindSink is Data:
-  RebindSink{listener: Session.Listener(),transcript: Transcript.Handle,footerRef: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>,working: Working}
+  RebindSink{listener: Session.Listener(),editor: Ref.Ref<Maybe<&2,Live.Handle>>,transcript: Transcript.Handle,footerRef: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>,working: Working}
 def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
   match sink:
-    case RebindSink{listener,+transcript,footerRef,failure,redraw,cwd,home,+working}:
+    case RebindSink{listener,editor,+transcript,footerRef,failure,redraw,cwd,home,+working}:
       do IO<Unit>:
         Session.subscribe(session,listener)
         Ref.write(WorkingPreferences,workingPreferences(working),WorkingPreferences{None{},True{},None{}})
@@ -3044,7 +3073,8 @@ def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
         Transcript.setToolCwd(transcript,Tree.getCwd(Schema.Value,Tools.ToolDetails,Schema.Value,Session.stateOf(stored)))
         +settings : Settings.SettingsManager <- Session.getSettings(session)
         Transcript.setHideThinking(transcript,Settings.getHideThinkingBlock(settings))
-        seedStoredTranscript(transcript,session,messages)
+        target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
+        seedStoredTranscript(transcript,session,messages,target)
         state : Session.AgentState() <- Session.state(session)
         initialFooterState : Footer.State <- initialSessionFooter(session,state,messages,cwd,home,Settings.getCompactionEnabled(settings))
         Ref.write(Footer.State,footerRef,initialFooterState)
@@ -3055,7 +3085,7 @@ def bindRebound(binding: Binding,listener: Session.Listener(),transcript: Transc
   match binding:
     case Binding{_,_,hook,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
-        callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~RebindSink,~Session.AgentSession,~Unit,~rebound,RebindSink{listener,transcript,footer,failure,redraw,cwd,home,working})
+        callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~RebindSink,~Session.AgentSession,~Unit,~rebound,RebindSink{listener,editor,transcript,footer,failure,redraw,cwd,home,working})
         Ref.write(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook,Some{callback})
 def bindOptional(mode: Maybe<&2,Binding>,listener: Session.Listener(),transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>,working: Working) -> IO(Unit):
   match mode:
@@ -3292,7 +3322,8 @@ def initializeApplication(failure: Interactive.StatusSink,first: Bool,managed: M
         renderers : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(live)
         Transcript.setExtensions(transcript,renderers)
         existing : List<&2,Session.Message()> <- Session.messages(live)
-        seedStoredTranscript(transcript,live,existing)
+        target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editorRefOf(interaction))
+        seedStoredTranscript(transcript,live,existing,target)
         startAutocomplete(interaction,session,files)
         Interactive.maybeWarnAboutAnthropicSubscriptionAuth(failure,live)
         startupProjectTrustWarning(transcript,session)

@@ -156,13 +156,25 @@ def setTextState(state: State,value: String) -> IO(State & Unit):
 def setText(handle: Handle,value: String) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => setTextState(state,value))
-def historyAdded(state: State,text: String) -> IO(State & Unit):
+def submittedState(state: State) -> IO(State & Unit):
   match state:
     case State{editor,words,bindings,keyboard,rows,error}:
-      IO.pure(State & Unit,(State{Editor.addToHistory(editor,text),words,bindings,keyboard,rows,error},Unit{}))
-def addToHistory(handle: Handle,text: String) -> IO(Unit):
+      do IO<State & Unit>:
+        next : Editor.Editor <- Editor.submitProgrammatically(editor)
+        return (State{next,words,bindings,keyboard,rows,error},Unit{})
+def submit(handle: Handle) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => historyAdded(state,text))
+    case Handle{resource}: Serial.run(State,Unit,resource,submittedState)
+def modifiedState(state: State,change: Editor.Editor -> Editor.Editor) -> IO(State & Unit):
+  match state:
+    case State{editor,words,bindings,keyboard,rows,error}:
+      IO.pure(State & Unit,(State{change(editor),words,bindings,keyboard,rows,error},Unit{}))
+# The functional counterpart of query: update the live value under its owner.
+def modify(handle: Handle,change: Editor.Editor -> Editor.Editor) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => modifiedState(state,change))
+def addToHistory(handle: Handle,text: String) -> IO(Unit):
+  modify(handle,editor => Editor.addToHistory(editor,text))
 
 def insertState(state: State,value: String) -> IO(State & Unit):
   match state:
