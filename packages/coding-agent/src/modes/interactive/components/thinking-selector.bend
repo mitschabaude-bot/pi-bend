@@ -192,7 +192,7 @@ def handleMouse(+state: State,+event: Tui.TuiMouseEvent) -> State & Action & May
 type Modal is Data: Closed{} Open{state: State}
 type Choice is Data: Choice{level: Ai.ModelThinkingLevel,persist: Bool}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Segmenter.Source>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,chosen: Callback.Callback<Choice,Unit>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Segmenter.Source>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,chosen: Callback.Callback<Choice,Unit>}
 type Owner is Type:
   Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,mouseCallback: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidateCallback: Callback.Callback<Unit,Unit>,focusCallback: Callback.Callback<Bool,Unit>}
 def displayedPair(modal: Ref.Ref<Modal>,pair: State & List<&2,String>) -> IO(List<&2,String>):
@@ -201,13 +201,14 @@ def displayedPair(modal: Ref.Ref<Modal>,pair: State & List<&2,String>) -> IO(Lis
       do IO<List<&2,String>>:
         Ref.write(Modal,modal,Open{next})
         return lines
-def displayed(modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,width: Nat,current: Modal) -> IO(List<&2,String>):
+def displayed(modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,width: Nat,current: Modal) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
     case Open{state}:
       do IO<List<&2,String>>:
         chosenTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        pair : State & List<&2,String> <- rendered(state,chosenTheme,bindings,width)
+        liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        pair : State & List<&2,String> <- rendered(state,chosenTheme,liveBindings,width)
         displayedPair(modal,pair)
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
@@ -223,13 +224,14 @@ def accepted(modal: Ref.Ref<Modal>,onSelect: Callback.Callback<Choice,Unit>,pair
       do IO<Unit>:
         Ref.write(Modal,modal,Closed{})
         Callback.call(Choice,Unit,onSelect,Choice{level,persist})
-def receiveCurrent(modal: Ref.Ref<Modal>,editor: Component.Component,words: Ref.Ref<Segmenter.Source>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,onSelect: Callback.Callback<Choice,Unit>,data: String,current: Modal) -> IO(Unit):
+def receiveCurrent(modal: Ref.Ref<Modal>,editor: Component.Component,words: Ref.Ref<Segmenter.Source>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,onSelect: Callback.Callback<Choice,Unit>,data: String,current: Modal) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
     case Open{state}:
       do IO<Unit>:
         source : Segmenter.Source <- Ref.read(Segmenter.Source,words)
-        pair : State & Action <- input(state,source,bindings,keyboard,data)
+        liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        pair : State & Action <- input(state,source,liveBindings,keyboard,data)
         accepted(modal,onSelect,pair)
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
@@ -261,7 +263,7 @@ def invalidate(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_}: Component.invalidate(editor)
 def focus(host: Host,value: Bool) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_}: Component.setFocused(editor,value)
-def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Segmenter.Source,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,onSelect: Callback.Callback<Choice,Unit>) -> IO(Owner):
+def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Segmenter.Source,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,onSelect: Callback.Callback<Choice,Unit>) -> IO(Owner):
   do IO<Owner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     source : Ref.Ref<Segmenter.Source> <- Ref.new(Segmenter.Source,words)

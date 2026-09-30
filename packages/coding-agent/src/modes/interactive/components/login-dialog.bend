@@ -38,7 +38,7 @@ type State is Data: Closed{} Choosing{menu: Menu,title: String,all: List<&2,Choi
 type InputSubmission is Data:
   InputSubmission{state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Pending>>}
 type Host is Data:
-  Host{state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Pending>>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>,words: Ref.Ref<Words.Source>,submit: Callback.Callback<String,Unit>}
+  Host{state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Pending>>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>,words: Ref.Ref<Words.Source>,submit: Callback.Callback<String,Unit>}
 type Owner is Type:
   Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,mouseCallback: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidateCallback: Callback.Callback<Unit,Unit>,focusCallback: Callback.Callback<Bool,Unit>}
 
@@ -232,13 +232,20 @@ def drawStored(+current: State,state: Ref.Ref<State>,editor: Component.Component
         pair : State & List<&2,String> <- renderProvider(current,theme,width)
         providerStored(state,pair)
     case current: drawCurrent(current,editor,theme,width,bindings)
+def drawLive(current: State,state: Ref.Ref<State>,editor: Component.Component,theme: Theme.Theme,width: Nat,bindings: Ref.Ref<Bindings.KeybindingsManager>) -> IO(List<&2,String>):
+  match current:
+    case Closed{}: Component.render(editor,width)
+    case active:
+      do IO<List<&2,String>>:
+        snapshot : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        drawStored(active,state,editor,theme,width,snapshot)
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{+state,_,editor,theme,bindings,_,_,_,_}:
       do IO<List<&2,String>>:
         current : State <- Ref.read(State,state)
         colors : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        drawStored(current,state,editor,colors,width,bindings)
+        drawLive(current,state,editor,colors,width,bindings)
 def resolveReply(current: Maybe<&2,Pending>,value: Target) -> IO(Unit):
   match current value:
     case None{} _: IO.pure(Unit,Unit{})
@@ -364,12 +371,19 @@ def receiveCurrent(current: State,+state: Ref.Ref<State>,+reply: Ref.Ref<Maybe<&
         Ref.write(State,state,Closed{})
         Component.setFocused(editor,True{})
         Callback.call(Unit,Unit,cancel,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
+def receiveLive(current: State,state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Pending>>,editor: Component.Component,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>,words: Ref.Ref<Words.Source>,data: String) -> IO(Unit):
+  match current:
+    case Closed{}: Component.handleInput(editor,data)
+    case active:
+      do IO<Unit>:
+        snapshot : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        receiveCurrent(active,state,reply,editor,snapshot,keyboard,cancel,words,data)
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
     case Host{+state,reply,editor,_,bindings,keyboard,cancel,words,_}:
       do IO<Unit>:
         current : State <- Ref.read(State,state)
-        receiveCurrent(current,state,reply,editor,bindings,keyboard,cancel,words,data)
+        receiveLive(current,state,reply,editor,bindings,keyboard,cancel,words,data)
 def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match editor:
     case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,callback,event)
@@ -414,7 +428,7 @@ def focus(host: Host,value: Bool) -> IO(Unit):
         +focused : Bool = value
         Component.setFocused(editor,focused)
         Ref.modify(State,Unit,state,current => focusedState(current,focused))
-def create(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Words.Source,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>) -> IO(Owner):
+def create(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Words.Source,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>) -> IO(Owner):
   do IO<Owner>:
     +state : Ref.Ref<State> <- Ref.new(State,Closed{})
     +reply : Ref.Ref<Maybe<&2,Pending>> <- Ref.new(Maybe<&2,Pending>,None{})

@@ -28,7 +28,7 @@ def cancelled(value: Maybe<&1,Dialog.Answer()>) -> Bool:
   match value: case Some{None{}}: True{} case _: False{}
 def check(value: Bool,name: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),value,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,"FAIL " ++ name))(Unit{})
-def hosted(borrowed: Dialog.Owner & Dialog.Host & Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>,redraw: Callback.Callback<Unit,Unit>,editorInput: Callback.Callback<String,Unit>,+signalChannel: Chan(Unit),rows: Ref.Ref<Nat>,themeRef: Ref.Ref<Theme.Theme>,+forwardedKey: Ref.Ref<Bool>) -> IO(Unit):
+def hosted(borrowed: Dialog.Owner & Dialog.Host & Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>,redraw: Callback.Callback<Unit,Unit>,editorInput: Callback.Callback<String,Unit>,+signalChannel: Chan(Unit),rows: Ref.Ref<Nat>,themeRef: Ref.Ref<Theme.Theme>,+bindings: Ref.Ref<Bindings.KeybindingsManager>,+forwardedKey: Ref.Ref<Bool>) -> IO(Unit):
   match borrowed:
     case (owner,host,component):
       do IO<Unit>:
@@ -42,10 +42,12 @@ def hosted(borrowed: Dialog.Owner & Dialog.Host & Component.Component,render: Ca
         Chan.close(Dialog.Answer(),task)
         +first : Dialog.Reply() <- Chan.new(Dialog.Answer(),1)
         Dialog.replace(host,Dialog.Selecting{Selector.create("Pick",["one","two"],None{}),first})
+        previous : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        Ref.write(Bindings.KeybindingsManager,bindings,Bindings.setUserBindings(previous,Record.set(List<&2,Keys.KeyId>,Record.new(List<&2,Keys.KeyId>),"tui.select.down",[Keys.KeyId{Keys.Printable{'n'},Keys.Modifiers{False{},False{},True{},False{}}}])))
         Component.handleInput(component,"\u{000F}")
         passed : Bool <- Ref.read(Bool,forwardedKey)
         check(passed,"tool expansion key reaches mounted editor")
-        Component.handleInput(component,"j")
+        Component.handleInput(component,"\u{0e}")
         Component.handleInput(component,"\n")
         choice : Maybe<&1,Dialog.Answer()> <- Chan.recv(Dialog.Answer(),first)
         check(accepted(choice,"two"),"select")
@@ -84,6 +86,7 @@ def hosted(borrowed: Dialog.Owner & Dialog.Host & Component.Component,render: Ca
         Chan.close(Unit,signalChannel)
         oldRows : Nat <- Ref.dispose(Nat,rows)
         oldTheme : Theme.Theme <- Ref.dispose(Theme.Theme,themeRef)
+        oldBindings : Bindings.KeybindingsManager <- Ref.dispose(Bindings.KeybindingsManager,bindings)
         forwarded : Bool <- Ref.dispose(Bool,forwardedKey)
         return Unit{}
 def run(theme: Theme.Theme) -> IO(Unit):
@@ -96,10 +99,10 @@ def run(theme: Theme.Theme) -> IO(Unit):
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
     +forwardedKey : Ref.Ref<Bool> <- Ref.new(Bool,False{})
     +editorInput : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<Bool>,~String,~Unit,~forwarded,forwardedKey)
-    +bindings : Bindings.KeybindingsManager <- IO.pure(Bindings.KeybindingsManager,Bindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)))
+    +bindings : Ref.Ref<Bindings.KeybindingsManager> <- Ref.new(Bindings.KeybindingsManager,Bindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)))
     owner : Dialog.Owner <- Dialog.create(Component.Component{Component.ComponentId{1n},render,Some{editorInput},None{},invalidate,None{},False{}},themeRef,Words.Pending{"packages/runtime/data"},bindings,Keys.defaults(),rows,redraw)
     borrowed : Dialog.Owner & Dialog.Host & Component.Component <- IO.pure(Dialog.Owner & Dialog.Host & Component.Component,Dialog.borrow(owner))
-    hosted(borrowed,render,invalidate,redraw,editorInput,signalChannel,rows,themeRef,forwardedKey)
+    hosted(borrowed,render,invalidate,redraw,editorInput,signalChannel,rows,themeRef,bindings,forwardedKey)
 def loaded(result: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Unit):
   match result: case Done{theme}: run(theme) case Fail{_}: IO.die(Unit,1,"dark theme missing")
 def main() -> IO(Unit):

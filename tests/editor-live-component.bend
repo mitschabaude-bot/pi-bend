@@ -15,7 +15,7 @@ def submitted(output: Ref.Ref<List<&2,String>>,value: String) -> IO(Unit):
   Ref.modify(List<&2,String>,Unit,output,values => (value <> values,Unit{}))
 def check(value: Bool,message: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),value,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,message))(Unit{})
-def run(owner: Live.Owner,+component: Component.Component,+handle: Live.Handle,rows: Ref.Ref<Nat>,output: Ref.Ref<List<&2,String>>) -> IO(Unit):
+def run(owner: Live.Owner,+component: Component.Component,+handle: Live.Handle,rows: Ref.Ref<Nat>,output: Ref.Ref<List<&2,String>>,+bindings: Ref.Ref<Keybindings.KeybindingsManager>) -> IO(Unit):
   do IO<Unit>:
     Component.setFocused(component,True{})
     initial : List<&2,String> <- Component.render(component,40n)
@@ -30,20 +30,30 @@ def run(owner: Live.Owner,+component: Component.Component,+handle: Live.Handle,r
     Component.handleInput(component,"i")
     current : String <- Live.text(handle)
     check(String.eq(current,"hi"),"editor input was not retained")
+    Live.addToHistory(handle,"previous prompt")
     # Ctrl+Left is a word command: the pending word data loads for it.
     Component.handleInput(component,"\u{1b}[1;5D")
     Component.handleInput(component,"x")
     moved : String <- Live.text(handle)
     check(String.eq(moved,"xhi"),"word navigation did not move to the word start")
+    # Rebinding the live editor preserves its text and cursor.
+    Ref.write(Keybindings.KeybindingsManager,bindings,Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.set(List<&2,Keys.KeyId>,Record.new(List<&2,Keys.KeyId>),"tui.editor.cursorRight",[Keys.KeyId{Keys.Printable{'r'},Keys.Modifiers{False{},False{},True{},False{}}}])))
+    Component.handleInput(component,"\u{12}")
+    Component.handleInput(component,"z")
+    rebound : String <- Live.text(handle)
+    check(String.eq(rebound,"xhzi"),"live binding reload reset cursor/text or ignored the new binding")
     Component.handleInput(component,"\r")
     values : List<&2,String> <- Ref.read(List<&2,String>,output)
-    check(String.eq(Maybe.default(&2,String,List.get(&2,String,values,0n),""),"xhi"),"submit callback was not delivered")
+    check(String.eq(Maybe.default(&2,String,List.get(&2,String,values,0n),""),"xhzi"),"submit callback was not delivered")
+    Component.handleInput(component,"\u{1b}[A")
+    recalled : String <- Live.text(handle)
+    check(String.eq(recalled,"previous prompt"),"explicit live history was not retained or generic submit recorded text itself")
     error : Maybe<&2,Editor.Error> <- Live.lastError(handle)
     check(Maybe.is_none(&2,Editor.Error,error),"editor input returned an error")
     Live.dispose(owner)
-def borrowed(pair: Live.Owner & Component.Component & Live.Handle,rows: Ref.Ref<Nat>,output: Ref.Ref<List<&2,String>>) -> IO(Unit):
+def borrowed(pair: Live.Owner & Component.Component & Live.Handle,rows: Ref.Ref<Nat>,output: Ref.Ref<List<&2,String>>,bindings: Ref.Ref<Keybindings.KeybindingsManager>) -> IO(Unit):
   match pair:
-    case (owner,component,handle): run(owner,component,handle,rows,output)
+    case (owner,component,handle): run(owner,component,handle,rows,output,bindings)
 def main() -> IO(Unit):
   do IO<Unit>:
     +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
@@ -51,10 +61,12 @@ def main() -> IO(Unit):
     +paint : Callback.Callback<String,String> <- Callback.create(~Unit,~String,~String,~identity,Unit{})
     +submit : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<List<&2,String>>,~String,~Unit,~submitted,output)
     editor : Editor.Editor <- Editor.new(Editor.EditorTheme{paint,Select.SelectListTheme{paint,paint,paint,paint,paint}},None{})
-    owner : Live.Owner <- Live.create(Component.ComponentId{1n},Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submit},None{}}),Segmenter.Pending{"packages/runtime/data"},Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
-    borrowed(Live.borrow(owner),rows,output)
+    +bindings : Ref.Ref<Keybindings.KeybindingsManager> <- Ref.new(Keybindings.KeybindingsManager,Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)))
+    owner : Live.Owner <- Live.create(Component.ComponentId{1n},Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submit},None{}}),Segmenter.Pending{"packages/runtime/data"},bindings,Keys.defaults(),rows)
+    borrowed(Live.borrow(owner),rows,output,bindings)
     Callback.dispose(String,String,paint)
     Callback.dispose(String,Unit,submit)
+    oldBindings : Keybindings.KeybindingsManager <- Ref.dispose(Keybindings.KeybindingsManager,bindings)
     oldRows : Nat <- Ref.dispose(Nat,rows)
     oldOutput : List<&2,String> <- Ref.dispose(List<&2,String>,output)
     IO.print("editor component rendered, accepted input, loaded word data for word navigation and submitted")

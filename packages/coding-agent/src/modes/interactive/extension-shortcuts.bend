@@ -16,7 +16,7 @@ import ../../core/skills.bend as Skills
 # actions read the live session through the runner's existing bindings.
 type Shortcut is Data: Shortcut{key: Keys.KeyId,handler: T.ShortcutHandler(),context: Ctx.ExtensionContext}
 type State is Data: State{active: Bool,shortcuts: List<&2,Shortcut>}
-type Host is Data: Host{state: R.Ref<State>,input: C.Callback<String,Bool>,bindings: Bindings.KeybindingsManager,header: Maybe<&2,Header.Handle>}
+type Host is Data: Host{state: R.Ref<State>,input: C.Callback<String,Bool>,bindings: R.Ref<Bindings.KeybindingsManager>,header: Maybe<&2,Header.Handle>}
 type Owner is Type: Owner{host: Host}
 type Input is Data: Input{state: R.Ref<State>,keyboard: Keys.Context,transcript: Transcript.Handle,redraw: R.Ref<Maybe<&2,C.Callback<Unit,Unit>>>}
 type Task is Data: Task{shortcut: Shortcut,state: R.Ref<State>,transcript: Transcript.Handle,redraw: R.Ref<Maybe<&2,C.Callback<Unit,Unit>>>}
@@ -52,7 +52,8 @@ def bind(host: Host,runner: Maybe<&2,Runner.ExtensionRunner>) -> IO(Unit):
         publish(header,Nil{})
     case Host{state,_,bindings,header} Some{+runner}:
       do IO<Unit>:
-        shortcuts : Record.Record<T.ExtensionShortcut> <- Runner.getShortcuts(runner,Bindings.getResolvedBindings(bindings))
+        config : Bindings.KeybindingsManager <- R.read(Bindings.KeybindingsManager,bindings)
+        shortcuts : Record.Record<T.ExtensionShortcut> <- Runner.getShortcuts(runner,Bindings.getResolvedBindings(config))
         R.write(State,state,State{True{},compile(Record.entries(T.ExtensionShortcut,shortcuts),Runner.createContext(runner))})
         diagnostics : List<&2,Diagnostics.ResourceDiagnostic> <- Runner.getShortcutDiagnostics(runner)
         extensions : List<&2,T.Extension> <- Runner.extensions(runner)
@@ -110,7 +111,7 @@ def input(env: Input,data: String) -> IO(Bool):
       do IO<Bool>:
         current : State <- R.read(State,state)
         dispatch(state,transcript,redraw,fromState(current,keyboard,data))
-def create(+bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,transcript: Transcript.Handle,redraw: R.Ref<Maybe<&2,C.Callback<Unit,Unit>>>,header: Maybe<&2,Header.Handle>) -> IO(Owner):
+def create(+bindings: R.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,transcript: Transcript.Handle,redraw: R.Ref<Maybe<&2,C.Callback<Unit,Unit>>>,header: Maybe<&2,Header.Handle>) -> IO(Owner):
   do IO<Owner>:
     +state : R.Ref<State> <- R.new(State,State{True{},Nil{}})
     callback : C.Callback<String,Bool> <- C.create(~Input,~String,~Bool,~input,Input{state,keyboard,transcript,redraw})

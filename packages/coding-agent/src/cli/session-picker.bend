@@ -1002,10 +1002,10 @@ def syncHostLoading(current: Modal,loader: HostLoader) -> IO(Unit):
         requestLoading(value,scope)
     case _ _: IO.pure(Unit,Unit{})
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,ids: Uuid.Generator,session: Ref.Ref<AgentSession.AgentSession>,loader: HostLoader}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Ref.Ref<Bindings.KeybindingsManager>,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,ids: Uuid.Generator,session: Ref.Ref<AgentSession.AgentSession>,loader: HostLoader}
 type HostOwner is Type:
   HostOwner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
-def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,loads: Loads,+width: Nat) -> IO(List<&2,String>):
+def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Ref.Ref<Bindings.KeybindingsManager>,theme: Ref.Ref<Theme.Theme>,loads: Loads,+width: Nat) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
     case Open{state}:
@@ -1013,7 +1013,8 @@ def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindi
         now : F64 <- Date.now()
         home : Result<&2,&2,FS.Error,String> <- FS.homedir()
         currentTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        renderState(state,width,bindings,currentTheme,loads,now,Result.default(&2,&2,FS.Error,String,home,""),True{})
+        liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        renderState(state,width,liveBindings,currentTheme,loads,now,Result.default(&2,&2,FS.Error,String,home,""),True{})
     case Renaming{_,_,input}:
       do IO<List<&2,String>>:
         +selected : Theme.Theme <- Ref.read(Theme.Theme,theme)
@@ -1181,10 +1182,10 @@ def touchModal(current: Modal,loader: HostLoader,bindings: Bindings.KeybindingsM
       +changed = touchesSelection(action(bindings,data))
       Ref.modify(Bool,Unit,touched,old => (old || changed,Unit{}))
     case _ _: IO.pure(Unit,Unit{})
-def receivedModalState(host: Host,current: Modal,+data: String) -> IO(Unit):
+def receivedModalState(host: Host,current: Modal,+bindings: Bindings.KeybindingsManager,+data: String) -> IO(Unit):
   match host current:
     case Host{_,editor,_,_,_,_,_,_,_} Closed{}: Component.handleInput(editor,data)
-    case Host{+modal,editor,+bindings,_,words,handler,ids,_,+loader} current:
+    case Host{+modal,editor,_,_,words,handler,ids,_,+loader} current:
       +savedCurrent = {current: Modal}
       do IO<Unit>:
         touchModal(savedCurrent,loader,bindings,data)
@@ -1211,12 +1212,13 @@ def takeInput(value: List<&2,String>) -> List<&2,String> & List<&2,String>:
 # Replaying happens on the TUI's input/render owner, never on the listing
 # worker: saving or closing the picker may cancel and join that worker.
 def replayInput(+host: Host,+modal: Ref.Ref<Modal>,items: List<&2,String>,current: Modal) -> IO(Unit):
-  match items current:
-    case Nil{} _: IO.pure(Unit,Unit{})
-    case _ Closed{}: IO.pure(Unit,Unit{})
-    case data <> rest opened:
+  match host items current:
+    case _ Nil{} _: IO.pure(Unit,Unit{})
+    case _ _ Closed{}: IO.pure(Unit,Unit{})
+    case Host{_,_,bindings,_,_,_,_,_,_} data <> rest opened:
       do IO<Unit>:
-        receivedModalState(host,opened,data)
+        liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        receivedModalState(host,opened,liveBindings,data)
         next : Modal <- Ref.read(Modal,modal)
         replayInput(host,modal,rest,next)
 
@@ -1234,31 +1236,36 @@ def isCancel(selected: Action) -> Bool:
   match selected: case Cancel{}: True{} case _: False{}
 
 def receiveReady(+host: Host,+data: String,+current: Modal,loading: Loads) -> IO(Unit):
-  match host:
-    case Host{_,_,bindings,_,_,_,_,_,HostLoader{_,_,redraw,_,pending}}:
-      Bool.pick(Unit -> IO(Unit),pickerReady(current,loading) || isCancel(action(bindings,data)),
-        _ => receivedModalState(host,current,data),
-        _ => do IO<Unit>:
-          Ref.modify(List<&2,String>,Unit,pending,old => (data <> old,Unit{}))
-          requestProgress(redraw))(Unit{})
-def receivedModal(+host: Host,data: String) -> IO(Unit):
-  match host:
-    case Host{+modal,_,_,_,_,_,_,_,HostLoader{loads,_,_,_,_}}:
+  match host current:
+    case Host{_,editor,_,_,_,_,_,_,_} Closed{}: Component.handleInput(editor,data)
+    case Host{_,_,bindings,_,_,_,_,_,HostLoader{_,_,redraw,_,pending}} current:
       do IO<Unit>:
-        flushInput(host)
+        +liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        Bool.pick(Unit -> IO(Unit),pickerReady(current,loading) || isCancel(action(liveBindings,data)),
+          _ => receivedModalState(host,current,liveBindings,data),
+          _ => do IO<Unit>:
+            Ref.modify(List<&2,String>,Unit,pending,old => (data <> old,Unit{}))
+            requestProgress(redraw))(Unit{})
+def receivedModal(host: Host,data: String) -> IO(Unit):
+  match host:
+    case Host{+modal,editor,bindings,theme,words,chosen,ids,session,HostLoader{+loads,worker,redraw,touched,pending}}:
+      +activeHost = {Host{modal,editor,bindings,theme,words,chosen,ids,session,HostLoader{loads,worker,redraw,touched,pending}}: Host}
+      do IO<Unit>:
+        flushInput(activeHost)
         current : Modal <- Ref.read(Modal,modal)
         loading : Loads <- Ref.read(Loads,loads)
-        receiveReady(host,data,current,loading)
+        receiveReady(activeHost,data,current,loading)
 
 def mouseCurrent(current: Modal,mouse: Maybe<&2,Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>>,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match current mouse:
     case Closed{} Some{callback}: Callback.call(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,callback,event)
     case _ _: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
-def drawModal(+host: Host,width: Nat) -> IO(List<&2,String>):
+def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{+modal,editor,bindings,theme,_,_,_,_,HostLoader{+loads,_,_,_,_}}:
+    case Host{+modal,+editor,+bindings,+theme,words,chosen,ids,session,HostLoader{+loads,worker,redraw,touched,pending}}:
+      +activeHost = {Host{modal,editor,bindings,theme,words,chosen,ids,session,HostLoader{loads,worker,redraw,touched,pending}}: Host}
       do IO<List<&2,String>>:
-        flushInput(host)
+        flushInput(activeHost)
         current : Modal <- Ref.read(Modal,modal)
         loading : Loads <- Ref.read(Loads,loads)
         drawModalCurrent(current,editor,bindings,theme,loading,width)
@@ -1272,7 +1279,7 @@ def modalInvalidate(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_,_,_}: Component.invalidate(editor)
 def modalFocus(host: Host,value: Bool) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_,_,_}: Component.setFocused(editor,value)
-def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Words.Source,chosen: Callback.Callback<String,Unit>,session: Ref.Ref<AgentSession.AgentSession>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(HostOwner):
+def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Ref.Ref<Bindings.KeybindingsManager>,theme: Ref.Ref<Theme.Theme>,words: Words.Source,chosen: Callback.Callback<String,Unit>,session: Ref.Ref<AgentSession.AgentSession>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(HostOwner):
   do IO<HostOwner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     wordRef : Ref.Ref<Words.Source> <- Ref.new(Words.Source,words)
@@ -1281,8 +1288,8 @@ def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindin
     touched : Ref.Ref<Bool> <- Ref.new(Bool,False{})
     pendingInput : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,Nil{})
     +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen,ids,session,HostLoader{loads,worker,redraw,touched,pendingInput}})
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~(host => width => drawModal(host,width)),host)
-    +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~(host => data => receivedModal(host,data)),host)
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~drawModal,host)
+    +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receivedModal,host)
     +mouse : Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- Callback.create(~Host,~Ui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~modalMouse,host)
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~modalInvalidate,host)
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Host,~Bool,~Unit,~modalFocus,host)

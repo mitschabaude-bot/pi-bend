@@ -17,17 +17,18 @@ type Mode is Data: TreeMode{} ForkMode{}
 type Modal is Data: Closed{} Open{component: TreePicker.TreeSelectorComponent} ForkOpen{component: UserPicker.UserMessageSelectorComponent}
 type Choice is Data: Choice{mode: Mode,id: String}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Segmenter.Source>,chosen: Callback.Callback<Choice,Unit>,onAction: Maybe<&2,Callback.Callback<TreePicker.Action,Unit>>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,words: Ref.Ref<Segmenter.Source>,chosen: Callback.Callback<Choice,Unit>,onAction: Maybe<&2,Callback.Callback<TreePicker.Action,Unit>>}
 type Owner is Type:
   Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,mouseCallback: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidateCallback: Callback.Callback<Unit,Unit>,focusCallback: Callback.Callback<Bool,Unit>}
 
-def drawCurrent(current: Modal,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,width: Nat,bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
+def drawCurrent(current: Modal,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,width: Nat,bindings: Ref.Ref<Bindings.KeybindingsManager>) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
     case Open{component}:
       do IO<List<&2,String>>:
         chosen : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        pair : TreePicker.TreeSelectorComponent & List<&2,String> <- TreePicker.render(component,chosen,width,bindings)
+        +liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        pair : TreePicker.TreeSelectorComponent & List<&2,String> <- TreePicker.render(component,chosen,width,liveBindings)
         return Pair.snd(TreePicker.TreeSelectorComponent,List<&2,String>,pair)
     case ForkOpen{component}:
       do IO<List<&2,String>>:
@@ -84,15 +85,19 @@ def preparedWords(+words: Ref.Ref<Segmenter.Source>,text: Maybe<&2,String>) -> I
         +next : Segmenter.Source <- Segmenter.readyFor(source,value)
         Ref.write(Segmenter.Source,words,next)
         return next
-def receiveCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,words: Ref.Ref<Segmenter.Source>,chosen: Callback.Callback<Choice,Unit>,onAction: Maybe<&2,Callback.Callback<TreePicker.Action,Unit>>,+data: String) -> IO(Unit):
+def receiveCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,+bindings: Ref.Ref<Bindings.KeybindingsManager>,+keyboard: Keys.Context,words: Ref.Ref<Segmenter.Source>,chosen: Callback.Callback<Choice,Unit>,onAction: Maybe<&2,Callback.Callback<TreePicker.Action,Unit>>,+data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
     case Open{+component}:
       do IO<Unit>:
-        source : Segmenter.Source <- preparedWords(words,TreePicker.wordText(component,bindings,keyboard,data))
-        pair : TreePicker.TreeSelectorComponent & TreePicker.Action <- TreePicker.handleInput(component,source,bindings,keyboard,data)
+        +liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        source : Segmenter.Source <- preparedWords(words,TreePicker.wordText(component,liveBindings,keyboard,data))
+        pair : TreePicker.TreeSelectorComponent & TreePicker.Action <- TreePicker.handleInput(component,source,liveBindings,keyboard,data)
         receiveOpen(modal,chosen,onAction,pair)
-    case ForkOpen{component}: receiveFork(modal,chosen,UserPicker.handleInput(UserPicker.getMessageList(component),bindings,keyboard,data))
+    case ForkOpen{component}:
+      do IO<Unit>:
+        liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        receiveFork(modal,chosen,UserPicker.handleInput(UserPicker.getMessageList(component),liveBindings,keyboard,data))
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
     case Host{+modal,editor,_,bindings,keyboard,words,chosen,onAction}:
@@ -125,7 +130,7 @@ def hostFocus(host: Host,focused: Bool) -> IO(Unit):
       do IO<Unit>:
         current : Modal <- Ref.read(Modal,modal)
         focusCurrent(modal,editor,focused,current)
-def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Segmenter.Source,chosen: Callback.Callback<Choice,Unit>,onAction: Maybe<&2,Callback.Callback<TreePicker.Action,Unit>>) -> IO(Owner):
+def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,words: Segmenter.Source,chosen: Callback.Callback<Choice,Unit>,onAction: Maybe<&2,Callback.Callback<TreePicker.Action,Unit>>) -> IO(Owner):
   do IO<Owner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     wordSource : Ref.Ref<Segmenter.Source> <- Ref.new(Segmenter.Source,words)

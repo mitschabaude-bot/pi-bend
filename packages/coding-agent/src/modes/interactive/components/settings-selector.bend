@@ -231,7 +231,7 @@ def nonAtomic(_: Segmenter.Source,_: String) -> Bool: False{}
 # Callbacks and theme are borrowed from the surrounding settings panel.
 type WarningPanel is Data: WarningClosed{} WarningOpen{list: ListUI.SettingsList,done: ListUI.SubmenuDone}
 type WarningContext is Data:
-  WarningContext{panel: Ref.Ref<WarningPanel>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>}
+  WarningContext{panel: Ref.Ref<WarningPanel>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Ref.Ref<Keybindings.KeybindingsManager>,keyboard: Keys.Context,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>}
 type WarningFactory is Data:
   WarningFactory{context: WarningContext,component: Component.Component,cancel: Callback.Callback<Unit,Unit>}
 type WarningOwner is Data:
@@ -269,7 +269,8 @@ def warningInputCurrent(context: WarningContext,data: String,current: WarningPan
     case WarningContext{panel,_,words,bindings,keyboard,_,_,_} WarningOpen{list,done}:
       do IO<Unit>:
         source : Segmenter.Source <- Ref.read(Segmenter.Source,words)
-        result : Word.ResultOf(ListUI.SettingsList) <- ListUI.handleInput(~Segmenter.Source,~Word.sourceSegments,~nonAtomic,source,list,bindings,keyboard,data)
+        liveBindings : Keybindings.KeybindingsManager <- Ref.read(Keybindings.KeybindingsManager,bindings)
+        result : Word.ResultOf(ListUI.SettingsList) <- ListUI.handleInput(~Segmenter.Source,~Word.sourceSegments,~nonAtomic,source,list,liveBindings,keyboard,data)
         warningAccepted(panel,result,done)
 def warningInput(context: WarningContext,data: String) -> IO(Unit):
   match context:
@@ -313,7 +314,7 @@ def warningCreate(factory: WarningFactory,request: ListUI.SubmenuRequest) -> IO(
         items : List<&2,ListUI.SettingItem> = [boolean("anthropic-extra-usage","Anthropic extra usage","Warn when Anthropic subscription auth may use paid extra usage",warningOption(Settings.getWarnings(settings)))]
         Ref.write(WarningPanel,panel,WarningOpen{ListUI.new(items,1n,style,changed,cancel,None{},completed),done})
         return component
-def createWarnings(editor: Component.Component,+session: Ref.Ref<Session.AgentSession>,+words: Ref.Ref<Segmenter.Source>,+bindings: Keybindings.KeybindingsManager,+keyboard: Keys.Context,+style: ListUI.SettingsListTheme,+changed: Callback.Callback<ListUI.Change,Unit>,+completed: Callback.Callback<ListUI.Completion,Unit>) -> IO(WarningOwner):
+def createWarnings(editor: Component.Component,+session: Ref.Ref<Session.AgentSession>,+words: Ref.Ref<Segmenter.Source>,+bindings: Ref.Ref<Keybindings.KeybindingsManager>,+keyboard: Keys.Context,+style: ListUI.SettingsListTheme,+changed: Callback.Callback<ListUI.Change,Unit>,+completed: Callback.Callback<ListUI.Completion,Unit>) -> IO(WarningOwner):
   do IO<WarningOwner>:
     +panel : Ref.Ref<WarningPanel> <- Ref.new(WarningPanel,WarningClosed{})
     +context : WarningContext = WarningContext{panel,session,words,bindings,keyboard,style,changed,completed}
@@ -347,7 +348,7 @@ type CancelContext is Data:
 type CompletionContext is Data:
   CompletionContext{pending: Ref.Ref<Maybe<&2,ListUI.Completion>>}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,themeSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,pending: Ref.Ref<Maybe<&2,ListUI.Completion>>,modelSubmenu: Submenus,modeChanged: Callback.Callback<Process.RendererResult,Unit>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Ref.Ref<Keybindings.KeybindingsManager>,keyboard: Keys.Context,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,themeSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,pending: Ref.Ref<Maybe<&2,ListUI.Completion>>,modelSubmenu: Submenus,modeChanged: Callback.Callback<Process.RendererResult,Unit>}
 type Owner is Type:
   Owner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>,label: Callback.Callback<ListUI.ThemeText,String>,value: Callback.Callback<ListUI.ThemeText,String>,description: Callback.Callback<String,String>,hint: Callback.Callback<String,String>,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,themeOwner: ThemePicker.Owner,modelOwner: ModelThinkingPicker.Owner,warningOwner: WarningOwner,modeChanged: Callback.Callback<Process.RendererResult,Unit>}
 
@@ -578,7 +579,8 @@ def inputOpen(host: Host,list: ListUI.SettingsList,data: String) -> IO(Unit):
     case Host{modal,_,_,_,words,bindings,keyboard,_,_,_,_,_,_,_,pending,_,_}:
       do IO<Unit>:
         source : Segmenter.Source <- Ref.read(Segmenter.Source,words)
-        result : Word.ResultOf(ListUI.SettingsList) <- ListUI.handleInput(~Segmenter.Source,~Word.sourceSegments,~nonAtomic,source,list,bindings,keyboard,data)
+        liveBindings : Keybindings.KeybindingsManager <- Ref.read(Keybindings.KeybindingsManager,bindings)
+        result : Word.ResultOf(ListUI.SettingsList) <- ListUI.handleInput(~Segmenter.Source,~Word.sourceSegments,~nonAtomic,source,list,liveBindings,keyboard,data)
         completed : Word.ResultOf(ListUI.SettingsList) <- applyCompletion(result,pending)
         accepted(modal,completed)
 def receiveCurrent(current: Modal,host: Host,editor: Component.Component,data: String) -> IO(Unit):
@@ -623,7 +625,7 @@ def invalidated(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: Component.invalidate(editor)
 def focused(host: Host,value: Bool) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: Component.setFocused(editor,value)
-def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,+transcript: Transcript.Handle,editorHandle: Ref.Ref<Maybe<&2,Live.Handle>>,words: Segmenter.Source,+bindings: Keybindings.KeybindingsManager,+keyboard: Keys.Context,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Owner):
+def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,+transcript: Transcript.Handle,editorHandle: Ref.Ref<Maybe<&2,Live.Handle>>,words: Segmenter.Source,+bindings: Ref.Ref<Keybindings.KeybindingsManager>,+keyboard: Keys.Context,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Owner):
   do IO<Owner>:
     +modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     +pending : Ref.Ref<Maybe<&2,ListUI.Completion>> <- Ref.new(Maybe<&2,ListUI.Completion>,None{})

@@ -14,7 +14,7 @@ import ./keybinding-hints.bend as Hints
 # components stay mounted and resume when the operation clears the activity.
 type Activity is Data: Activity{controller: Abort.AbortController<Unit>,message: String,startedAt: F64}
 type Context is Data:
-  Context{editor: Component.Component,activity: Ref.Ref<Maybe<&2,Activity>>,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager}
+  Context{editor: Component.Component,activity: Ref.Ref<Maybe<&2,Activity>>,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>}
 type Owner is Type:
   Owner{component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>,children: Callback.Callback<Unit,List<&2,Component.Component>>}
 
@@ -31,14 +31,15 @@ def progress(+theme: Theme.Theme,bindings: Bindings.KeybindingsManager,+message:
   +hint = " " ++ color(theme,"dim",Hints.keyText(bindings,"tui.select.cancel")) ++ color(theme,"muted"," cancel")
   [border,"",spinner,"",hint,"",border]
 
-def renderActive(editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,width: Nat,active: Maybe<&2,Activity>) -> IO(List<&2,String>):
+def renderActive(editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,width: Nat,active: Maybe<&2,Activity>) -> IO(List<&2,String>):
   match active:
     case None{}: Component.render(editor,width)
     case Some{Activity{_,message,startedAt}}:
       do IO<List<&2,String>>:
         chosen : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        snapshot : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
         now : F64 <- Date.now()
-        return progress(chosen,bindings,message,frame(now,startedAt),width)
+        return progress(chosen,snapshot,message,frame(now,startedAt),width)
 
 def render(context: Context,width: Nat) -> IO(List<&2,String>):
   match context:
@@ -91,7 +92,7 @@ def wantsRelease(component: Component.Component) -> Bool:
     case Component.Group{child,_}: wantsRelease(child)
     case Component.Managed{child,_}: wantsRelease(child)
 
-def create(+editor: Component.Component,+activity: Ref.Ref<Maybe<&2,Activity>>,+theme: Ref.Ref<Theme.Theme>,+bindings: Bindings.KeybindingsManager) -> IO(Owner):
+def create(+editor: Component.Component,+activity: Ref.Ref<Maybe<&2,Activity>>,+theme: Ref.Ref<Theme.Theme>,+bindings: Ref.Ref<Bindings.KeybindingsManager>) -> IO(Owner):
   do IO<Owner>:
     +context : Context <- IO.pure(Context,Context{editor,activity,theme,bindings})
     +rendered : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Context,~Nat,~List<&2,String>,~render,context)

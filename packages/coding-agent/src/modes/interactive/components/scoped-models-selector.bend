@@ -367,7 +367,7 @@ def render(+state: State,theme: Theme.Theme,bindings: Bindings.KeybindingsManage
 
 type Modal is Data: Closed{} Open{state: State}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Segmenter.Source>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,notify: Callback.Callback<Action,Unit>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Segmenter.Source>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,notify: Callback.Callback<Action,Unit>}
 type Owner is Type:
   Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,mouseCallback: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidateCallback: Callback.Callback<Unit,Unit>,focusCallback: Callback.Callback<Bool,Unit>}
 def displayedPair(modal: Ref.Ref<Modal>,pair: State & List<&2,String>) -> IO(List<&2,String>):
@@ -376,13 +376,14 @@ def displayedPair(modal: Ref.Ref<Modal>,pair: State & List<&2,String>) -> IO(Lis
       do IO<List<&2,String>>:
         Ref.write(Modal,modal,Open{next})
         return lines
-def displayed(modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,width: Nat,current: Modal) -> IO(List<&2,String>):
+def displayed(modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,width: Nat,current: Modal) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
     case Open{state}:
       do IO<List<&2,String>>:
         chosenTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        pair : State & List<&2,String> <- render(state,chosenTheme,bindings,width)
+        +liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        pair : State & List<&2,String> <- render(state,chosenTheme,liveBindings,width)
         displayedPair(modal,pair)
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
@@ -409,15 +410,16 @@ def readyWords(command: Input.Command,source: Segmenter.Source,text: String) -> 
     case Input.KillWordBackward{}: Segmenter.readyFor(source,text)
     case Input.KillWordForward{}: Segmenter.readyFor(source,text)
     case _: IO.pure(Segmenter.Source,source)
-def receiveCurrent(modal: Ref.Ref<Modal>,editor: Component.Component,+words: Ref.Ref<Segmenter.Source>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,notify: Callback.Callback<Action,Unit>,+data: String,current: Modal) -> IO(Unit):
+def receiveCurrent(modal: Ref.Ref<Modal>,editor: Component.Component,+words: Ref.Ref<Segmenter.Source>,+bindings: Ref.Ref<Bindings.KeybindingsManager>,+keyboard: Keys.Context,notify: Callback.Callback<Action,Unit>,+data: String,current: Modal) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
     case Open{+state}:
       do IO<Unit>:
+        +liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
         previous : Segmenter.Source <- Ref.read(Segmenter.Source,words)
-        +source : Segmenter.Source <- readyWords(Input.command(Input.bindings(),bindings,keyboard,data),previous,Input.getValue(searchOf(state)))
+        +source : Segmenter.Source <- readyWords(Input.command(Input.bindings(),liveBindings,keyboard,data),previous,Input.getValue(searchOf(state)))
         Ref.write(Segmenter.Source,words,source)
-        pair : State & Action <- input(state,source,bindings,keyboard,data)
+        pair : State & Action <- input(state,source,liveBindings,keyboard,data)
         accepted(modal,notify,pair)
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
@@ -446,13 +448,14 @@ def mouseStored(modal: Ref.Ref<Modal>,pair: State & Maybe<&2,Component.MouseResp
         return result
 def eventWidth(event: Tui.TuiMouseEvent) -> Nat:
   match event: case Tui.TuiMouseEvent{_,_,_,_,_,_,width,_,_,_,_,_,_}: width
-def mouseCurrent(editor: Component.Component,+event: Tui.TuiMouseEvent,current: Modal,modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager) -> IO(Maybe<&2,Component.MouseResponse()>):
+def mouseCurrent(editor: Component.Component,+event: Tui.TuiMouseEvent,current: Modal,modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>) -> IO(Maybe<&2,Component.MouseResponse()>):
   match current:
     case Closed{}: editorMouse(editor,event)
     case Open{state}:
       do IO<Maybe<&2,Component.MouseResponse()>>:
         colors : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        header : List<&2,String> <- heading(colors,bindings,eventWidth(event))
+        liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        header : List<&2,String> <- heading(colors,liveBindings,eventWidth(event))
         mouseStored(modal,mouseSearch(state,List.length(&2,String,header),event))
 def mouse(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match host:
@@ -473,7 +476,7 @@ def focus(host: Host,value: Bool) -> IO(Unit):
         +focused : Bool = value
         Component.setFocused(editor,focused)
         Ref.modify(Modal,Unit,modal,current => focusedModal(current,focused))
-def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Segmenter.Source,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,notify: Callback.Callback<Action,Unit>) -> IO(Owner):
+def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Segmenter.Source,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,notify: Callback.Callback<Action,Unit>) -> IO(Owner):
   do IO<Owner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     source : Ref.Ref<Segmenter.Source> <- Ref.new(Segmenter.Source,words)

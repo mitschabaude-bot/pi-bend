@@ -24,7 +24,7 @@ import ./thinking-selector.bend as ThinkingPicker
 # The settings-specific choices use the same reusable stepped submenu as pi.
 type Modal is Data: Closed{} Open{submenu: Submenu.SteppedSubmenu,done: SettingsList.SubmenuDone}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Words.Source>,listTheme: Select.SelectListTheme,collator: Ref.Ref<Maybe<&2,Collation.Collator>>}
+  Host{modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,words: Ref.Ref<Words.Source>,listTheme: Select.SelectListTheme,collator: Ref.Ref<Maybe<&2,Collation.Collator>>}
 type Factory is Data:
   Factory{host: Host,component: Component.Component,steps: List<&2,Submenu.SteppedSubmenuStep>,complete: C.Callback<Submenu.Context(),Unit>,cancel: C.Callback<Unit,Unit>}
 type Owner is Data:
@@ -197,15 +197,16 @@ def draw(host: Host,width: Nat) -> IO(List<&2,String>):
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
         drawCurrent(current,modal,theme,width)
-def inputCurrent(current: Modal,modal: Ref.Ref<Modal>,+words: Ref.Ref<Words.Source>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> IO(Unit):
+def inputCurrent(current: Modal,modal: Ref.Ref<Modal>,+words: Ref.Ref<Words.Source>,+bindings: Ref.Ref<Bindings.KeybindingsManager>,+keyboard: Keys.Context,+data: String) -> IO(Unit):
   match current:
     case Closed{}: IO.pure(Unit,Unit{})
     case Open{+submenu,_}:
       do IO<Unit>:
+        +liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
         previous : Words.Source <- Ref.read(Words.Source,words)
-        +source : Words.Source <- ModelPicker.wordsFor(ModelPicker.needsWords(Input.command(Input.bindings(),bindings,keyboard,data)),previous,Submenu.query(Submenu.active(submenu)))
+        +source : Words.Source <- ModelPicker.wordsFor(ModelPicker.needsWords(Input.command(Input.bindings(),liveBindings,keyboard,data)),previous,Submenu.query(Submenu.active(submenu)))
         Ref.write(Words.Source,words,source)
-        next : Submenu.SteppedSubmenu <- Submenu.handleSteppedInput(submenu,source,bindings,keyboard,data)
+        next : Submenu.SteppedSubmenu <- Submenu.handleSteppedInput(submenu,source,liveBindings,keyboard,data)
         Ref.modify(Modal,Unit,modal,current => stored(current,next))
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
@@ -226,7 +227,7 @@ def factory(environment: Factory,request: SettingsList.SubmenuRequest) -> IO(Com
         created : Result<&2,&2,Submenu.BuildError,Submenu.SteppedSubmenu> <- Submenu.stepped(steps,listTheme,complete,cancel,Submenu.SteppedSubmenuOptions{0n,Record.new(String),True{}})
         begun(created,modal,done)
         return component
-def configured(pair: Submenu.ThemeOwner & Select.SelectListTheme,parent: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Words.Source>) -> IO(Owner):
+def configured(pair: Submenu.ThemeOwner & Select.SelectListTheme,parent: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,words: Ref.Ref<Words.Source>) -> IO(Owner):
   match pair:
     case (themeOwner,listTheme):
       do IO<Owner>:
@@ -247,7 +248,7 @@ def configured(pair: Submenu.ThemeOwner & Select.SelectListTheme,parent: Compone
         steps : List<&2,Submenu.SteppedSubmenuStep> = [Submenu.SteppedSubmenuStep{"model",Submenu.Literal{"Per-Model Thinking Level"},Submenu.Literal{"Select a model to configure"},modelOptions,Some{modelPreselect},True{},Some{Select.SelectListLayoutOptions{Some{12n},Some{46n},None{}}}},Submenu.SteppedSubmenuStep{"level",Submenu.Dynamic{levelTitle},Submenu.Literal{"Select default thinking level for this model"},levelOptions,Some{levelPreselect},False{},None{}}]
         +factoryCallback : C.Callback<SettingsList.SubmenuRequest,Component.Component> <- C.create(~Factory,~SettingsList.SubmenuRequest,~Component.Component,~factory,Factory{host,component,steps,complete,cancel})
         return Owner{host,component,renderCallback,inputCallback,invalidateCallback,factoryCallback,themeOwner,modelOptions,levelOptions,levelTitle,modelPreselect,levelPreselect,complete,cancel}
-def createHost(parent: Component.Component,+theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Words.Source>) -> IO(Owner):
+def createHost(parent: Component.Component,+theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,words: Ref.Ref<Words.Source>) -> IO(Owner):
   do IO<Owner>:
     owner : Submenu.ThemeOwner <- Submenu.createTheme(theme)
     configured(Submenu.theme(owner),parent,theme,session,models,transcript,bindings,keyboard,words)

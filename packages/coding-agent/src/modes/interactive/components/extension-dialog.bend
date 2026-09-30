@@ -33,7 +33,7 @@ type InputEffect is Data:
   Handled{}
   OpenExternal{request: ExternalRequest}
 type Host is Data:
-  Host{modal: Serial.Handle<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,source: Ref.Ref<Words.Source>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>,redraw: Callback.Callback<Unit,Unit>,nextTicket: Ref.Ref<Nat>,external: Ref.Ref<Maybe<&2,Callback.Callback<ExternalRequest,Unit>>>}
+  Host{modal: Serial.Handle<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,source: Ref.Ref<Words.Source>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,rows: Ref.Ref<Nat>,redraw: Callback.Callback<Unit,Unit>,nextTicket: Ref.Ref<Nat>,external: Ref.Ref<Maybe<&2,Callback.Callback<ExternalRequest,Unit>>>}
 type Owner is Type:
   Owner{modal: Serial.Owner<Modal>,host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 
@@ -99,6 +99,13 @@ def drawLines(editor: Component.Component,width: Nat,lines: Maybe<&2,List<&2,Str
   match lines:
     case None{}: Component.render(editor,width)
     case Some{value}: IO.pure(List<&2,String>,value)
+def drawLive(current: Modal,theme: Theme.Theme,bindings: Ref.Ref<Bindings.KeybindingsManager>,width: Nat,rows: Nat) -> IO(Modal & Maybe<&2,List<&2,String>>):
+  match current:
+    case Closed{}: IO.pure(Modal & Maybe<&2,List<&2,String>>,(Closed{},None{}))
+    case active:
+      do IO<Modal & Maybe<&2,List<&2,String>>>:
+        snapshot : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        drawModal(active,theme,snapshot,width,rows)
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{modal,editor,theme,_,bindings,_,rows,_,_,_}:
@@ -106,7 +113,7 @@ def draw(host: Host,width: Nat) -> IO(List<&2,String>):
         +width : Nat <- IO.pure(Nat,width)
         palette : Theme.Theme <- Ref.read(Theme.Theme,theme)
         height : Nat <- Ref.read(Nat,rows)
-        lines : Maybe<&2,List<&2,String>> <- Serial.run(Modal,Maybe<&2,List<&2,String>>,modal,current => drawModal(current,palette,bindings,width,height))
+        lines : Maybe<&2,List<&2,String>> <- Serial.run(Modal,Maybe<&2,List<&2,String>>,modal,current => drawLive(current,palette,bindings,width,height))
         drawLines(editor,width,lines)
 def wordSource(+words: Ref.Ref<Words.Source>,text: String) -> IO(Words.Source):
   do IO<Words.Source>:
@@ -129,6 +136,13 @@ def receiveModal(modal: Modal,source: Ref.Ref<Words.Source>,bindings: Bindings.K
         words : Words.Source <- wordSource(source,Multi.value(state))
         outcome : Multi.State & Multi.Action <- Multi.handleInput(state,words,bindings,keyboard,data,rows)
         editing(outcome,reply,ticket)
+def receiveLive(current: Modal,source: Ref.Ref<Words.Source>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,data: String,rows: Nat) -> IO(Modal & InputEffect):
+  match current:
+    case Closed{}: IO.pure(Modal & InputEffect,(Closed{},Forward{}))
+    case active:
+      do IO<Modal & InputEffect>:
+        snapshot : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        receiveModal(active,source,snapshot,keyboard,data,rows)
 def callExternal(callback: Maybe<&2,Callback.Callback<ExternalRequest,Unit>>,request: ExternalRequest) -> IO(Unit):
   match callback:
     case None{}: IO.pure(Unit,Unit{})
@@ -147,7 +161,7 @@ def receive(host: Host,data: String) -> IO(Unit):
       do IO<Unit>:
         +data : String <- IO.pure(String,data)
         height : Nat <- Ref.read(Nat,rows)
-        effect : InputEffect <- Serial.run(Modal,InputEffect,modal,current => receiveModal(current,source,bindings,keyboard,data,height))
+        effect : InputEffect <- Serial.run(Modal,InputEffect,modal,current => receiveLive(current,source,bindings,keyboard,data,height))
         applyEffect(editor,external,data,effect)
 def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match editor:
@@ -175,7 +189,7 @@ def focus(host: Host,focused: Bool) -> IO(Unit):
       do IO<Unit>:
         closed : Bool <- Serial.run(Modal,Bool,modal,current => IO.pure(Modal & Bool,isClosed(current)))
         focusCurrent(editor,focused,closed)
-def built(pair: Serial.Owner<Modal> & Serial.Handle<Modal>,+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Words.Source,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>,redraw: Callback.Callback<Unit,Unit>) -> IO(Owner):
+def built(pair: Serial.Owner<Modal> & Serial.Handle<Modal>,+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Words.Source,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,rows: Ref.Ref<Nat>,redraw: Callback.Callback<Unit,Unit>) -> IO(Owner):
   match pair:
     case (modalOwner,modal):
       do IO<Owner>:
@@ -190,7 +204,7 @@ def built(pair: Serial.Owner<Modal> & Serial.Handle<Modal>,+editor: Component.Co
         +focusing : Callback.Callback<Bool,Unit> <- Callback.create(~Host,~Bool,~Unit,~focus,host)
         +component : Component.Component <- IO.pure(Component.Component,Component.Component{Component.id(editor),render,Some{input},Some{mouseInput},invalidator,Some{focusing},False{}})
         return Owner{modalOwner,host,component,render,input,mouseInput,invalidator,focusing}
-def create(editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Words.Source,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>,redraw: Callback.Callback<Unit,Unit>) -> IO(Owner):
+def create(editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Words.Source,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,rows: Ref.Ref<Nat>,redraw: Callback.Callback<Unit,Unit>) -> IO(Owner):
   do IO<Owner>:
     owner : Serial.Owner<Modal> <- Serial.create(Modal,Closed{})
     built(Serial.borrow(Modal,owner),editor,theme,words,bindings,keyboard,rows,redraw)

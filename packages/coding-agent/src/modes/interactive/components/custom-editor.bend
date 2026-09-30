@@ -4,6 +4,7 @@ import ../../../../../tui/src/components/editor-component.bend as Live
 import ../../../../../tui/src/keybindings.bend as Bindings
 import ../../../../../tui/src/keys.bend as Keys
 import ../../../../../runtime/src/callback.bend as Callback
+import ../../../../../runtime/src/ref.bend as Ref
 
 # upstream components/custom-editor.ts: the editor with coding-agent's app
 # keybindings in front of it. `actions` are the registered app actions in
@@ -12,7 +13,7 @@ import ../../../../../runtime/src/callback.bend as Callback
 # handles the key. Extension shortcuts get first refusal, as upstream does.
 type AppAction is Data: AppAction{name: String,editor: Live.Handle}
 type Host is Data:
-  Host{editor: Live.Handle,inner: Component.Component,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,actions: List<&2,String>,onAction: Callback.Callback<AppAction,Unit>,onExtensionShortcut: Maybe<&2,Callback.Callback<String,Bool>>}
+  Host{editor: Live.Handle,inner: Component.Component,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,actions: List<&2,String>,onAction: Callback.Callback<AppAction,Unit>,onExtensionShortcut: Maybe<&2,Callback.Callback<String,Bool>>}
 type Owner is Type: Owner{component: Component.Component,input: Callback.Callback<String,Unit>}
 
 def registered(actions: List<&2,String>,+name: String) -> Bool:
@@ -36,21 +37,21 @@ def otherAction(+host: Host,+data: String,found: Maybe<&2,String>) -> IO(Unit):
     case None{}: forward(host,data)
 # Explicit history bindings take precedence over app actions, so Ctrl+P can
 # be rebound to history even though it cycles models by default.
-def otherKey(+host: Host,+data: String) -> IO(Unit):
+def otherKey(+host: Host,+data: String,+config: Bindings.KeybindingsManager) -> IO(Unit):
   match host:
     case Host{editor,inner,+bindings,+keyboard,actions,onAction,shortcut}:
-      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.editor.historyPrevious") || Bindings.matches(bindings,keyboard,data,"tui.editor.historyNext"),
+      Bool.pick(Unit -> IO(Unit),Bindings.matches(config,keyboard,data,"tui.editor.historyPrevious") || Bindings.matches(config,keyboard,data,"tui.editor.historyNext"),
         _ => forward(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data),
-        _ => otherAction(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data,firstMatch(actions,bindings,keyboard,data)))(Unit{})
+        _ => otherAction(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data,firstMatch(actions,config,keyboard,data)))(Unit{})
 # Exit only from an empty editor; otherwise the key edits (delete forward).
-def exitKey(+host: Host,+data: String) -> IO(Unit):
+def exitKey(+host: Host,+data: String,config: Bindings.KeybindingsManager) -> IO(Unit):
   match host:
     case Host{+editor,inner,bindings,keyboard,+actions,onAction,shortcut}:
       do IO<Unit>:
         text : String <- Live.text(editor)
         Bool.pick(Unit -> IO(Unit),String.is_empty(text),
           _ => Bool.pick(Unit -> IO(Unit),registered(actions,"app.exit"),_ => run(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},"app.exit"),_ => IO.pure(Unit,Unit{}))(Unit{}),
-          _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data))(Unit{})
+          _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data,config))(Unit{})
 # Interrupt only without an autocomplete menu; the editor closes the menu.
 def interruptKey(+host: Host,+data: String) -> IO(Unit):
   match host:
@@ -63,14 +64,16 @@ def interruptKey(+host: Host,+data: String) -> IO(Unit):
 def defaultInput(+host: Host,+data: String) -> IO(Unit):
   match host:
     case Host{editor,inner,+bindings,+keyboard,actions,onAction,shortcut}:
-      # upstream checks the clipboard paste binding before every app key.
-      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"app.clipboard.pasteImage"),
-        _ => run(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},"app.clipboard.pasteImage"),
-        _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"app.interrupt"),
-        _ => interruptKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data),
-        _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"app.exit"),
-          _ => exitKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data),
-          _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data))(Unit{}))(Unit{}))(Unit{})
+      do IO<Unit>:
+        +config : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        # upstream checks the clipboard paste binding before every app key.
+        Bool.pick(Unit -> IO(Unit),Bindings.matches(config,keyboard,data,"app.clipboard.pasteImage"),
+          _ => run(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},"app.clipboard.pasteImage"),
+          _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(config,keyboard,data,"app.interrupt"),
+          _ => interruptKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data),
+          _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(config,keyboard,data,"app.exit"),
+            _ => exitKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data,config),
+            _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data,config))(Unit{}))(Unit{}))(Unit{})
 
 def extensionHandled(hook: Maybe<&2,Callback.Callback<String,Bool>>,data: String) -> IO(Bool):
   match hook:

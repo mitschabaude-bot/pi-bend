@@ -17,7 +17,7 @@ import ../../../runtime/src/word-segmenter.bend as Segmenter
 # state; a submission callback must schedule application work without trying
 # to re-enter this editor during the same input event.
 type State is Data:
-  State{editor: Editor.Editor,words: Segmenter.Source,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>,error: Maybe<&2,Editor.Error>}
+  State{editor: Editor.Editor,words: Segmenter.Source,bindings: Ref.Ref<Keybindings.KeybindingsManager>,keyboard: Keys.Context,rows: Ref.Ref<Nat>,error: Maybe<&2,Editor.Error>}
 type Handle is Data: Handle{resource: Serial.Handle<State>}
 type RenderInput is Data: RenderInput{editor: Handle,working: Maybe<&2,Ref.Ref<Maybe<&2,Loader.Handle>>>}
 type Owner is Type:
@@ -35,7 +35,7 @@ def polled(state: State) -> IO(State):
       do IO<State>:
         result : Editor.ResultOf(Editor.Editor) <- Editor.pollAutocomplete(editor)
         return accepted(State{editor,words,bindings,keyboard,rows,error},result)
-def renderedPair(pair: Editor.Editor & List<&2,String>,words: Segmenter.Source,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>,error: Maybe<&2,Editor.Error>) -> State & List<&2,String>:
+def renderedPair(pair: Editor.Editor & List<&2,String>,words: Segmenter.Source,bindings: Ref.Ref<Keybindings.KeybindingsManager>,keyboard: Keys.Context,rows: Ref.Ref<Nat>,error: Maybe<&2,Editor.Error>) -> State & List<&2,String>:
   match pair:
     case (next,lines): (State{next,words,bindings,keyboard,rows,error},lines)
 def renderedCurrent(state: State,width: Nat) -> IO(State & List<&2,String>):
@@ -89,9 +89,10 @@ def inputState(state: State,+data: String) -> IO(State & Unit):
   match state:
     case State{+editor,words,+bindings,+keyboard,+rows,error}:
       do IO<State & Unit>:
+        +config : Keybindings.KeybindingsManager <- Ref.read(Keybindings.KeybindingsManager,bindings)
         height : Nat <- Ref.read(Nat,rows)
-        +source : Segmenter.Source <- wordsFor(wordCommand(bindings,keyboard,data),words,Editor.getText(editor))
-        result : Editor.ResultOf(Editor.Editor) <- Editor.handleInput(~Segmenter.Source,~Word.sourceSegments,source,editor,bindings,keyboard,data,height)
+        +source : Segmenter.Source <- wordsFor(wordCommand(config,keyboard,data),words,Editor.getText(editor))
+        result : Editor.ResultOf(Editor.Editor) <- Editor.handleInput(~Segmenter.Source,~Word.sourceSegments,source,editor,config,keyboard,data,height)
         return (accepted(State{editor,source,bindings,keyboard,rows,error},result),Unit{})
 def inputLive(handle: Handle,data: String) -> IO(Unit):
   match handle:
@@ -155,6 +156,14 @@ def setTextState(state: State,value: String) -> IO(State & Unit):
 def setText(handle: Handle,value: String) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => setTextState(state,value))
+def historyAdded(state: State,text: String) -> IO(State & Unit):
+  match state:
+    case State{editor,words,bindings,keyboard,rows,error}:
+      IO.pure(State & Unit,(State{Editor.addToHistory(editor,text),words,bindings,keyboard,rows,error},Unit{}))
+def addToHistory(handle: Handle,text: String) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => historyAdded(state,text))
+
 def insertState(state: State,value: String) -> IO(State & Unit):
   match state:
     case State{editor,words,bindings,keyboard,rows,error}:
@@ -207,11 +216,11 @@ def created(id: Component.ComponentId,pair: Serial.Owner<State> & Serial.Handle<
         invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Handle,~Unit,~Unit,~invalidateLive,Handle{handle})
         focus : Callback.Callback<Bool,Unit> <- Callback.create(~Handle,~Bool,~Unit,~focusLive,Handle{handle})
         return Owner{resource,Component.Component{id,render,Some{input},Some{mouse},invalidate,Some{focus},False{}},Handle{handle}}
-def create(id: Component.ComponentId,editor: Editor.Editor,words: Segmenter.Source,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>) -> IO(Owner):
+def create(id: Component.ComponentId,editor: Editor.Editor,words: Segmenter.Source,bindings: Ref.Ref<Keybindings.KeybindingsManager>,keyboard: Keys.Context,rows: Ref.Ref<Nat>) -> IO(Owner):
   do IO<Owner>:
     resource : Serial.Owner<State> <- Serial.create(State,State{editor,words,bindings,keyboard,rows,None{}})
     created(id,Serial.borrow(State,resource),None{})
-def createWithWorking(id: Component.ComponentId,editor: Editor.Editor,words: Segmenter.Source,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>,working: Ref.Ref<Maybe<&2,Loader.Handle>>) -> IO(Owner):
+def createWithWorking(id: Component.ComponentId,editor: Editor.Editor,words: Segmenter.Source,bindings: Ref.Ref<Keybindings.KeybindingsManager>,keyboard: Keys.Context,rows: Ref.Ref<Nat>,working: Ref.Ref<Maybe<&2,Loader.Handle>>) -> IO(Owner):
   do IO<Owner>:
     resource : Serial.Owner<State> <- Serial.create(State,State{editor,words,bindings,keyboard,rows,None{}})
     created(id,Serial.borrow(State,resource),Some{working})

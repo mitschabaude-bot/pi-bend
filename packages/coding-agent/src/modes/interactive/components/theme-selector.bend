@@ -20,7 +20,7 @@ type State is Data:
 type Modal is Data: Closed{} Open{state: State}
 type Action is Data: Continue{} Preview{name: String} Finish{setting: String} Cancel{}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,controller: Ref.Ref<Maybe<&2,Controller.Handle>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context}
+  Host{modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,controller: Ref.Ref<Maybe<&2,Controller.Handle>>,transcript: Transcript.Handle,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context}
 type Factory is Data: Factory{host: Host,component: Component.Component}
 type Owner is Data:
   Owner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,invalidate: Callback.Callback<Unit,Unit>,factory: Callback.Callback<SettingsList.SubmenuRequest,Component.Component>}
@@ -278,10 +278,13 @@ def action(host: Host,+state: State,result: Action) -> IO(Unit):
 def accepted(host: Host,pair: State & Action) -> IO(Unit):
   match pair:
     case (state,result): action(host,state,result)
-def receiveCurrent(current: Modal,host: Host,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String) -> IO(Unit):
+def receiveCurrent(current: Modal,host: Host,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,data: String) -> IO(Unit):
   match current:
     case Closed{}: IO.pure(Unit,Unit{})
-    case Open{state}: accepted(host,input(state,bindings,keyboard,data))
+    case Open{state}:
+      do IO<Unit>:
+        liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        accepted(host,input(state,liveBindings,keyboard,data))
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
     case Host{+modal,theme,controller,transcript,+bindings,+keyboard}:
@@ -326,7 +329,7 @@ def factory(context: Factory,request: SettingsList.SubmenuRequest) -> IO(Compone
       do IO<Component.Component>:
         open(host,request)
         return component
-def createHost(parent: Component.Component,theme: Ref.Ref<Theme.Theme>,controller: Ref.Ref<Maybe<&2,Controller.Handle>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context) -> IO(Owner):
+def createHost(parent: Component.Component,theme: Ref.Ref<Theme.Theme>,controller: Ref.Ref<Maybe<&2,Controller.Handle>>,transcript: Transcript.Handle,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context) -> IO(Owner):
   do IO<Owner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     +host : Host <- IO.pure(Host,Host{modal,theme,controller,transcript,bindings,keyboard})

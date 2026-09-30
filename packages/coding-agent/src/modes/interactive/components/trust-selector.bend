@@ -14,7 +14,7 @@ type State is Data:
   State{cwd: String,options: List<&2,Trust.ProjectTrustOption>,saved: Maybe<&2,Trust.ProjectTrustStoreEntry>,trusted: Bool,selected: Nat}
 type Modal is Data: Closed{} Open{state: State}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,chosen: Callback.Callback<Trust.ProjectTrustOption,Unit>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,chosen: Callback.Callback<Trust.ProjectTrustOption,Unit>}
 type Owner is Type:
   Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,mouseCallback: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidateCallback: Callback.Callback<Unit,Unit>,focusCallback: Callback.Callback<Bool,Unit>}
 
@@ -79,17 +79,20 @@ def render(state: State,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManag
         "" <> List.append(&2,String,savedLine,List.append(&2,String,current,
           "" <> List.append(&2,String,choiceRows(options,saved,0n,index,theme,width),
             "" <> List.append(&2,String,help,"" <> rule <> Nil{}))))))
-def drawCurrent(current: Modal,editor: Component.Component,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,width: Nat) -> IO(List<&2,String>):
+def drawCurrent(current: Modal,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,width: Nat) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
-    case Open{state}: IO.pure(List<&2,String>,render(state,theme,bindings,width))
+    case Open{state}:
+      do IO<List<&2,String>>:
+        chosenTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        return render(state,chosenTheme,liveBindings,width)
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{modal,editor,theme,bindings,_,_}:
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
-        chosenTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        drawCurrent(current,editor,chosenTheme,bindings,width)
+        drawCurrent(current,editor,theme,bindings,width)
 type Action is Data: Up{} Down{} Confirm{} Cancel{} Ignore{}
 def action(+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> Action:
   Bool.pick(Unit -> Action,Bindings.matches(bindings,keyboard,data,"tui.select.up") || String.eq(data,"k"),_ => Up{},
@@ -115,10 +118,13 @@ def receiveOpen(modal: Ref.Ref<Modal>,chosen: Callback.Callback<Trust.ProjectTru
         Ref.write(Modal,modal,Closed{})
         chooseOption(chosen,selectedOption(state))
     case other: Ref.write(Modal,modal,Open{changed(state,other)})
-def receiveCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,chosen: Callback.Callback<Trust.ProjectTrustOption,Unit>,data: String) -> IO(Unit):
+def receiveCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,chosen: Callback.Callback<Trust.ProjectTrustOption,Unit>,data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
-    case Open{state}: receiveOpen(modal,chosen,state,action(bindings,keyboard,data))
+    case Open{state}:
+      do IO<Unit>:
+        liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        receiveOpen(modal,chosen,state,action(liveBindings,keyboard,data))
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
     case Host{+modal,editor,_,bindings,keyboard,chosen}:
@@ -143,7 +149,7 @@ def invalidate(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_}: Component.invalidate(editor)
 def focus(host: Host,value: Bool) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_}: Component.setFocused(editor,value)
-def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,chosen: Callback.Callback<Trust.ProjectTrustOption,Unit>) -> IO(Owner):
+def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,chosen: Callback.Callback<Trust.ProjectTrustOption,Unit>) -> IO(Owner):
   do IO<Owner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     +host : Host <- IO.pure(Host,Host{modal,editor,theme,bindings,keyboard,chosen})

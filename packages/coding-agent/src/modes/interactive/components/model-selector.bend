@@ -231,7 +231,7 @@ def refreshedModal(current: Modal,models: List<&2,Models.Model()>,status: String
     case Closed{}: (Closed{},False{})
     case Open{state}: (Open{refreshedState(state,models,status)},True{})
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,words: Ref.Ref<Words.Source>,collator: Ref.Ref<Maybe<&2,Collation.Collator>>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,chosen: Callback.Callback<Choice,Unit>}
+  Host{modal: Ref.Ref<Modal>,words: Ref.Ref<Words.Source>,collator: Ref.Ref<Maybe<&2,Collation.Collator>>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,chosen: Callback.Callback<Choice,Unit>}
 type Owner is Type:
   Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,mouseCallback: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidateCallback: Callback.Callback<Unit,Unit>,focusCallback: Callback.Callback<Bool,Unit>}
 def drawn(modal: Ref.Ref<Modal>,pair: State & List<&2,String>) -> IO(List<&2,String>):
@@ -240,20 +240,21 @@ def drawn(modal: Ref.Ref<Modal>,pair: State & List<&2,String>) -> IO(List<&2,Str
       do IO<List<&2,String>>:
         Ref.write(Modal,modal,Open{state})
         return lines
-def drawCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,width: Nat) -> IO(List<&2,String>):
+def drawCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Bindings.KeybindingsManager>,width: Nat) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
     case Open{state}:
       do IO<List<&2,String>>:
-        pair : State & List<&2,String> <- render(state,theme,bindings,width)
+        chosenTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        +liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        pair : State & List<&2,String> <- render(state,chosenTheme,liveBindings,width)
         drawn(modal,pair)
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{+modal,_,collator,editor,theme,bindings,_,_}:
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
-        chosenTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        drawCurrent(current,modal,editor,chosenTheme,bindings,width)
+        drawCurrent(current,modal,editor,theme,bindings,width)
 def receiveOpen(modal: Ref.Ref<Modal>,chosen: Callback.Callback<Choice,Unit>,pair: State & Action) -> IO(Unit):
   match pair:
     case (state,Continue{}): Ref.write(Modal,modal,Open{state})
@@ -269,15 +270,16 @@ def needsWords(command: Input.Command) -> Bool:
     case _: False{}
 def wordsFor(needed: Bool,source: Words.Source,text: String) -> IO(Words.Source):
   match needed: case True{}: Words.readyFor(source,text) case False{}: IO.pure(Words.Source,source)
-def receiveCurrent(current: Modal,modal: Ref.Ref<Modal>,+words: Ref.Ref<Words.Source>,editor: Component.Component,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,chosen: Callback.Callback<Choice,Unit>,+data: String) -> IO(Unit):
+def receiveCurrent(current: Modal,modal: Ref.Ref<Modal>,+words: Ref.Ref<Words.Source>,editor: Component.Component,+bindings: Ref.Ref<Bindings.KeybindingsManager>,+keyboard: Keys.Context,chosen: Callback.Callback<Choice,Unit>,+data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
     case Open{+state}:
       do IO<Unit>:
+        +liveBindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
         stored : Words.Source <- Ref.read(Words.Source,words)
-        +source : Words.Source <- wordsFor(needsWords(Input.command(Input.bindings(),bindings,keyboard,data)),stored,queryOf(state))
+        +source : Words.Source <- wordsFor(needsWords(Input.command(Input.bindings(),liveBindings,keyboard,data)),stored,queryOf(state))
         Ref.write(Words.Source,words,source)
-        pair : State & Action <- input(state,source,bindings,keyboard,data)
+        pair : State & Action <- input(state,source,liveBindings,keyboard,data)
         receiveOpen(modal,chosen,pair)
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
@@ -318,7 +320,7 @@ def invalidate(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,_,_,editor,_,_,_,_}: Component.invalidate(editor)
 def focus(host: Host,value: Bool) -> IO(Unit):
   match host: case Host{_,_,_,editor,_,_,_,_}: Component.setFocused(editor,value)
-def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,source: Words.Source,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,chosen: Callback.Callback<Choice,Unit>) -> IO(Owner):
+def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,source: Words.Source,bindings: Ref.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,chosen: Callback.Callback<Choice,Unit>) -> IO(Owner):
   do IO<Owner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     words : Ref.Ref<Words.Source> <- Ref.new(Words.Source,source)

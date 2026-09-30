@@ -229,12 +229,13 @@ def footerEvent(state: Footer.State,event: Session.AgentSessionEvent) -> Footer.
     case Session.SessionInfoChanged{name}: (withName(state,name),True{})
     case _: (state,False{})
 type WorkingOwned is Type:
-  WorkingOwned{indicator: Maybe<&1,Status.Owner>,appearance: Status.Appearance,redraw: Callback.Callback<Unit,Unit>,cancelKey: String}
-type StartupState is Data: StartupState{initialized: Bool,draft: Maybe<&2,String>}
+  WorkingOwned{indicator: Maybe<&1,Status.Owner>,appearance: Status.Appearance,redraw: Callback.Callback<Unit,Unit>,bindings: Ref.Ref<Keybindings.KeybindingsManager>}
+type EditorInputState is Data: EditorInputState{initialized: Bool,draft: Maybe<&2,String>,history: List<&2,String>}
+type EditorInputEffects is Data: EditorInputEffects{draft: Maybe<&2,String>,history: List<&2,String>}
 type WorkingPreferences is Data:
   WorkingPreferences{message: Maybe<&2,String>,visible: Bool,indicator: Maybe<&2,Loader.Indicator>}
 type Working is Data:
-  Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,ready: Ref.Ref<StartupState>,subscriptionShown: Ref.Ref<Bool>,preferences: Ref.Ref<WorkingPreferences>}
+  Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,ready: Ref.Ref<EditorInputState>,subscriptionShown: Ref.Ref<Bool>,preferences: Ref.Ref<WorkingPreferences>}
 type StatusChange is Data:
   ShowStatus{indicator: Status.Indicator}
   ClearStatus{kind: Status.StatusIndicatorKind}
@@ -248,7 +249,7 @@ def workingActive(working: Working) -> Ref.Ref<Maybe<&2,Loader.Handle>>:
   match working: case Working{active,_,_,_,_,_}: active
 def workingTerminal(working: Working) -> Ref.Ref<Maybe<&2,Terminal.Handle>>:
   match working: case Working{_,_,terminal,_,_,_}: terminal
-def workingReady(working: Working) -> Ref.Ref<StartupState>:
+def workingReady(working: Working) -> Ref.Ref<EditorInputState>:
   match working: case Working{_,_,_,ready,_,_}: ready
 def workingPreferences(working: Working) -> Ref.Ref<WorkingPreferences>:
   match working: case Working{_,_,_,_,_,preferences}: preferences
@@ -362,7 +363,7 @@ def retainedStatus(indicator: Maybe<&1,Status.Owner>) -> Maybe<&1,Status.Owner> 
     case None{}: (None{},None{})
     case Some{Status.Owner{+spec,appearance,Loader.Owner{resource,+handle,animation},colors,countdown,tick}}:
       (Some{Status.Owner{spec,appearance,Loader.Owner{resource,handle,animation},colors,countdown,tick}},Some{handle})
-def workingRetained(pair: Maybe<&1,Status.Owner> & Maybe<&2,Loader.Handle>,appearance: Status.Appearance,request: Callback.Callback<Unit,Unit>,cancel: String,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>) -> IO(Unit):
+def workingRetained(pair: Maybe<&1,Status.Owner> & Maybe<&2,Loader.Handle>,appearance: Status.Appearance,request: Callback.Callback<Unit,Unit>,cancel: Ref.Ref<Keybindings.KeybindingsManager>,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>) -> IO(Unit):
   match pair:
     case (indicator,handle):
       do IO<Unit>:
@@ -391,7 +392,8 @@ def workingMutated(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loa
     case None{}: IO.pure(Unit,Unit{})
     case Some{WorkingOwned{indicator,+appearance,+request,+cancel}}:
       do IO<Unit>:
-        next : Maybe<&1,Status.Owner> <- mutateStatus(indicator,appearance,cancel,mutation)
+        keys : Keybindings.KeybindingsManager <- Ref.read(Keybindings.KeybindingsManager,cancel)
+        next : Maybe<&1,Status.Owner> <- mutateStatus(indicator,appearance,Hints.keyText(keys,"app.interrupt"),mutation)
         workingRetained(retainedStatus(next),appearance,request,cancel,active,owned)
         Bool.pick(Unit -> IO(Unit),mutationChanged(mutation),_ => Callback.call(Unit,Unit,request,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def workingEventApplied(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,config: WorkingPreferences,event: Session.AgentSessionEvent) -> IO(Unit):
@@ -399,7 +401,8 @@ def workingEventApplied(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&
     case None{}: IO.pure(Unit,Unit{})
     case Some{WorkingOwned{indicator,+appearance,+request,+cancel}}:
       do IO<Unit>:
-        +change : StatusChange <- IO.pure(StatusChange,statusChange(event,cancel,config))
+        keys : Keybindings.KeybindingsManager <- Ref.read(Keybindings.KeybindingsManager,cancel)
+        +change : StatusChange <- IO.pure(StatusChange,statusChange(event,Hints.keyText(keys,"app.interrupt"),config))
         next : Maybe<&1,Status.Owner> <- changeStatus(indicator,appearance,change)
         workingRetained(retainedStatus(next),appearance,request,cancel,active,owned)
         Bool.pick(Unit -> IO(Unit),mutationChanged(ApplyStatus{change}),_ => Callback.call(Unit,Unit,request,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
@@ -457,12 +460,12 @@ def changeWorkingIndicator(+working: Working,+options: Maybe<&2,Ctx.WorkingIndic
     applyWorkingMutation(working,UpdateWorkingIndicator{indicator})
 def workingIndicatorCallback(working: Working,options: Maybe<&2,Ctx.WorkingIndicatorOptions>) -> IO(Unit):
   changeWorkingIndicator(working,options)
-def setupWorking(working: Working,paint: Callback.Callback<String,String>,theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+def setupWorking(working: Working,paint: Callback.Callback<String,String>,theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Keybindings.KeybindingsManager>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
   match working:
     case Working{_,owned,_,_,_,_}:
       do IO<Unit>:
         +request : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~workingRedraw,redraw)
-        Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{None{},Status.Appearance{theme,Some{paint},request},request,Hints.keyText(bindings,"app.interrupt")}})
+        Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{None{},Status.Appearance{theme,Some{paint},request},request,bindings}})
 def disposeWorkingOwned(oldOwner: Maybe<&1,WorkingOwned>) -> IO(Unit):
   match oldOwner:
     case None{}: IO.pure(Unit,Unit{})
@@ -476,7 +479,7 @@ def disposeWorking(working: Working) -> IO(Unit):
       do IO<Unit>:
         oldPreferences : WorkingPreferences <- Ref.dispose(WorkingPreferences,preferences)
         oldSubscription : Bool <- Ref.dispose(Bool,subscriptionShown)
-        oldStartup : StartupState <- Ref.dispose(StartupState,ready)
+        oldStartup : EditorInputState <- Ref.dispose(EditorInputState,ready)
         oldTerminal : Maybe<&2,Terminal.Handle> <- Ref.dispose(Maybe<&2,Terminal.Handle>,terminal)
         oldActive : Maybe<&2,Loader.Handle> <- Ref.dispose(Maybe<&2,Loader.Handle>,active)
         oldOwner : Maybe<&1,WorkingOwned> <- Ref.dispose(Maybe<&1,WorkingOwned>,owned)
@@ -702,7 +705,7 @@ type AutocompleteSlot is Data:
   AutocompleteSlot{owner: Ref.Ref<Maybe<&2,Interactive.AutocompleteOwner>>,files: Ref.Ref<Bool>,home: String,data: String}
 type ExportTheme is Data: ExportTheme{active: Ref.Ref<Theme.Theme>,customDir: String}
 type CommandObservation is Data:
-  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>,bash: BashInput,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: TrustContext,header: Maybe<&2,Header.Handle>,bindings: Keybindings.KeybindingsManager,autocomplete: AutocompleteSlot,exportTheme: ExportTheme,shortcuts: Shortcuts.Host}
+  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>,bash: BashInput,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: TrustContext,header: Maybe<&2,Header.Handle>,bindings: Ref.Ref<Keybindings.KeybindingsManager>,autocomplete: AutocompleteSlot,exportTheme: ExportTheme,shortcuts: Shortcuts.Host}
 # builtinDir is <assets>/packages/coding-agent/src/modes/interactive/theme.
 def autocompleteSlot(home: Maybe<&2,String>,builtinDir: String) -> IO(AutocompleteSlot):
   do IO<AutocompleteSlot>:
@@ -1337,7 +1340,8 @@ def hotkeysObserved(input: CommandObservation) -> IO(Unit):
   match input:
     case CommandObservation{_,_,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,bindings,_,_,_}:
       do IO<Unit>:
-        Transcript.hotkeys(transcript,hotkeysMarkdown(bindings))
+        keys : Keybindings.KeybindingsManager <- Ref.read(Keybindings.KeybindingsManager,bindings)
+        Transcript.hotkeys(transcript,hotkeysMarkdown(keys))
         Interactive.requestRender(redraw)
 def matchSettings(host: Maybe<&2,SettingsPicker.Host>) -> IO(Unit):
   match host:
@@ -1382,8 +1386,8 @@ def trustChosen(input: TrustChoiceInput,option: Trust.ProjectTrustOption) -> IO(
       do IO<Unit>:
         result : Result<&2,&2,Trust.Error,Unit> <- Trust.setMany(store,updates)
         trustSaved(trusted,transcript,result)
-# upstream handleReloadCommand (no extensions or keybindings file reload yet):
-# the session reloads settings and prompt resources, the header lists them.
+# upstream handleReloadCommand: reload session resources, then keybindings
+# and the mounted extension shortcut cache.
 def reloadListed(header: Maybe<&2,Header.Handle>,+session: Session.AgentSession) -> IO(Unit):
   match header:
     case None{}: IO.pure(Unit,Unit{})
@@ -1459,15 +1463,34 @@ def reloadShortcuts(shortcuts: Shortcuts.Host,+live: Session.AgentSession,autoco
     runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(live)
     Shortcuts.bind(shortcuts,runner)
     setupAutocomplete(autocomplete,editor,session)
+def updateHeaderBindings(handle: Maybe<&2,Header.Handle>,bindings: Keybindings.KeybindingsManager) -> IO(Unit):
+  match handle:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{ready}: Header.setBindings(ready,bindings)
+def applyReloadedBindings(result: Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager>,target: Ref.Ref<Keybindings.KeybindingsManager>,transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>) -> IO(Unit):
+  match result:
+    case Fail{_}: Transcript.showError(transcript,"Cannot reload keybindings.json; keeping current shortcuts")
+    case Done{AppKeys.KeybindingsManager{+bindings,_,_}}:
+      do IO<Unit>:
+        Ref.write(Keybindings.KeybindingsManager,target,bindings)
+        Transcript.setBindings(transcript,bindings)
+        updateHeaderBindings(header,bindings)
+def reloadBindings(+target: Ref.Ref<Keybindings.KeybindingsManager>,customDir: String,transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>) -> IO(Unit):
+  do IO<Unit>:
+    previous : Keybindings.KeybindingsManager <- Ref.read(Keybindings.KeybindingsManager,target)
+    result : Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager> <- AppKeys.reload(AppKeys.KeybindingsManager{previous,Some{Path.normalize(customDir ++ "/../keybindings.json")},AppKeys.Environment{"linux",None{},None{}}})
+    applyReloadedBindings(result,target,transcript,header)
 def reloadObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,+session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,editor,_,_,_},_,trust,header,_,+autocomplete,_,shortcuts}:
+    case CommandObservation{_,+session,_,_,redraw,cwd,_,_,_,_,BashInput{_,+transcript,editor,_,_,_},_,trust,+header,bindings,+autocomplete,ExportTheme{_,customDir},shortcuts}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         streaming : Bool <- Session.isStreaming(live)
         compacting : Bool <- Session.isCompacting(live)
         done : Bool <- reloadIdle(transcript,header,live,trust,cwd,streaming,compacting)
-        Bool.pick(Unit -> IO(Unit),done,_ => reloadShortcuts(shortcuts,live,autocomplete,editor,session),_ => IO.pure(Unit,Unit{}))(Unit{})
+        Bool.pick(Unit -> IO(Unit),done,_ => do IO<Unit>:
+            reloadBindings(bindings,customDir,transcript,header)
+            reloadShortcuts(shortcuts,live,autocomplete,editor,session),_ => IO.pure(Unit,Unit{}))(Unit{})
         Interactive.requestRender(redraw)
 def sessionStatus(input: CommandObservation,message: String) -> IO(Unit):
   match input:
@@ -2322,7 +2345,7 @@ def cancelLogin(state: LoginState,_: Unit) -> IO(Unit):
         target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,host)
         cancelLoginDialog(active,target)
 type ThemeContext is Data:
-  ThemeContext{theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,interaction: Interaction,models: Ref.Ref<List<&2,Models.Model()>>,binding: Maybe<&2,Binding>,login: LoginState,resume: ResumeState,keys: Keybindings.KeybindingsManager,highlighter: SyntaxHighlight.Highlighter,status: Interactive.StatusSink}
+  ThemeContext{theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,interaction: Interaction,models: Ref.Ref<List<&2,Models.Model()>>,binding: Maybe<&2,Binding>,login: LoginState,resume: ResumeState,keys: Ref.Ref<Keybindings.KeybindingsManager>,highlighter: SyntaxHighlight.Highlighter,status: Interactive.StatusSink}
 type KeyInput is Data:
   KeyInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Interactive.StatusSink,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,session: Ref.Ref<Session.AgentSession>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,header: Maybe<&2,Header.Handle>,transcript: Transcript.Handle,models: Interactive.CommandSink,suspension: Process.SuspensionHandle}
 type ControlSink is Data:
@@ -2640,7 +2663,7 @@ def resumeDialogRef(state: ResumeState) -> Ref.Ref<Maybe<&2,ExtensionDialog.Host
   match state: case ResumeState{_,dialog,_,_,_,_}: dialog
 def contextBinding(context: ThemeContext) -> Maybe<&2,Binding>:
   match context: case ThemeContext{_,_,_,_,_,_,_,_,binding,_,_,_,_,_}: binding
-def contextBindings(context: ThemeContext) -> Keybindings.KeybindingsManager:
+def contextBindings(context: ThemeContext) -> Ref.Ref<Keybindings.KeybindingsManager>:
   match context: case ThemeContext{_,_,_,_,_,_,_,_,_,_,_,keys,_,_}: keys
 def loginStateOf(mode: Maybe<&2,Binding>,host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,abort: Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>,resources: LoginResources) -> LoginState:
   match mode:
@@ -3244,16 +3267,21 @@ def connectSettingsTheme(interaction: Interaction,handle: ThemeController.Handle
       do IO<Unit>:
         current : Maybe<&2,SettingsPicker.Host> <- Ref.read(Maybe<&2,SettingsPicker.Host>,settings)
         installSettingsTheme(current,handle)
-def enableStartup(state: StartupState) -> StartupState & Unit:
-  match state: case StartupState{_,draft}: (StartupState{True{},draft},Unit{})
-def acceptStartupSubmission(state: StartupState,text: String) -> StartupState & Bool:
+def enableStartup(state: EditorInputState) -> EditorInputState & Unit:
+  match state: case EditorInputState{_,draft,history}: (EditorInputState{True{},draft,history},Unit{})
+def promptSubmission(command: Commands.Command) -> Bool:
+  match command: case Commands.Send{_}: True{} case _: False{}
+def acceptStartupSubmission(state: EditorInputState,+text: String) -> EditorInputState & Bool:
   match state:
-    case StartupState{True{},draft}: (StartupState{True{},draft},True{})
-    case StartupState{False{},_}: (StartupState{False{},Some{text}},False{})
-def takeStartupDraft(state: StartupState) -> StartupState & Maybe<&2,String>:
-  match state: case StartupState{initialized,draft}: (StartupState{initialized,None{}},draft)
-def startupInitialized(state: StartupState) -> Bool:
-  match state: case StartupState{initialized,_}: initialized
+    case EditorInputState{True{},draft,+history}:
+      (EditorInputState{True{},draft,Bool.pick(List<&2,String>,promptSubmission(Commands.parse(text)) && Bool.not(String.is_empty(Text.trim(text))),text <> history,history)},True{})
+    case EditorInputState{False{},_,history}: (EditorInputState{False{},Some{text},history},False{})
+def takeInputEffects(state: EditorInputState) -> EditorInputState & EditorInputEffects:
+  match state:
+    case EditorInputState{initialized,draft,history}: (EditorInputState{initialized,None{},Nil{}},EditorInputEffects{draft,List.reverse(&2,String,history)})
+def startupInitialized(state: EditorInputState) -> Bool:
+  match state: case EditorInputState{initialized,_,_}: initialized
+
 def initializeApplication(failure: Interactive.StatusSink,first: Bool,managed: Maybe<&2,Manager.ToolsManager>,+transcript: Transcript.Handle,+session: Ref.Ref<Session.AgentSession>,+interaction: Interaction,builtinDir: String,highlighter: SyntaxHighlight.Highlighter,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match first:
     case False{}: IO.pure(Unit,Unit{})
@@ -3323,7 +3351,7 @@ def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & T
         Callback.call(Unit,Unit,render,Unit{})
         startInput(handle,redraw,queue,initial,failure,render)
         Bool.pick(Unit -> IO(Unit),first,
-          _ => Ref.modify(StartupState,Unit,workingReady(workingOf(interaction)),enableStartup),
+          _ => Ref.modify(EditorInputState,Unit,workingReady(workingOf(interaction)),enableStartup),
           _ => IO.pure(Unit,Unit{}))(Unit{})
     case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
@@ -3449,7 +3477,7 @@ def configuredTui(base: Tui.TuiBase,session: Ref.Ref<Session.AgentSession>,scree
     clearFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(clearEnv),""),"1"))
     show : Bool <- IO.pure(Bool,Maybe.default(&2,Bool,Settings.selectedShowHardwareCursor(Settings.get(Settings.effective(settings),"showHardwareCursor")),hardwareFallback))
     return Process.preferredTui(base,Process.screenPreferences(screen,Process.Preferences{Some{show},Some{Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),clearFallback)},Some{configuredScrollbar(Settings.getFullscreenScrollbar(settings))},None{},Nil{},Settings.getFullscreenCopyOnSelect(settings),None{}}))
-type IndicatorStyle is Data: IndicatorStyle{theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager}
+type IndicatorStyle is Data: IndicatorStyle{theme: Ref.Ref<Theme.Theme>,bindings: Ref.Ref<Keybindings.KeybindingsManager>}
 def styledIndicator(+current: Theme.Theme,bindings: Keybindings.KeybindingsManager) -> String:
   +shortcut = Hints.keyDisplayText(bindings,"tui.altScreen.bottom")
   +text = " ↓ Jump to latest message" ++ Bool.pick(String,String.is_empty(shortcut),""," · " ++ shortcut) ++ " "
@@ -3460,7 +3488,8 @@ def indicatorText(style: IndicatorStyle,_: Unit) -> IO(String):
     case IndicatorStyle{theme,bindings}:
       do IO<String>:
         current : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        return styledIndicator(current,bindings)
+        keys : Keybindings.KeybindingsManager <- Ref.read(Keybindings.KeybindingsManager,bindings)
+        return styledIndicator(current,keys)
 def searchPalette(theme: Ref.Ref<Theme.Theme>,_: Unit) -> IO(AltSearch.Styles):
   do IO<AltSearch.Styles>:
     +current : Theme.Theme <- Ref.read(Theme.Theme,theme)
@@ -3518,11 +3547,10 @@ def processEditorBorrowed(borrowed: View.View & Component.Component & View.Handl
       do IO<View.View & Result<&2,&2,Error,Unit>>:
         +indicator : Callback.Callback<Unit,String> <- Callback.create(~IndicatorStyle,~Unit,~String,~indicatorText,IndicatorStyle{contextTheme(context),contextBindings(context)})
         +searchStyles : Callback.Callback<Unit,AltSearch.Styles> <- Callback.create(~Ref.Ref<Theme.Theme>,~Unit,~AltSearch.Styles,~searchPalette,contextTheme(context))
-        +viewportBindings : Ref.Ref<Keybindings.KeybindingsManager> <- Ref.new(Keybindings.KeybindingsManager,contextBindings(context))
+        +viewportBindings : Ref.Ref<Keybindings.KeybindingsManager> = contextBindings(context)
         +screen : Process.ScreenState <- configuredScreen(contextSession(context),tuiModeOverride(contextBinding(context)),indicator,viewportBindings,searchStyles)
         mounted : View.View & View.Handle & Tui.ResultOf(Tui.TuiBase) <- View.mountFor(view,editorComponent,footerComponent(foot),fullscreenScreen(screen))
         outcome : View.View & Result<&2,&2,Error,Unit> <- processMounted(mounted,document,editorComponent,foot,stopped,redraw,queue,initial,screen,AltScreen.initial(indicator,viewportBindings,searchStyles),context)
-        oldBindings : Keybindings.KeybindingsManager <- Ref.dispose(Keybindings.KeybindingsManager,viewportBindings)
         Callback.dispose(Unit,AltSearch.Styles,searchStyles)
         Callback.dispose(Unit,String,indicator)
         return outcome
@@ -3735,21 +3763,44 @@ def restoreStartupDraft(editor: Live.Handle,draft: Maybe<&2,String>) -> IO(Unit)
   match draft:
     case None{}: IO.pure(Unit,Unit{})
     case Some{text}: Live.setText(editor,text)
+# Submission runs inside the serialized editor input callback. Capture history
+# there and apply it after that input returns, without re-entering its lock.
+def addPromptHistory(+editor: Live.Handle,history: List<&2,String>) -> IO(Unit):
+  match history:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case text <> rest:
+      do IO<Unit>:
+        Live.addToHistory(editor,text)
+        addPromptHistory(editor,rest)
+def applyInputEffects(+editor: Live.Handle,effects: EditorInputEffects) -> IO(Unit):
+  match effects:
+    case EditorInputEffects{draft,history}:
+      do IO<Unit>:
+        restoreStartupDraft(editor,draft)
+        addPromptHistory(editor,history)
 type StartupInput is Data:
-  StartupInput{host: CustomEditor.Host,ready: Ref.Ref<StartupState>}
+  StartupInput{host: CustomEditor.Host,ready: Ref.Ref<EditorInputState>}
+def startupDefault(+host: CustomEditor.Host,+data: String,initialized: Bool) -> IO(Unit):
+  match initialized host:
+    case True{} host: CustomEditor.defaultInput(host,data)
+    case False{} CustomEditor.Host{editor,inner,+bindings,keyboard,actions,onAction,shortcut}:
+      do IO<Unit>:
+        keys : Keybindings.KeybindingsManager <- Ref.read(Keybindings.KeybindingsManager,bindings)
+        Bool.pick(Unit -> IO(Unit),Keybindings.matches(keys,keyboard,data,"app.clipboard.pasteImage"),
+          _ => IO.pure(Unit,Unit{}),
+          _ => CustomEditor.defaultInput(startupHost(CustomEditor.Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},False{}),data))(Unit{})
 def startupInput(input: StartupInput,data: String) -> IO(Unit):
   match input:
     case StartupInput{CustomEditor.Host{+editor,+inner,+bindings,+keyboard,+actions,+onAction,+shortcut},+ready}:
       do IO<Unit>:
         +shared : String = data
-        +state : StartupState <- Ref.read(StartupState,ready)
+        +state : EditorInputState <- Ref.read(EditorInputState,ready)
         handled : Bool <- CustomEditor.handleExtensionShortcut(CustomEditor.Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},shared)
-        Bool.pick(Unit -> IO(Unit),handled,_ => IO.pure(Unit,Unit{}),_ => Bool.pick(Unit -> IO(Unit),Bool.not(startupInitialized(state)) && Keybindings.matches(bindings,keyboard,shared,"app.clipboard.pasteImage"),
-          _ => IO.pure(Unit,Unit{}),
-          _ => CustomEditor.defaultInput(startupHost(CustomEditor.Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},startupInitialized(state)),shared))(Unit{}))(Unit{})
-        draft : Maybe<&2,String> <- Ref.modify(StartupState,Maybe<&2,String>,ready,takeStartupDraft)
-        restoreStartupDraft(editor,draft)
-def startupEditor(host: CustomEditor.Host,ready: Ref.Ref<StartupState>) -> IO(CustomEditor.Owner):
+        Bool.pick(Unit -> IO(Unit),handled,_ => IO.pure(Unit,Unit{}),
+          _ => startupDefault(CustomEditor.Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},shared,startupInitialized(state)))(Unit{})
+        effects : EditorInputEffects <- Ref.modify(EditorInputState,EditorInputEffects,ready,takeInputEffects)
+        applyInputEffects(editor,effects)
+def startupEditor(host: CustomEditor.Host,ready: Ref.Ref<EditorInputState>) -> IO(CustomEditor.Owner):
   match host:
     case CustomEditor.Host{editor,+inner,bindings,keyboard,actions,onAction,shortcut}:
       do IO<CustomEditor.Owner>:
@@ -3776,10 +3827,6 @@ def loadedBindings(result: Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager
       do IO<Keybindings.KeybindingsManager>:
         Transcript.showError(transcript,"Cannot load keybindings.json; using default shortcuts")
         return Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>))
-def updateHeaderBindings(handle: Maybe<&2,Header.Handle>,bindings: Keybindings.KeybindingsManager) -> IO(Unit):
-  match handle:
-    case None{}: IO.pure(Unit,Unit{})
-    case Some{ready}: Header.setBindings(ready,bindings)
 # The editor's requestRender: asynchronous autocomplete results repaint.
 def editorRenderRequested(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,unit: Unit) -> IO(Unit): Interactive.requestRender(redraw)
 def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,changed: Callback.Callback<String,Unit>,controller: Controller.Controller,+queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,+words: Words.Source,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
@@ -3800,7 +3847,7 @@ def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,chang
         live : Live.Owner <- Live.createWithWorking(Component.ComponentId{2n},configured,words,contextBindings(context),Keys.defaults(),rows,workingActive(working))
         runLive(Live.borrow(live),words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context)
 type SubmissionInput is Data:
-  SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Interactive.StatusSink,session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,startup: Ref.Ref<StartupState>}
+  SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Interactive.StatusSink,session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,startup: Ref.Ref<EditorInputState>}
 def submitCommandWithPending(input: SubmissionInput,command: Commands.Command) -> IO(Unit):
   match input command:
     case SubmissionInput{queue,stop,failure,session,transcript,_} Commands.Send{message}:
@@ -3815,7 +3862,7 @@ def submitWithPending(input: SubmissionInput,text: String) -> IO(Unit):
     case SubmissionInput{queue,stop,failure,session,+transcript,+startup}:
       do IO<Unit>:
         +shared : String = text
-        accepted : Bool <- Ref.modify(StartupState,Bool,startup,state => acceptStartupSubmission(state,shared))
+        accepted : Bool <- Ref.modify(EditorInputState,Bool,startup,state => acceptStartupSubmission(state,shared))
         Bool.pick(Unit -> IO(Unit),accepted,
           _ => Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(shared)),_ => IO.pure(Unit,Unit{}),_ => submitCommandWithPending(SubmissionInput{queue,stop,failure,session,transcript,startup},Commands.parse(shared)))(Unit{}),
           _ => Transcript.status(transcript,"Startup is still in progress"))(Unit{})
@@ -3906,7 +3953,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +workingActiveRef : Ref.Ref<Maybe<&2,Loader.Handle>> <- Ref.new(Maybe<&2,Loader.Handle>,None{})
         +workingOwnerRef : Ref.Ref<Maybe<&1,WorkingOwned>> <- Ref.new(Maybe<&1,WorkingOwned>,None{})
         +workingTerminalRef : Ref.Ref<Maybe<&2,Terminal.Handle>> <- Ref.new(Maybe<&2,Terminal.Handle>,None{})
-        +workingReadyRef : Ref.Ref<StartupState> <- Ref.new(StartupState,StartupState{False{},None{}})
+        +workingReadyRef : Ref.Ref<EditorInputState> <- Ref.new(EditorInputState,EditorInputState{False{},None{},Nil{}})
         +workingPreferencesRef : Ref.Ref<WorkingPreferences> <- Ref.new(WorkingPreferences,WorkingPreferences{None{},True{},None{}})
         +working : Working <- IO.pure(Working,Working{workingActiveRef,workingOwnerRef,workingTerminalRef,workingReadyRef,subscriptionShown,workingPreferencesRef})
         +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
@@ -3936,10 +3983,11 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +bashActivity : Ref.Ref<BashActivity> <- Ref.new(BashActivity,BashActivity{False{},False{},None{}})
         +autocomplete : AutocompleteSlot <- autocompleteSlot(home,builtinDir)
-        shortcutOwner : Shortcuts.Owner <- Shortcuts.create(bindings,Keys.defaults(),transcriptHandle,redraw,View.headerHandle(viewHandle))
-        withShortcuts(Shortcuts.borrow(shortcutOwner),shortcuts => do IO<Result<&2,&2,Error,Unit>>:
+        +bindingSource : Ref.Ref<Keybindings.KeybindingsManager> <- Ref.new(Keybindings.KeybindingsManager,bindings)
+        shortcutOwner : Shortcuts.Owner <- Shortcuts.create(bindingSource,Keys.defaults(),transcriptHandle,redraw,View.headerHandle(viewHandle))
+        result : Result<&2,&2,Error,Unit> <- withShortcuts(Shortcuts.borrow(shortcutOwner),shortcuts => do IO<Result<&2,&2,Error,Unit>>:
             +shortcuts : Shortcuts.Host <- IO.pure(Shortcuts.Host,shortcuts)
-            commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),status,redraw,cwd,builtinDir,importStateOf(mode,extensionDialogHost,status,redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,status,redraw,bashActivity},settingsSelectorRef,TrustContext{trustSelectorRef,Trust.create(Path.normalize(customDir ++ "/..")),autoTrustOnReloadOf(mode)},View.headerHandle(viewHandle),bindings,autocomplete,ExportTheme{liveTheme,customDir},shortcuts})
+            commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),status,redraw,cwd,builtinDir,importStateOf(mode,extensionDialogHost,status,redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,status,redraw,bashActivity},settingsSelectorRef,TrustContext{trustSelectorRef,Trust.create(Path.normalize(customDir ++ "/..")),autoTrustOnReloadOf(mode)},View.headerHandle(viewHandle),bindingSource,autocomplete,ExportTheme{liveTheme,customDir},shortcuts})
             +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
             +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
             selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home,working,selectorRef})
@@ -3948,8 +3996,11 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
             Transcript.setExtensions(transcriptHandle,renderers)
             bindOptional(mode,listener,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home,working)
             controllerPair : Controller.Controller & Controller.Handle <- controllerFor(mode,current,session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver},Some{selectionObserver},modelsRef,loginCallback)
-            startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,settingsSelectorRef,trustSelectorRef,View.headerHandle(viewHandle),bashActivity,working,autocomplete,suspension,shareControlRef,startupCatalogRef,shortcuts},modelsRef,mode,loginState,resumeState,bindings,highlighter,status})
+            startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,settingsSelectorRef,trustSelectorRef,View.headerHandle(viewHandle),bashActivity,working,autocomplete,suspension,shareControlRef,startupCatalogRef,shortcuts},modelsRef,mode,loginState,resumeState,bindingSource,highlighter,status})
         )
+        oldBindings : Keybindings.KeybindingsManager <- Ref.dispose(Keybindings.KeybindingsManager,bindingSource)
+        return result
+
 def startStyles(styles: MarkdownTheme.Styles,view: View.View,+viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match styles:
     case MarkdownTheme.Styles{+markdown,callbacks,+live,+highlighter}:
