@@ -1778,3 +1778,27 @@ SCENARIOS.append({
               ("json-file", "project/.pi/settings.json", "restored-settings"),
               ("key", "Escape"), ("wait", r"shell\$", "exit"), ("snap", "exit")],
 })
+
+
+def current_large_session():
+    """The upstream transcript in current session format, with an existing cwd.
+
+    Keep the legacy/missing-cwd scenario separate: its migration and deliberate
+    reload after Continue are not ordinary resume costs.
+    """
+    entries = [json.loads(line) for line in (UPSTREAM / "packages/coding-agent/test/fixtures/large-session.jsonl").read_text().splitlines() if line]
+    entries[0].update(version=3, cwd="<root>/project")
+    previous = None
+    for index, entry in enumerate(entries[1:], 1):
+        entry.update(id=f"{index:08x}", parentId=previous)
+        previous = entry["id"]
+    return "".join(json.dumps(entry, separators=(",", ":"), ensure_ascii=False) + "\n" for entry in entries)
+
+
+SCENARIOS.append({
+    "name": "large-session-current-typing", "args": MODEL + ["--session", "large.jsonl"],
+    "within": {"startup": 2, "frame": 1.5, **{f"key{index}": {"ratio": 2, "floor_ms": 20} for index in range(1, 7)}},
+    "files": {"project/large.jsonl": current_large_session()},
+    "steps": [("wait", READY, "startup"), ("wait", "Did we revert", "frame"), ("settle", 1.0),
+              *typed("typing"), ("settle", .3), ("snap", "typed"), ("snap-history", "history")],
+})
