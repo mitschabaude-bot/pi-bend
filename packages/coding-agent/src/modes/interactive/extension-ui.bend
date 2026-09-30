@@ -18,17 +18,18 @@ import ./theme/markdown-theme.bend as MarkdownTheme
 import ./theme/theme.bend as Theme
 import ./transcript.bend as Transcript
 import ./interactive-mode.bend as Interactive
+import ./extension-shortcuts.bend as Shortcuts
 
 # Interactive extension callbacks share the live editor and prompt slot.
 # The owner unbinds these callbacks before disposing them.
 type Env is Data:
   Env{dialog: Dialog.Host,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,theme: Ref.Ref<Theme.Theme>,editorTheme: Editor.EditorTheme}
 type BaseEnv is Data:
-  BaseEnv{dialog: Dialog.Host,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,theme: Ref.Ref<Theme.Theme>,widgets: Widgets.Host,working: Ctx.WorkingControls}
+  BaseEnv{dialog: Dialog.Host,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,theme: Ref.Ref<Theme.Theme>,widgets: Widgets.Host,working: Ctx.WorkingControls,shortcuts: Shortcuts.Host}
 type Rebinding is Data:
-  Rebinding{previous: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,ui: Ctx.ExtensionUIContext,runner: Ref.Ref<Maybe<&2,Runner.ExtensionRunner>>,widgets: Widgets.Host}
+  Rebinding{previous: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,ui: Ctx.ExtensionUIContext,runner: Ref.Ref<Maybe<&2,Runner.ExtensionRunner>>,widgets: Widgets.Host,shortcuts: Shortcuts.Host}
 type Owner is Type:
-  Owner{ui: Ctx.ExtensionUIContext,border: Callback.Callback<String,String>,accent: Callback.Callback<String,String>,muted: Callback.Callback<String,String>,runner: Ref.Ref<Maybe<&2,Runner.ExtensionRunner>>,widgets: Widgets.Host,previous: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>}
+  Owner{ui: Ctx.ExtensionUIContext,border: Callback.Callback<String,String>,accent: Callback.Callback<String,String>,muted: Callback.Callback<String,String>,runner: Ref.Ref<Maybe<&2,Runner.ExtensionRunner>>,widgets: Widgets.Host,previous: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,shortcuts: Shortcuts.Host}
 
 def select(env: Env,request: Ctx.SelectRequest) -> IO(Maybe<&2,String>):
   match env request:
@@ -126,7 +127,7 @@ def editorText(env: Env,_: Unit) -> IO(String):
         readEditor(found)
 def create(+base: BaseEnv) -> IO(Owner):
   match base:
-    case BaseEnv{dialog,editor,footer,transcript,redraw,terminal,theme,+widgets,working}:
+    case BaseEnv{dialog,editor,footer,transcript,redraw,terminal,theme,+widgets,working,shortcuts}:
       do IO<Owner>:
         +border : Callback.Callback<String,String> <- MarkdownTheme.color(theme,"borderMuted")
         +accent : Callback.Callback<String,String> <- MarkdownTheme.color(theme,"accent")
@@ -145,7 +146,7 @@ def create(+base: BaseEnv) -> IO(Owner):
         +paste : Callback.Callback<String,Unit> <- Callback.create(~Env,~String,~Unit,~pasteToEditor,bound)
         +getText : Callback.Callback<Unit,String> <- Callback.create(~Env,~Unit,~String,~editorText,bound)
         current : Ref.Ref<Maybe<&2,Runner.ExtensionRunner>> <- Ref.new(Maybe<&2,Runner.ExtensionRunner>,None{})
-        return Owner{Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,setText,paste,getText,Some{working},Some{theme}},border,accent,muted,current,widgets,None{}}
+        return Owner{Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,setText,paste,getText,Some{working},Some{theme}},border,accent,muted,current,widgets,None{},shortcuts}
 def bindRunner(ui: Ctx.ExtensionUIContext,runner: Maybe<&2,Runner.ExtensionRunner>) -> IO(Unit):
   match runner:
     case None{}: IO.pure(Unit,Unit{})
@@ -165,42 +166,45 @@ def callPrevious(previous: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>
     case Some{callback}: Callback.call(Session.AgentSession,Unit,callback,session)
 def sessionRebound(binding: Rebinding,+session: Session.AgentSession) -> IO(Unit):
   match binding:
-    case Rebinding{previous,ui,current,widgets}:
+    case Rebinding{previous,ui,current,widgets,shortcuts}:
       do IO<Unit>:
         callPrevious(previous,session)
-        next : Maybe<&2,Runner.ExtensionRunner> <- Session.extensionRunner(session)
+        +next : Maybe<&2,Runner.ExtensionRunner> <- Session.extensionRunner(session)
         switchRunner(ui,current,next)
+        Shortcuts.bind(shortcuts,next)
         Widgets.clear(widgets)
 def rebound(binding: Rebinding,session: Session.AgentSession) -> IO(Unit):
   sessionRebound(binding,session)
-def installHook(hook: Maybe<&2,Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>>,ui: Ctx.ExtensionUIContext,current: Ref.Ref<Maybe<&2,Runner.ExtensionRunner>>,widgets: Widgets.Host) -> IO(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>):
+def installHook(hook: Maybe<&2,Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>>,ui: Ctx.ExtensionUIContext,current: Ref.Ref<Maybe<&2,Runner.ExtensionRunner>>,widgets: Widgets.Host,shortcuts: Shortcuts.Host) -> IO(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>):
   match hook:
     case None{}: IO.pure(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,None{})
     case Some{+reference}:
       do IO<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>:
         +previous : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- Ref.read(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,reference)
-        callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~Rebinding,~Session.AgentSession,~Unit,~rebound,Rebinding{previous,ui,current,widgets})
+        callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~Rebinding,~Session.AgentSession,~Unit,~rebound,Rebinding{previous,ui,current,widgets,shortcuts})
         Ref.write(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,reference,Some{callback})
         return previous
 def bind(owner: Owner,+runner: Maybe<&2,Runner.ExtensionRunner>,hook: Maybe<&2,Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>>) -> IO(Owner):
   match owner:
-    case Owner{+ui,border,accent,muted,+current,+widgets,_}:
+    case Owner{+ui,border,accent,muted,+current,+widgets,_,+shortcuts}:
       do IO<Owner>:
         switchRunner(ui,current,runner)
-        previous : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- installHook(hook,ui,current,widgets)
-        return Owner{ui,border,accent,muted,current,widgets,previous}
+        Shortcuts.bind(shortcuts,runner)
+        previous : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- installHook(hook,ui,current,widgets,shortcuts)
+        return Owner{ui,border,accent,muted,current,widgets,previous,shortcuts}
 def context(owner: Owner) -> Owner & Ctx.ExtensionUIContext:
   match owner:
-    case Owner{+ui,border,accent,muted,current,widgets,previous}:
-      (Owner{ui,border,accent,muted,current,widgets,previous},ui)
+    case Owner{+ui,border,accent,muted,current,widgets,previous,shortcuts}:
+      (Owner{ui,border,accent,muted,current,widgets,previous,shortcuts},ui)
 def disposePrevious(previous: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>) -> IO(Unit):
   match previous:
     case None{}: IO.pure(Unit,Unit{})
     case Some{callback}: Callback.dispose(Session.AgentSession,Unit,callback)
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,setText,paste,getText,_,_},border,accent,muted,runner,_,previous}:
+    case Owner{Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,setText,paste,getText,_,_},border,accent,muted,runner,_,previous,shortcuts}:
       do IO<Unit>:
+        Shortcuts.clear(shortcuts)
         current : Maybe<&2,Runner.ExtensionRunner> <- Ref.dispose(Maybe<&2,Runner.ExtensionRunner>,runner)
         unbind(current)
         disposePrevious(previous)

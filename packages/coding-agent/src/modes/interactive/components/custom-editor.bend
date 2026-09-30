@@ -9,11 +9,10 @@ import ../../../../../runtime/src/callback.bend as Callback
 # keybindings in front of it. `actions` are the registered app actions in
 # registration order (upstream actionHandlers); a matching key calls
 # `onAction` with the action name and the editor, otherwise the editor
-# handles the key. Extension shortcuts and clipboard image paste are not
-# ported yet.
+# handles the key. Extension shortcuts get first refusal, as upstream does.
 type AppAction is Data: AppAction{name: String,editor: Live.Handle}
 type Host is Data:
-  Host{editor: Live.Handle,inner: Component.Component,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,actions: List<&2,String>,onAction: Callback.Callback<AppAction,Unit>}
+  Host{editor: Live.Handle,inner: Component.Component,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,actions: List<&2,String>,onAction: Callback.Callback<AppAction,Unit>,onExtensionShortcut: Maybe<&2,Callback.Callback<String,Bool>>}
 type Owner is Type: Owner{component: Component.Component,input: Callback.Callback<String,Unit>}
 
 def registered(actions: List<&2,String>,+name: String) -> Bool:
@@ -22,10 +21,10 @@ def registered(actions: List<&2,String>,+name: String) -> Bool:
     case action <> rest: String.eq(action,name) || registered(rest,name)
 def run(+host: Host,+name: String) -> IO(Unit):
   match host:
-    case Host{editor,_,_,_,_,onAction}: Callback.call(AppAction,Unit,onAction,AppAction{name,editor})
+    case Host{editor,_,_,_,_,onAction,_}: Callback.call(AppAction,Unit,onAction,AppAction{name,editor})
 def forward(host: Host,data: String) -> IO(Unit):
   match host:
-    case Host{_,inner,_,_,_,_}: Component.handleInput(inner,data)
+    case Host{_,inner,_,_,_,_,_}: Component.handleInput(inner,data)
 def firstMatch(actions: List<&2,String>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> Maybe<&2,String>:
   match actions:
     case Nil{}: None{}
@@ -39,39 +38,50 @@ def otherAction(+host: Host,+data: String,found: Maybe<&2,String>) -> IO(Unit):
 # be rebound to history even though it cycles models by default.
 def otherKey(+host: Host,+data: String) -> IO(Unit):
   match host:
-    case Host{editor,inner,+bindings,+keyboard,actions,onAction}:
+    case Host{editor,inner,+bindings,+keyboard,actions,onAction,shortcut}:
       Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.editor.historyPrevious") || Bindings.matches(bindings,keyboard,data,"tui.editor.historyNext"),
-        _ => forward(Host{editor,inner,bindings,keyboard,actions,onAction},data),
-        _ => otherAction(Host{editor,inner,bindings,keyboard,actions,onAction},data,firstMatch(actions,bindings,keyboard,data)))(Unit{})
+        _ => forward(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data),
+        _ => otherAction(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data,firstMatch(actions,bindings,keyboard,data)))(Unit{})
 # Exit only from an empty editor; otherwise the key edits (delete forward).
 def exitKey(+host: Host,+data: String) -> IO(Unit):
   match host:
-    case Host{+editor,inner,bindings,keyboard,+actions,onAction}:
+    case Host{+editor,inner,bindings,keyboard,+actions,onAction,shortcut}:
       do IO<Unit>:
         text : String <- Live.text(editor)
         Bool.pick(Unit -> IO(Unit),String.is_empty(text),
-          _ => Bool.pick(Unit -> IO(Unit),registered(actions,"app.exit"),_ => run(Host{editor,inner,bindings,keyboard,actions,onAction},"app.exit"),_ => IO.pure(Unit,Unit{}))(Unit{}),
-          _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction},data))(Unit{})
+          _ => Bool.pick(Unit -> IO(Unit),registered(actions,"app.exit"),_ => run(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},"app.exit"),_ => IO.pure(Unit,Unit{}))(Unit{}),
+          _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data))(Unit{})
 # Interrupt only without an autocomplete menu; the editor closes the menu.
 def interruptKey(+host: Host,+data: String) -> IO(Unit):
   match host:
-    case Host{+editor,inner,bindings,keyboard,+actions,onAction}:
+    case Host{+editor,inner,bindings,keyboard,+actions,onAction,shortcut}:
       do IO<Unit>:
         menu : Bool <- Live.isShowingAutocomplete(editor)
         Bool.pick(Unit -> IO(Unit),Bool.not(menu) && registered(actions,"app.interrupt"),
-          _ => run(Host{editor,inner,bindings,keyboard,actions,onAction},"app.interrupt"),
-          _ => forward(Host{editor,inner,bindings,keyboard,actions,onAction},data))(Unit{})
-def handleInput(+host: Host,+data: String) -> IO(Unit):
+          _ => run(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},"app.interrupt"),
+          _ => forward(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data))(Unit{})
+def defaultInput(+host: Host,+data: String) -> IO(Unit):
   match host:
-    case Host{editor,inner,+bindings,+keyboard,actions,onAction}:
+    case Host{editor,inner,+bindings,+keyboard,actions,onAction,shortcut}:
       # upstream checks the clipboard paste binding before every app key.
       Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"app.clipboard.pasteImage"),
-        _ => run(Host{editor,inner,bindings,keyboard,actions,onAction},"app.clipboard.pasteImage"),
+        _ => run(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},"app.clipboard.pasteImage"),
         _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"app.interrupt"),
-        _ => interruptKey(Host{editor,inner,bindings,keyboard,actions,onAction},data),
+        _ => interruptKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data),
         _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"app.exit"),
-          _ => exitKey(Host{editor,inner,bindings,keyboard,actions,onAction},data),
-          _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction},data))(Unit{}))(Unit{}))(Unit{})
+          _ => exitKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data),
+          _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data))(Unit{}))(Unit{}))(Unit{})
+
+def extensionInput(+host: Host,+data: String,hook: Maybe<&2,Callback.Callback<String,Bool>>) -> IO(Unit):
+  match hook:
+    case None{}: defaultInput(host,data)
+    case Some{callback}:
+      do IO<Unit>:
+        handled : Bool <- Callback.call(String,Bool,callback,data)
+        Bool.pick(Unit -> IO(Unit),handled,_ => IO.pure(Unit,Unit{}),_ => defaultInput(host,data))(Unit{})
+def handleInput(+host: Host,+data: String) -> IO(Unit):
+  match host:
+    case Host{_,_,_,_,_,_,hook}: extensionInput(host,data,hook)
 
 def receive(host: Host,data: String) -> IO(Unit): handleInput(host,data)
 # The wrapped editor keeps its id, rendering, mouse and focus callbacks.
@@ -82,9 +92,9 @@ def wrapped(inner: Component.Component,input: Callback.Callback<String,Unit>) ->
     case Component.Managed{component,lifetime}: Component.Managed{wrapped(component,input),lifetime}
 def create(host: Host) -> IO(Owner):
   match host:
-    case Host{editor,+inner,bindings,keyboard,actions,onAction}:
+    case Host{editor,+inner,bindings,keyboard,actions,onAction,shortcut}:
       do IO<Owner>:
-        +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,Host{editor,inner,bindings,keyboard,actions,onAction})
+        +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,Host{editor,inner,bindings,keyboard,actions,onAction,shortcut})
         return Owner{wrapped(inner,input),input}
 def borrow(owner: Owner) -> Owner & Component.Component:
   match owner:
