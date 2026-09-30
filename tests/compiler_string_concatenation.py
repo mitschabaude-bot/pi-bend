@@ -13,6 +13,9 @@ pairs = list(itertools.product(atoms, repeat=2))
 rng = random.Random(471)
 pairs += [("".join(rng.choices(atoms, k=rng.randrange(40))),
            "".join(rng.choices(atoms, k=rng.randrange(40)))) for _ in range(200)]
+long_ascii, long_unicode = "long" * 1024, "🙂日本é" * 512
+pairs += [(long_ascii, "tail"), (long_unicode, "tail"),
+          ("head", long_unicode), (long_ascii, long_unicode), (long_unicode, "")]
 expected = "".join("\n".join(("True", str(not (a + b)), a + b,
                                (a + b)[::-1], (a + b)[:3], (a + b)[3:], "True")) + "\n"
                    for a, b in pairs)
