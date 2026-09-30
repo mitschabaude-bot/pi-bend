@@ -11,5 +11,8 @@ for (const [path, hash] of [
 const { loadThemeFromPath, setThemeInstance, getMarkdownTheme } = await import(`${root}/packages/coding-agent/src/modes/interactive/theme/theme.ts`);
 const { Markdown } = await import(`${root}/packages/tui/src/components/markdown.ts`);
 setThemeInstance(loadThemeFromPath(`${root}/packages/coding-agent/src/modes/interactive/theme/dark.json`, 'truecolor'));
-const cases = ['# Heading', '**bold** and *italic*', '[link](https://example.com)', '~~gone~~ and `code`', '> quoted'];
+const cases = ['# Heading', '**bold** and *italic*', '[link](https://example.com)', '~~gone~~ and `code`', '> quoted',
+  '> This is a blockquote\n> It can span multiple lines',
+  '> **bold** and *italic*\n> continued with ~~deleted~~ text',
+  '**bold across\nlines** and *italic across\nlines*'];
 for (const source of cases) console.log(JSON.stringify(new Markdown(source, 0, 0, getMarkdownTheme()).render(42)));

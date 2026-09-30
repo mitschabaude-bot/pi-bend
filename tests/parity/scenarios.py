@@ -1802,3 +1802,14 @@ SCENARIOS.append({
     "steps": [("wait", READY, "startup"), ("wait", "Did we revert", "frame"), ("settle", 1.0),
               *typed("typing"), ("settle", .3), ("snap", "typed"), ("snap-history", "history")],
 })
+
+SCENARIOS.append({
+    "name": "bash-multiline", "args": MODEL, "env": FD_PATH,
+    "turns": [{"tool": {"name": "bash", "arguments": {
+        "command": "python3 - << 'EOF'\nprint('multiline output')\nEOF"}}},
+              {"text": "Multiline complete."}],
+    "steps": [("wait", READY, "startup"), ("settle", .3),
+              ("keys", "run a multiline command"), ("key", "Enter"),
+              ("wait", "Multiline complete", "done"), ("settle", .3),
+              ("snap", "completed"), ("snap-history", "history")],
+})

@@ -10,6 +10,7 @@ import ../../../../../runtime/src/posix-path.bend as Path
 import ../../../../../runtime/src/stable-sort.bend as Sort
 import ../../../../../runtime/src/case-map.bend as Case
 import ../../../utils/syntax-highlight.bend as SyntaxHighlight
+import ../../../../../runtime/src/string.bend as Text
 
 # Theme documents are immutable data. Variables are resolved once when a theme
 # is loaded, so rendering never depends on JSON or mutable global state.
@@ -311,10 +312,28 @@ def loadByName(+themeName: String,builtinDir: String,+customDir: String,+mode: C
 # TUI helpers
 # -----------
 
-def bold(text: String) -> String: "\u{1b}[1m" ++ text ++ "\u{1b}[22m"
-def italic(text: String) -> String: "\u{1b}[3m" ++ text ++ "\u{1b}[23m"
-def underline(text: String) -> String: "\u{1b}[4m" ++ text ++ "\u{1b}[24m"
-def strikethrough(text: String) -> String: "\u{1b}[9m" ++ text ++ "\u{1b}[29m"
+# Close effects before each line break and restore them afterwards, including
+# CRLF. An embedded closing escape also restores the enclosing effect.
+def effectLines(text: String,+open: String,+close: String,reversed: String) -> String:
+  match text:
+    case SNil{}: String.reverse(reversed)
+    case SCon{'\r',SCon{'\n',rest}}: effectLines(rest,open,close,String.reverse(close ++ "\r\n" ++ open) ++ reversed)
+    case SCon{'\n',rest}: effectLines(rest,open,close,String.reverse(close ++ "\n" ++ open) ++ reversed)
+    case SCon{char,rest}: effectLines(rest,open,close,SCon{char,reversed})
+def effect(+text: String,+open: String,+close: String) -> String:
+  match text:
+    case SNil{}: ""
+    case _:
+      +restored = Bool.pick(Unit -> String,String.contains(text,close),
+        _ => Text.replaceAll(text,close,close ++ open),_ => text)(Unit{})
+      lines = Bool.pick(Unit -> String,String.contains(restored,"\n"),
+        _ => effectLines(restored,open,close,""),_ => restored)(Unit{})
+      open ++ lines ++ close
+def bold(text: String) -> String: effect(text,"\u{1b}[1m","\u{1b}[22m")
+def italic(text: String) -> String: effect(text,"\u{1b}[3m","\u{1b}[23m")
+def underline(text: String) -> String: effect(text,"\u{1b}[4m","\u{1b}[24m")
+def inverse(text: String) -> String: effect(text,"\u{1b}[7m","\u{1b}[27m")
+def strikethrough(text: String) -> String: effect(text,"\u{1b}[9m","\u{1b}[29m")
 def fg(theme: Theme,+key: String,+text: String) -> String: Result.default(&2,&2,Error,String,foreground(theme,key,text),text)
 
 # The formatters of the CLI highlight theme: a theme foreground or an effect.

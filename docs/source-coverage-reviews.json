@@ -682,11 +682,16 @@
     },
     "packages/coding-agent/src/core/tools/renderers/bash.ts": {
       "state": "partial",
-      "note": "Width-aware five-visual-line tail previews, skipped-line counts and ordinary bash snapshots match upstream; the broader renderer contract is not yet fully validated. The collapsed preview hint now preserves the upstream color boundary before its closing parenthesis.",
+      "note": "Width-aware five-visual-line tail previews, skipped-line counts and ordinary Bash snapshots match upstream. Multiline command titles close/reopen bold at line breaks; live one/four-thread terminal frames, history colors and model requests match pi, and the Bash styling differences in restored large sessions are fixed. The collapsed preview hint preserves the upstream color boundary before its closing parenthesis. The broader renderer contract remains unverified.",
       "source_sha256": "f04ab261d9f915f7b43a97ac679fb38d5646110855a886474593dc5d973f6764",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/renderers/bash.bend": "04261e47410548d713a3d49d594b2ad1a5ccca44a6c7745871e31034e332b03e"
-      }
+        "packages/coding-agent/src/core/tools/renderers/bash.bend": "04261e47410548d713a3d49d594b2ad1a5ccca44a6c7745871e31034e332b03e",
+        "packages/coding-agent/src/core/tools/render-utils.bend": "3b2a7201022373b38c56a6902599e74dee5365f3af908b27a44a80cc44e69b7d"
+      },
+      "ports": [
+        "packages/coding-agent/src/core/tools/renderers/bash.bend",
+        "packages/coding-agent/src/core/tools/render-utils.bend"
+      ]
     },
     "packages/coding-agent/src/core/tools/write.ts": {
       "state": "partial",
@@ -994,11 +999,16 @@
     },
     "packages/coding-agent/src/modes/interactive/theme/theme.ts": {
       "state": "partial",
-      "note": "Built-in and custom theme loading, JSON-name discovery, sorted catalog and theme render equality are implemented; registered themes, reload and export behavior remain partial. strikethrough (chalk.strikethrough) is a module function beside bold, italic and underline.",
+      "note": "Built-in and custom theme loading, JSON-name discovery, sorted catalog and theme render equality are implemented. All five text effects, including inverse, preserve empty strings, reopen nested closing escapes, and close/reopen across LF and CRLF; Markdown callbacks use these same effects. Focused effect and real Markdown-theme comparisons cover nested escapes and multiline quotes. Registered themes, reload and export behavior remain partial.",
       "source_sha256": "c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "ca18d1864e11bfc6f8cc27c20f3a0c5a3cb53ff6688cbd78fee027f8ed5265c9"
-      }
+        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "c667c5ab0a17b88f5c482966ea40111b03d0f81d038245357d4ab38bb492828d",
+        "packages/coding-agent/src/modes/interactive/theme/markdown-theme.bend": "b4fb414d618b747a7a8bbdc5cde762866c4f0eb12c34a999852d98475b1f41b9"
+      },
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/theme/theme.bend",
+        "packages/coding-agent/src/modes/interactive/theme/markdown-theme.bend"
+      ]
     },
     "packages/coding-agent/src/modes/rpc/jsonl.ts": {
       "state": "ported",

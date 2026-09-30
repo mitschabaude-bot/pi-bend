@@ -24,6 +24,9 @@ def cases(+theme: Markdown.MarkdownTheme) -> IO(Unit):
     one("[link](https://example.com)",theme)
     one("~~gone~~ and `code`",theme)
     one("> quoted",theme)
+    one("> This is a blockquote\n> It can span multiple lines",theme)
+    one("> **bold** and *italic*\n> continued with ~~deleted~~ text",theme)
+    one("**bold across\nlines** and *italic across\nlines*",theme)
 def withBorrowed(pair: Styles.Styles & Markdown.MarkdownTheme) -> IO(Unit):
   match pair:
     case (styles,theme):

@@ -23,10 +23,10 @@ def colored(style: ColorStyle,text: String) -> IO(String):
         colorResult(Theme.foreground(current,key,text))
 def ansi(effect: Effect,text: String) -> String:
   match effect:
-    case Bold{}: "\u{1b}[1m" ++ text ++ "\u{1b}[22m"
-    case Italic{}: "\u{1b}[3m" ++ text ++ "\u{1b}[23m"
-    case Underline{}: "\u{1b}[4m" ++ text ++ "\u{1b}[24m"
-    case Strike{}: "\u{1b}[9m" ++ text ++ "\u{1b}[29m"
+    case Bold{}: Theme.bold(text)
+    case Italic{}: Theme.italic(text)
+    case Underline{}: Theme.underline(text)
+    case Strike{}: Theme.strikethrough(text)
 def effectStyle(effect: Effect,text: String) -> IO(String): IO.pure(String,ansi(effect,text))
 def color(theme: Ref.Ref<Theme.Theme>,key: String) -> IO(Callback.Callback<String,String>):
   Callback.create(~ColorStyle,~String,~String,~colored,ColorStyle{theme,key})

@@ -30,7 +30,7 @@ def shownPath(theme: Theme.Theme,value: Maybe<&2,String>) -> IO(String):
     case Some{""}: Messages.foregroundText(theme,"toolOutput","...")
     case Some{text}: Messages.foregroundText(theme,"accent",text)
 def title(theme: Theme.Theme,label: String) -> IO(String):
-  Messages.foregroundText(theme,"toolTitle","\u{1b}[1m" ++ label ++ "\u{1b}[22m")
+  Messages.foregroundText(theme,"toolTitle",Theme.bold(label))
 def pathCall(+theme: Theme.Theme,label: String,args: Value.Value) -> IO(String):
   do IO<String>:
     name : String <- title(theme,label)
