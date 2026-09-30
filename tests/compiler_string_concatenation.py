@@ -16,7 +16,7 @@ pairs += [("".join(rng.choices(atoms, k=rng.randrange(40))),
 long_ascii, long_unicode = "long" * 1024, "🙂日本é" * 512
 pairs += [(long_ascii, "tail"), (long_unicode, "tail"),
           ("head", long_unicode), (long_ascii, long_unicode), (long_unicode, "")]
-expected = "".join("\n".join(("True", str(not (a + b)), a + b,
+expected = "".join("\n".join((str(len(a + b)), "True", str(not (a + b)), a + b,
                                (a + b)[::-1], (a + b)[:3], (a + b)[3:], "True",
                                a + b + "!", a + b, a + b, a + b + "!")) + "\n"
                    for a, b in pairs)

@@ -11,6 +11,7 @@ def observedThenExtended(+text: String) -> IO(Unit):
 def describe(+a: String,+b: String) -> IO(Unit):
   do IO<Unit>:
     +text : String = a ++ b
+    IO.print(Nat.show(String.length(text)))
     IO.print(Bool.show(String.eq(text,a ++ b)))
     IO.print(Bool.show(String.is_empty(text)))
     IO.print(text)
