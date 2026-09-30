@@ -3,6 +3,9 @@ import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/record.bend as Rec
 import ../../../../runtime/src/ref.bend as R
 import ../diagnostics.bend as D
+import ../../../../tui/src/keybindings.bend as Keybindings
+import ../../../../tui/src/keys.bend as Keys
+import ../../../../runtime/src/case-map.bend as Case
 import ../model-runtime.bend as Models
 import ./context.bend as Ctx
 import ./tool-context.bend as ToolContext
@@ -30,7 +33,7 @@ type Listeners is Data:
   Listeners{next: Nat, listeners: List<&2, ErrorListener>}
 
 type ExtensionRunner is Data:
-  ExtensionRunner{runtime: T.ExtensionRuntime(), cwd: String, models: Models.ModelRuntime, bindings: R.Ref<Ctx.Bindings>, listeners: R.Ref<Listeners>, toolContext: C.Callback<Unit, Maybe<&2, ToolContext.ContextView>>}
+  ExtensionRunner{runtime: T.ExtensionRuntime(), cwd: String, models: Models.ModelRuntime, bindings: R.Ref<Ctx.Bindings>, listeners: R.Ref<Listeners>, toolContext: C.Callback<Unit, Maybe<&2, ToolContext.ContextView>>, shortcutDiagnostics: R.Ref<List<&2,D.ResourceDiagnostic>>}
 
 # The runner owns the extension runtime from here on.
 def create(+runtime: T.ExtensionRuntime(), +cwd: String, +models: Models.ModelRuntime) -> IO(ExtensionRunner):
@@ -39,15 +42,17 @@ def create(+runtime: T.ExtensionRuntime(), +cwd: String, +models: Models.ModelRu
     listeners : R.Ref<Listeners> <- R.new(Listeners, Listeners{0n, Nil{}})
     Loader.setCwd(runtime, cwd)
     toolContext : C.Callback<Unit, Maybe<&2, ToolContext.ContextView>> <- Ctx.createToolContext(Ctx.ExtensionContext{cwd, models, bindings})
-    return ExtensionRunner{runtime, cwd, models, bindings, listeners, toolContext}
+    diagnostics : R.Ref<List<&2,D.ResourceDiagnostic>> <- R.new(List<&2,D.ResourceDiagnostic>,Nil{})
+    return ExtensionRunner{runtime, cwd, models, bindings, listeners, toolContext, diagnostics}
 
 # Whoever bound callbacks or listeners unbinds and disposes them; the
 # extensions' own registrations live as long as the program.
 def dispose(runner: ExtensionRunner) -> IO(Unit):
   match runner:
-    case ExtensionRunner{runtime, _, _, bindings, listeners, toolContext}:
+    case ExtensionRunner{runtime, _, _, bindings, listeners, toolContext, diagnostics}:
       do IO<Unit>:
         C.dispose(Unit, Maybe<&2, ToolContext.ContextView>, toolContext)
+        warnings : List<&2,D.ResourceDiagnostic> <- R.dispose(List<&2,D.ResourceDiagnostic>,diagnostics)
         state : T.ExtensionRuntimeState <- R.dispose(T.ExtensionRuntimeState, runtime)
         bound : Ctx.Bindings <- R.dispose(Ctx.Bindings, bindings)
         registered : Listeners <- R.dispose(Listeners, listeners)
@@ -55,25 +60,25 @@ def dispose(runner: ExtensionRunner) -> IO(Unit):
 
 def runtimeOf(runner: ExtensionRunner) -> T.ExtensionRuntime():
   match runner:
-    case ExtensionRunner{runtime, _, _, _, _, _}: runtime
+    case ExtensionRunner{runtime, _, _, _, _, _, _}: runtime
 
 def modelsOf(runner: ExtensionRunner) -> Models.ModelRuntime:
   match runner:
-    case ExtensionRunner{_, _, models, _, _, _}: models
+    case ExtensionRunner{_, _, models, _, _, _, _}: models
 
 def bindingsRef(runner: ExtensionRunner) -> R.Ref<Ctx.Bindings>:
   match runner:
-    case ExtensionRunner{_, _, _, bindings, _, _}: bindings
+    case ExtensionRunner{_, _, _, bindings, _, _, _}: bindings
 
 # upstream createContext and createCommandContext.
 def createContext(runner: ExtensionRunner) -> Ctx.ExtensionContext:
   match runner:
-    case ExtensionRunner{_, cwd, models, bindings, _, _}: Ctx.ExtensionContext{cwd, models, bindings}
+    case ExtensionRunner{_, cwd, models, bindings, _, _, _}: Ctx.ExtensionContext{cwd, models, bindings}
 
 # The context reader of the runner's built-in tools (upstream's ctxFactory).
 def toolContext(runner: ExtensionRunner) -> ToolContext.ContextSource():
   match runner:
-    case ExtensionRunner{_, _, _, _, _, reader}: Some{reader}
+    case ExtensionRunner{_, _, _, _, _, reader, _}: Some{reader}
 
 def createCommandContext(runner: ExtensionRunner) -> Ctx.ExtensionCommandContext:
   Ctx.ExtensionCommandContext{createContext(runner)}
@@ -152,7 +157,7 @@ def withListener(listeners: Listeners, listener: C.Callback<T.ExtensionError, Un
 # the returned subscription before disposing it.
 def onError(runner: ExtensionRunner, listener: C.Callback<T.ExtensionError, Unit>) -> IO(ErrorSubscription):
   match runner:
-    case ExtensionRunner{_, _, _, _, listeners, _}:
+    case ExtensionRunner{_, _, _, _, listeners, _, _}:
       do IO<ErrorSubscription>:
         id : Nat <- R.modify(Listeners, Nat, listeners, current => withListener(current, listener))
         return ErrorSubscription{id}
@@ -174,7 +179,7 @@ def removedListener(listeners: Listeners, +id: Nat) -> Listeners:
 
 def offError(runner: ExtensionRunner, subscription: ErrorSubscription) -> IO(Unit):
   match runner subscription:
-    case ExtensionRunner{_, _, _, _, listeners, _} ErrorSubscription{+id}: R.modify(Listeners, Unit, listeners, current => (removedListener(current, id), Unit{}))
+    case ExtensionRunner{_, _, _, _, listeners, _, _} ErrorSubscription{+id}: R.modify(Listeners, Unit, listeners, current => (removedListener(current, id), Unit{}))
 
 def notifyListeners(listeners: List<&2, ErrorListener>, +error: T.ExtensionError) -> IO(Unit):
   match listeners:
@@ -190,7 +195,7 @@ def registeredListeners(listeners: Listeners) -> List<&2, ErrorListener>:
 
 def emitError(runner: ExtensionRunner, error: T.ExtensionError) -> IO(Unit):
   match runner:
-    case ExtensionRunner{_, _, _, _, listeners, _}:
+    case ExtensionRunner{_, _, _, _, listeners, _, _}:
       do IO<Unit>:
         current : Listeners <- R.read(Listeners, listeners)
         notifyListeners(registeredListeners(current), error)
@@ -1016,3 +1021,86 @@ def getMessageRenderer(runner: ExtensionRunner, customType: String) -> IO(Maybe<
   do IO<Maybe<&2, T.MessageRenderer()>>:
     loaded : List<&2, T.Extension> <- extensions(runner)
     return messageRendererIn(loaded, customType)
+
+# Only editor-global shortcuts are reserved. A reserved action dominates any
+# other claim on the same key, regardless of configuration order.
+type ShortcutBinding is Data: ShortcutBinding{action: String,reserved: Bool}
+type ResolvedShortcuts is Data: ResolvedShortcuts{shortcuts: Rec.Record<T.ExtensionShortcut>,diagnostics: List<&2,D.ResourceDiagnostic>}
+def reservedShortcut(action: String) -> Bool:
+  List.contains(~String,~String.eq,["app.interrupt","app.clear","app.exit","app.suspend",
+    "app.thinking.cycle","app.model.cycleForward","app.model.cycleBackward",
+    "app.model.select","app.tools.expand","app.thinking.toggle","app.editor.external",
+    "app.message.copy","app.message.followUp","tui.input.submit","tui.select.confirm",
+    "tui.select.cancel","tui.input.copy","tui.editor.deleteToLineEnd"],action)
+def shortcutPath(shortcut: T.ExtensionShortcut) -> String:
+  match shortcut: case T.ExtensionShortcut{_,path,_,_}: path
+def keepShortcutClaim(existing: Maybe<&2,ShortcutBinding>,binding: ShortcutBinding) -> Bool:
+  match existing binding:
+    case Some{ShortcutBinding{_,True{}}} ShortcutBinding{_,False{}}: True{}
+    case _ _: False{}
+def builtinShortcutWarning(binding: Maybe<&2,ShortcutBinding>,+key: String,+path: String,warnings: List<&2,D.ResourceDiagnostic>) -> List<&2,D.ResourceDiagnostic>:
+  match binding:
+    case Some{ShortcutBinding{action,False{}}}: D.warning("Extension shortcut conflict: '" ++ key ++ "' is built-in shortcut for " ++ action ++ " and " ++ path ++ ". Using " ++ path ++ ".",path) <> warnings
+    case _: warnings
+def duplicateShortcutWarning(previous: Maybe<&2,T.ExtensionShortcut>,+key: String,+path: String,warnings: List<&2,D.ResourceDiagnostic>) -> List<&2,D.ResourceDiagnostic>:
+  match previous:
+    case Some{shortcut}: D.warning("Extension shortcut conflict: '" ++ key ++ "' registered by both " ++ shortcutPath(shortcut) ++ " and " ++ path ++ ". Using " ++ path ++ ".",path) <> warnings
+    case None{}: warnings
+def claimKeys(keys: List<&2,Keys.KeyId>,+binding: ShortcutBinding,+claims: Rec.Record<ShortcutBinding>) -> Rec.Record<ShortcutBinding>:
+  match keys:
+    case Nil{}: claims
+    case key <> rest:
+      +name = Keys.formatKeyId(key)
+      keep = keepShortcutClaim(Rec.get(ShortcutBinding,claims,name),binding)
+      claimKeys(rest,binding,Bool.pick(Rec.Record<ShortcutBinding>,keep,claims,Rec.set(ShortcutBinding,claims,name,binding)))
+def shortcutBindings(config: List<&2,Rec.Property<List<&2,Keys.KeyId>>>,claims: Rec.Record<ShortcutBinding>) -> Rec.Record<ShortcutBinding>:
+  match config:
+    case Nil{}: claims
+    case Rec.Property{+action,keys} <> rest: shortcutBindings(rest,claimKeys(keys,ShortcutBinding{action,reservedShortcut(action)},claims))
+def parsedShortcutName(value: Maybe<&2,Keys.KeyId>,text: String) -> String:
+  match value:
+    case Some{key}: Keys.formatKeyId(key)
+    case None{}: Case.lower(text)
+def shortcutName(+text: String) -> String: parsedShortcutName(Keys.parseKeyId(text),text)
+def shortcutValue(binding: Maybe<&2,ShortcutBinding>,+shortcut: T.ExtensionShortcut,state: ResolvedShortcuts) -> ResolvedShortcuts:
+  match binding shortcut state:
+    case Some{ShortcutBinding{_,True{}}} T.ExtensionShortcut{+key,+path,_,_} ResolvedShortcuts{selected,warnings}:
+      ResolvedShortcuts{selected,D.warning("Extension shortcut '" ++ key ++ "' from " ++ path ++ " conflicts with built-in shortcut. Skipping.",path) <> warnings}
+    case binding T.ExtensionShortcut{+key,+path,_,_} ResolvedShortcuts{+selected,warnings}:
+      +name = shortcutName(key)
+      earlier = builtinShortcutWarning(binding,key,path,warnings)
+      conflicts = duplicateShortcutWarning(Rec.get(T.ExtensionShortcut,selected,name),key,path,earlier)
+      ResolvedShortcuts{Rec.set(T.ExtensionShortcut,selected,name,shortcut),conflicts}
+def resolveShortcut(+claims: Rec.Record<ShortcutBinding>,+shortcut: T.ExtensionShortcut,state: ResolvedShortcuts) -> ResolvedShortcuts:
+  shortcutValue(Rec.get(ShortcutBinding,claims,shortcutName(Loader.shortcutKey(shortcut))),shortcut,state)
+def resolveShortcuts(shortcuts: List<&2,T.ExtensionShortcut>,+claims: Rec.Record<ShortcutBinding>,state: ResolvedShortcuts) -> ResolvedShortcuts:
+  match shortcuts:
+    case Nil{}: state
+    case shortcut <> rest: resolveShortcuts(rest,claims,resolveShortcut(claims,shortcut,state))
+def extensionShortcuts(loaded: List<&2,T.Extension>,+claims: Rec.Record<ShortcutBinding>,state: ResolvedShortcuts) -> ResolvedShortcuts:
+  match loaded:
+    case Nil{}:
+      match state: case ResolvedShortcuts{selected,warnings}: ResolvedShortcuts{selected,List.reverse(&2,D.ResourceDiagnostic,warnings)}
+    case T.Extension{_,_,_,_,_,_,_,_,_,_,T.ExtensionExtras{_,shortcuts,_,_}} <> rest: extensionShortcuts(rest,claims,resolveShortcuts(shortcuts,claims,state))
+def diagnosticsRef(runner: ExtensionRunner) -> R.Ref<List<&2,D.ResourceDiagnostic>>:
+  match runner: case ExtensionRunner{_,_,_,_,_,_,diagnostics}: diagnostics
+def getShortcutDiagnostics(runner: ExtensionRunner) -> IO(List<&2,D.ResourceDiagnostic>): R.read(List<&2,D.ResourceDiagnostic>,diagnosticsRef(runner))
+def warnShortcuts(warnings: List<&2,D.ResourceDiagnostic>) -> IO(Unit):
+  match warnings:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case D.ResourceDiagnostic{_,message,_,_} <> rest:
+      do IO<Unit>:
+        IO.print_err(message)
+        warnShortcuts(rest)
+def resolvedShortcuts(+runner: ExtensionRunner,resolved: ResolvedShortcuts) -> IO(Rec.Record<T.ExtensionShortcut>):
+  match resolved:
+    case ResolvedShortcuts{selected,+warnings}:
+      do IO<Rec.Record<T.ExtensionShortcut>>:
+        R.write(List<&2,D.ResourceDiagnostic>,diagnosticsRef(runner),warnings)
+        shown : Bool <- hasUI(runner)
+        Bool.pick(Unit -> IO(Unit),shown,_ => IO.pure(Unit,Unit{}),_ => warnShortcuts(warnings))(Unit{})
+        return selected
+def getShortcuts(+runner: ExtensionRunner,config: Keybindings.KeybindingsConfig()) -> IO(Rec.Record<T.ExtensionShortcut>):
+  do IO<Rec.Record<T.ExtensionShortcut>>:
+    loaded : List<&2,T.Extension> <- extensions(runner)
+    resolvedShortcuts(runner,extensionShortcuts(loaded,shortcutBindings(Rec.entries(List<&2,Keys.KeyId>,config),Rec.new(ShortcutBinding)),ResolvedShortcuts{Rec.new(T.ExtensionShortcut),Nil{}}))
