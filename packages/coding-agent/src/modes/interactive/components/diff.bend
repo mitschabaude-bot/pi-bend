@@ -75,40 +75,24 @@ def takeGroup(+lines: List<&2,String>,+prefix: Char,+reversed: List<&2,Line>) ->
       Bool.pick(Unit -> Group,belongs(parsed,prefix),
         _ => takeGroup(tail,prefix,prependParsed(parsed,reversed)),
         _ => Group{List.reverse(&2,Line,reversed),lines})(Unit{})
-def commonLengthFrom(a: String,b: String,+count: Nat) -> Nat:
-  match a b:
-    case SCon{left,restLeft} SCon{right,restRight}:
-      Bool.pick(Unit -> Nat,Char.is_eq(left,right),_ => commonLengthFrom(restLeft,restRight,count + 1n),_ => count)(Unit{})
-    case _ _: count
-def commonLength(a: String,b: String) -> Nat: commonLengthFrom(a,b,0n)
-def wordBoundary(+text: String,+index: Nat) -> Bool:
-  Nat.is_eq(index,0n) || Nat.is_eq(index,String.length(text)) || String.ends_with(String.take(text,index)," ") || String.starts_with(String.drop(text,index)," ") || String.ends_with(String.take(text,index),"\t") || String.starts_with(String.drop(text,index),"\t")
-def space(+char: Char) -> Bool: Char.is_eq(char,' ') || Char.is_eq(char,'\t')
-def lastSpaceEnd(chars: String,+index: Nat,last: Nat) -> Nat:
-  match chars:
-    case SNil{}: last
-    case SCon{char,rest}: lastSpaceEnd(rest,index + 1n,Bool.pick(Nat,space(char),index + 1n,last))
-def firstSpace(chars: String,+index: Nat) -> Maybe<&2,Nat>:
-  match chars:
-    case SNil{}: None{}
-    case SCon{char,rest}: Bool.pick(Unit -> Maybe<&2,Nat>,space(char),_ => Some{index},_ => firstSpace(rest,index + 1n))(Unit{})
-def suffixAfterSpace(found: Maybe<&2,Nat>,count: Nat) -> Nat:
-  match found:
-    case Some{position}: count - position
-    case None{}: 0n
-def alignedPrefix(+before: String,+after: String,+count: Nat) -> Nat:
-  Bool.pick(Nat,wordBoundary(before,count) && wordBoundary(after,count),count,lastSpaceEnd(String.take(before,count),0n,0n))
-def alignedSuffix(+before: String,+after: String,+count: Nat) -> Nat:
-  Bool.pick(Nat,wordBoundary(before,String.length(before) - count) && wordBoundary(after,String.length(after) - count),count,
-    suffixAfterSpace(firstSpace(String.take(String.drop(before,String.length(before) - count),count),0n),count))
-def highlight(+content: String,+prefix: Nat,+suffix: Nat) -> String:
-  +middle = String.take(String.drop(content,prefix),String.length(content) - prefix - suffix)
-  Bool.pick(String,String.is_empty(middle),content,
-    String.take(content,prefix) ++ "\u{1b}[7m" ++ middle ++ "\u{1b}[27m" ++ String.drop(content,String.length(content) - suffix))
-def markedPair(+before: String,+after: String) -> String & String:
-  +prefix = alignedPrefix(before,after,commonLength(before,after))
-  +suffix = alignedSuffix(before,after,commonLength(String.reverse(String.drop(before,prefix)),String.reverse(String.drop(after,prefix))))
-  (highlight(before,prefix,suffix),highlight(after,prefix,suffix))
+def inverse(+text: String) -> String:
+  Bool.pick(String,String.is_empty(text),"","\u{1b}[7m" ++ text ++ "\u{1b}[27m")
+def changedWord(+text: String,first: Bool) -> String:
+  Bool.pick(Unit -> String,first,
+    _ => Tokens.leadingSpace(text) ++ inverse(Tokens.stripLeading(text)),_ => inverse(text))(Unit{})
+def prefixMarked(old: String,newer: String,tail: String & String) -> String & String:
+  match tail: case (oldTail,newTail): (old ++ oldTail,newer ++ newTail)
+def markedWords(spans: List<&2,Tokens.WordSpan>,firstOld: Bool,firstNew: Bool) -> String & String:
+  match spans:
+    case Nil{}: ("", "")
+    case Tokens.WordSpan{Tokens.Same{},+text} <> rest:
+      prefixMarked(text,text,markedWords(rest,firstOld,firstNew))
+    case Tokens.WordSpan{Tokens.Removed{},text} <> rest:
+      prefixMarked(changedWord(text,firstOld),"",markedWords(rest,False{},firstNew))
+    case Tokens.WordSpan{Tokens.Added{},text} <> rest:
+      prefixMarked("",changedWord(text,firstNew),markedWords(rest,firstOld,False{}))
+def markedPair(before: String,after: String) -> String & String:
+  markedWords(Tokens.diffWords(before,after),True{},True{})
 def paintLine(+line: Line,theme: Theme.Theme) -> IO(String):
   Messages.foregroundText(theme,role(line),source(line))
 def paintLines(lines: List<&2,Line>,+theme: Theme.Theme,reversed: List<&2,String>) -> IO(List<&2,String>):

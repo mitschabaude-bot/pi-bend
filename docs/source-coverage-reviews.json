@@ -1332,7 +1332,7 @@
       "source_sha256": "f85a9809eb44b9828236050cf38a8e45933e5cfd583a186e9a0e55a664dd3e8d",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/edit-diff.bend": "20c97e7ba832547e1f44e87a2de510512791522af1f41db1075fe811592d6f23",
-        "packages/coding-agent/src/core/tools/diff.bend": "3cf45d8e28002617fbb89e1764609e94af8f4f49c35b791acee57f08587dfc01"
+        "packages/coding-agent/src/core/tools/diff.bend": "453b3b85fdbcd05e3b82d75bbf864d47033ead788f666453c9cc8eecb6fbba1b"
       }
     },
     "packages/coding-agent/src/core/tools/renderers/edit.ts": {
@@ -1342,12 +1342,12 @@
         "packages/coding-agent/src/modes/interactive/components/tool-execution.bend",
         "packages/coding-agent/src/modes/interactive/components/diff.bend"
       ],
-      "note": "Native owned asynchronous read-only preflight begins after complete canonical edit arguments; successful diffs and failures stay in the call box, settled details reconstruct saved previews without reading files, and identical settlement does not move the diff or request a full redraw. Input revisions discard stale completions, including A→B→A, and disposal joins owned reads. Bun/native1/native4 integration covers the three named edit-tool-no-full-redraw contracts. Diff-only stored results and historical path/oldText/newText call records reconstruct saved previews after the source file is deleted, with identical text/colors to modern results; the presentation decoder reads diff and optional firstChangedLine without inventing a missing executable patch. Bun integration checks a fresh historical component with no prior preview. Broader raw preflight argument shapes and the full renderer contract remain unreviewed. Numbered diff lines and removed/added block grouping now use the native interactive diff component, matching 286 source-pinned exact ANSI renders; single-pair word spans remain approximate.",
+      "note": "Native owned asynchronous read-only preflight begins after complete canonical edit arguments; successful diffs and failures stay in the call box, settled details reconstruct saved previews without reading files, and identical settlement does not move the diff or request a full redraw. Input revisions discard stale completions, including A→B→A, and disposal joins owned reads. Bun/native1/native4 integration covers the three named edit-tool-no-full-redraw contracts. Diff-only stored results and historical path/oldText/newText call records reconstruct saved previews after the source file is deleted, with identical text/colors to modern results; the presentation decoder reads diff and optional firstChangedLine without inventing a missing executable patch. Bun integration checks a fresh historical component with no prior preview. Broader raw preflight argument shapes and the full renderer contract remain unreviewed. Numbered diff lines and removed/added block grouping now use the native interactive diff component, matching 714 pinned exact ANSI renders including all changed word spans and whitespace display postprocessing. The full tools renderer review remains partial; multiline Bash call styling is a separate scrollback difference.",
       "source_sha256": "0c1bafcf74ad2b703bf5ab193e72084a1da80231a77abddefc23c5bb20558731",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/renderers/edit.bend": "cc10fcba4952f185f1c2bf47e1550d9036d26866196f58fba0640c826730bdfa",
         "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "19df313a9f9b5f302757ae6ecadbcf92a7b0630cec05b094e862776d6041eef1",
-        "packages/coding-agent/src/modes/interactive/components/diff.bend": "bc9f72db8cbf477436b60675048bb75830680fab8ae06ad15ee561fe9d946c87"
+        "packages/coding-agent/src/modes/interactive/components/diff.bend": "ece4ab1f5d928b1c85ee7b9ee62e730083cf5d35deb5782c9ef3790c12f3d19c"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/tool-execution.ts": {
@@ -1686,18 +1686,18 @@
       }
     },
     "packages/coding-agent/src/modes/interactive/components/diff.ts": {
-      "state": "partial",
+      "state": "ported",
       "ports": [
         "packages/coding-agent/src/core/tools/renderers/edit.bend",
         "packages/coding-agent/src/core/tools/diff.bend",
         "packages/coding-agent/src/modes/interactive/components/diff.bend"
       ],
-      "note": "Native diff-line parsing, tab expansion and consecutive removed/added grouping match 286 source-pinned exact ANSI renders on one/four threads, including numbered lines and multi-line blocks; mounted edit-tool checks pass. Default jsdiff word-key tokenization and Myers matching are native and match 863 source-pinned edit scripts, but are not yet integrated into rendering. Single-pair rendering still uses a prefix/suffix approximation rather than all changed word spans, so full color and scrollback parity remain incomplete. The upstream renderer can alter original whitespace inside string literals; that rendering-policy choice remains unresolved.",
+      "note": "Native numbered-line parsing, tab expansion, consecutive edit-block grouping and all changed word spans match 714 pinned exact ANSI differential renders on one/four threads, including separated changes, punctuation, indentation and Unicode whitespace. Default jsdiff matching and whitespace display postprocessing are implemented as immutable values, replacing the prefix/suffix approximation. Large-session plain scrollback now matches pinned pi on one/four threads; the remaining history.color mismatch is multiline Bash call styling outside this renderer. The source whitespace policy is currently reproduced: common words can use the new line's whitespace even in the displayed removed line. A proposed source-preserving rendering policy is undecided; current behavior matches upstream. Unused RenderDiffOptions.filePath is not represented; theme is an explicit native argument.",
       "source_sha256": "b43f8d91ba9f19088dc9dc86126091c3fdfca25eac6461f5510f5e1e9ddd6491",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/renderers/edit.bend": "cc10fcba4952f185f1c2bf47e1550d9036d26866196f58fba0640c826730bdfa",
-        "packages/coding-agent/src/core/tools/diff.bend": "3cf45d8e28002617fbb89e1764609e94af8f4f49c35b791acee57f08587dfc01",
-        "packages/coding-agent/src/modes/interactive/components/diff.bend": "bc9f72db8cbf477436b60675048bb75830680fab8ae06ad15ee561fe9d946c87"
+        "packages/coding-agent/src/core/tools/diff.bend": "453b3b85fdbcd05e3b82d75bbf864d47033ead788f666453c9cc8eecb6fbba1b",
+        "packages/coding-agent/src/modes/interactive/components/diff.bend": "ece4ab1f5d928b1c85ee7b9ee62e730083cf5d35deb5782c9ef3790c12f3d19c"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/extension-selector.ts": {

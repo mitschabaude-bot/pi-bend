@@ -107,8 +107,7 @@ def diffTokens(+left: List<&2,String>,+right: List<&2,String>) -> List<&2,Change
 def diffLines(old: String,newer: String) -> List<&2,Change>:
   diffTokens(tokenize(old,"",Nil{}),tokenize(newer,"",Nil{}))
 
-# Default jsdiff word matching ignores surrounding whitespace. Keep token
-# matching separate from rendering: both original lines remain authoritative.
+# Default jsdiff word matching ignores surrounding whitespace.
 def wordChar(+code: U32) -> Bool:
   (U32.is_ge(code,48) && U32.is_le(code,57)) || (U32.is_ge(code,65) && U32.is_le(code,90)) ||
   (U32.is_ge(code,97) && U32.is_le(code,122)) || U32.is_eq(code,95) || U32.is_eq(code,173) ||
@@ -142,6 +141,143 @@ def wordKeys(text: String) -> List<&2,String>:
     case text: whitespaceWord(scanWords(text,"",Nil{}))
 def diffWordKeys(old: String,newer: String) -> List<&2,Change>:
   diffTokens(wordKeys(old),wordKeys(newer))
+
+# Display tokens include the surrounding whitespace on both adjacent words.
+# Matching uses trimmed keys; these tokens recover the selected source text.
+type WordSpan is Data: WordSpan{kind: ChangeKind,text: String}
+def leadingSpace(text: String) -> String:
+  match text:
+    case SCon{+char,+rest}: Bool.pick(Unit -> String,wordSpace(Char.to_u32(char)),_ => SCon{char,leadingSpace(rest)},_ => "")(Unit{})
+    case SNil{}: ""
+def stripLeading(+text: String) -> String: String.drop(text,String.length(leadingSpace(text)))
+def trailingSpace(text: String) -> String: String.reverse(leadingSpace(String.reverse(text)))
+def tokenClass(+char: Char) -> Nat:
+  Bool.pick(Nat,wordSpace(Char.to_u32(char)),0n,Bool.pick(Nat,wordChar(Char.to_u32(char)),1n,2n))
+def wordParts(text: String,+kind: Nat,+current: String,+reversed: List<&2,String>) -> List<&2,String>:
+  match text:
+    case SNil{}: List.reverse(&2,String,finishWord(current,reversed))
+    case SCon{+char,+rest}:
+      +next = tokenClass(char)
+      Bool.pick(Unit -> List<&2,String>,Nat.is_eq(kind,next) && Bool.not(Nat.is_eq(next,2n)),
+        _ => wordParts(rest,next,SCon{char,current},reversed),
+        _ => wordParts(rest,next,SCon{char,""},finishWord(current,reversed)))(Unit{})
+def appendWordSpace(space: String,reversed: List<&2,String>) -> List<&2,String>:
+  match reversed:
+    case Nil{}: space <> Nil{}
+    case word <> rest: (word ++ space) <> rest
+def prependWordSpace(+word: String,+space: String,+reversed: List<&2,String>) -> List<&2,String>:
+  match reversed:
+    case +previous <> rest: Bool.pick(List<&2,String>,Strings.equal(previous,space),(space ++ word) <> rest,(space ++ word) <> reversed)
+    case Nil{}: (space ++ word) <> Nil{}
+def stitchWords(parts: List<&2,String>,+space: String,+reversed: List<&2,String>) -> List<&2,String>:
+  match parts:
+    case Nil{}: List.reverse(&2,String,reversed)
+    case +part <> +rest:
+      Bool.pick(Unit -> List<&2,String>,String.is_empty(stripLeading(part)),
+        _ => stitchWords(rest,part,appendWordSpace(part,reversed)),
+        _ => stitchWords(rest,"",prependWordSpace(part,space,reversed)))(Unit{})
+def wordDisplayTokens(text: String) -> List<&2,String>:
+  stitchWords(wordParts(text,2n,"",Nil{}),"",Nil{})
+def joinWordTail(tokens: List<&2,String>) -> String:
+  match tokens:
+    case Nil{}: ""
+    case token <> rest: stripLeading(token) ++ joinWordTail(rest)
+def stripMaybeLeading(value: Maybe<&2,String>) -> Maybe<&2,String>:
+  match value:
+    case None{}: None{}
+    case Some{text}: Some{stripLeading(text)}
+def joinWordTokens(tokens: List<&2,String>) -> String:
+  match tokens:
+    case Nil{}: ""
+    case first <> rest: first ++ joinWordTail(rest)
+def wordSpans(changes: List<&2,Change>,+old: List<&2,String>,+newer: List<&2,String>) -> List<&2,WordSpan>:
+  match changes:
+    case Nil{}: Nil{}
+    case Change{Removed{},keys} <> rest:
+      +n = List.length(&2,String,keys)
+      WordSpan{Removed{},joinWordTokens(List.take(&2,String,old,n))} <> wordSpans(rest,List.drop(&2,String,old,n),newer)
+    case Change{Added{},keys} <> rest:
+      +n = List.length(&2,String,keys)
+      WordSpan{Added{},joinWordTokens(List.take(&2,String,newer,n))} <> wordSpans(rest,old,List.drop(&2,String,newer,n))
+    case Change{Same{},keys} <> rest:
+      +n = List.length(&2,String,keys)
+      WordSpan{Same{},joinWordTokens(List.take(&2,String,newer,n))} <> wordSpans(rest,List.drop(&2,String,old,n),List.drop(&2,String,newer,n))
+
+def commonPrefix(a: String,b: String) -> String:
+  match a b:
+    case SCon{+left,rest} SCon{right,tail}: Bool.pick(Unit -> String,Char.is_eq(left,right),_ => SCon{left,commonPrefix(rest,tail)},_ => "")(Unit{})
+    case _ _: ""
+def commonSuffix(a: String,b: String) -> String: String.reverse(commonPrefix(String.reverse(a),String.reverse(b)))
+def removePrefix(text: String,prefix: String) -> String: String.drop(text,String.length(prefix))
+def removeSuffix(+text: String,suffix: String) -> String: String.take(text,String.length(text) - String.length(suffix))
+def overlap(+a: String,+b: String,+n: Nat) -> String:
+  match n:
+    case 0n: ""
+    case 1n+ +k: Bool.pick(Unit -> String,Strings.equal(String.drop(a,String.length(a) - n),String.take(b,n)),_ => String.take(b,n),_ => overlap(a,b,k))(Unit{})
+def whitespaceOverlap(+a: String,+b: String) -> String: overlap(a,b,Nat.min(String.length(a),String.length(b)))
+# A change block lies between two common spans, either of which may be absent.
+# Keep that boundary explicit rather than mutating adjacent change objects.
+type WordBlock is Data: WordBlock{before: Maybe<&2,String>,removed: Maybe<&2,String>,added: Maybe<&2,String>,after: Maybe<&2,String>}
+def tidyReplacement(before: Maybe<&2,String>,+old: String,+newer: String,after: Maybe<&2,String>,+prefix: String,+suffix: String) -> WordBlock:
+  match before after:
+    case Some{start} Some{+end}: WordBlock{Some{removeSuffix(start,leadingSpace(newer)) ++ prefix},Some{removeSuffix(removePrefix(old,prefix),suffix)},Some{removeSuffix(removePrefix(newer,prefix),suffix)},Some{suffix ++ removePrefix(end,leadingSpace(end))}}
+    case Some{start} None{}: WordBlock{Some{removeSuffix(start,leadingSpace(newer)) ++ prefix},Some{removePrefix(old,prefix)},Some{removePrefix(newer,prefix)},None{}}
+    case None{} Some{+end}: WordBlock{None{},Some{removeSuffix(old,suffix)},Some{removeSuffix(newer,suffix)},Some{suffix ++ removePrefix(end,leadingSpace(end))}}
+    case None{} None{}: WordBlock{None{},Some{old},Some{newer},None{}}
+def tidyWordBlock(block: WordBlock) -> WordBlock:
+  match block:
+    case WordBlock{before,Some{+old},Some{+newer},after}:
+      +prefix = commonPrefix(leadingSpace(old),leadingSpace(newer))
+      +suffix = commonSuffix(trailingSpace(old),trailingSpace(newer))
+      tidyReplacement(before,old,newer,after,prefix,suffix)
+    case WordBlock{Some{before},None{},Some{newer},after}:
+      WordBlock{Some{before},None{},Some{stripLeading(newer)},stripMaybeLeading(after)}
+    case WordBlock{None{},None{},Some{newer},after}:
+      WordBlock{None{},None{},Some{newer},stripMaybeLeading(after)}
+    case WordBlock{Some{+before},Some{+old},None{},Some{+after}}:
+      +full = leadingSpace(after)
+      +prefix = commonPrefix(full,leadingSpace(old))
+      +suffix = commonSuffix(removePrefix(full,prefix),trailingSpace(old))
+      WordBlock{Some{removeSuffix(before,full) ++ removeSuffix(full,suffix)},Some{removeSuffix(removePrefix(old,prefix),suffix)},None{},Some{suffix ++ removePrefix(after,full)}}
+    case WordBlock{None{},Some{+old},None{},Some{+after}}:
+      WordBlock{None{},Some{removeSuffix(old,whitespaceOverlap(trailingSpace(old),leadingSpace(after)))},None{},Some{after}}
+    case WordBlock{Some{+before},Some{+old},None{},None{}}:
+      WordBlock{Some{before},Some{removePrefix(old,whitespaceOverlap(trailingSpace(before),leadingSpace(old)))},None{},None{}}
+    case block: block
+
+def maybeSpan(kind: ChangeKind,value: Maybe<&2,String>,rest: List<&2,WordSpan>) -> List<&2,WordSpan>:
+  match value:
+    case None{}: rest
+    case Some{text}: WordSpan{kind,text} <> rest
+type WordWalk is Data:
+  Gather{before: Maybe<&2,String>,removed: Maybe<&2,String>,added: Maybe<&2,String>}
+  Emit{block: WordBlock}
+def collectWordBlock(block: WordBlock,reversed: List<&2,WordSpan>) -> List<&2,WordSpan>:
+  match block:
+    case WordBlock{start,old,newer,_}: maybeSpan(Added{},newer,maybeSpan(Removed{},old,maybeSpan(Same{},start,reversed)))
+def tidyWordSpans(fuel: Nat,walk: WordWalk,spans: List<&2,WordSpan>,+reversed: List<&2,WordSpan>) -> List<&2,WordSpan>:
+  match fuel walk spans:
+    case 0n _ _: List.reverse(&2,WordSpan,reversed)
+    case 1n+left Gather{before,removed,added} WordSpan{Removed{},text} <> rest: tidyWordSpans(left,Gather{before,Some{text},added},rest,reversed)
+    case 1n+left Gather{before,removed,added} WordSpan{Added{},text} <> rest: tidyWordSpans(left,Gather{before,removed,Some{text}},rest,reversed)
+    case 1n+left Gather{before,removed,added} WordSpan{Same{},text} <> rest: tidyWordSpans(left,Emit{tidyWordBlock(WordBlock{before,removed,added,Some{text}})},rest,reversed)
+    case 1n+left Gather{before,removed,added} Nil{}: tidyWordSpans(left,Emit{tidyWordBlock(WordBlock{before,removed,added,None{}})},Nil{},reversed)
+    case 1n+left Emit{WordBlock{start,old,newer,Some{+end}}} rest: tidyWordSpans(left,Gather{Some{end},None{},None{}},rest,collectWordBlock(WordBlock{start,old,newer,Some{end}},reversed))
+    case _ Emit{block} _: List.reverse(&2,WordSpan,collectWordBlock(block,reversed))
+def displayWordKey(text: String,+reversed: String) -> String:
+  match text:
+    case SNil{}: String.reverse(reversed)
+    case SCon{+char,+rest}: Bool.pick(Unit -> String,wordSpace(Char.to_u32(char)),
+      _ => String.reverse(reversed),_ => displayWordKey(rest,SCon{char,reversed}))(Unit{})
+def displayWordKeys(tokens: List<&2,String>) -> List<&2,String>:
+  match tokens:
+    case Nil{}: Nil{}
+    case token <> rest: displayWordKey(stripLeading(token),"") <> displayWordKeys(rest)
+def diffWords(old: String,newer: String) -> List<&2,WordSpan>:
+  +oldTokens = wordDisplayTokens(old)
+  +newTokens = wordDisplayTokens(newer)
+  +spans = wordSpans(diffTokens(displayWordKeys(oldTokens),displayWordKeys(newTokens)),oldTokens,newTokens)
+  tidyWordSpans(List.length(&2,WordSpan,spans) * 2n + 2n,Gather{None{},None{},None{}},spans,Nil{})
 
 def size(lines: List<&2,String>) -> Nat: List.length(&2,String,lines)
 
