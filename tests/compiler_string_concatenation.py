@@ -17,7 +17,8 @@ long_ascii, long_unicode = "long" * 1024, "🙂日本é" * 512
 pairs += [(long_ascii, "tail"), (long_unicode, "tail"),
           ("head", long_unicode), (long_ascii, long_unicode), (long_unicode, "")]
 expected = "".join("\n".join(("True", str(not (a + b)), a + b,
-                               (a + b)[::-1], (a + b)[:3], (a + b)[3:], "True")) + "\n"
+                               (a + b)[::-1], (a + b)[:3], (a + b)[3:], "True",
+                               a + b + "!", a + b, a + b, a + b + "!")) + "\n"
                    for a, b in pairs)
 for threads in ("1", "4"):
     command = [str(args.binary.resolve()), "--threads", threads]

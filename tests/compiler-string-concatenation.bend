@@ -1,5 +1,11 @@
 import Base
 
+# Inspect a value, then extend it with no other owner of that result.
+def observedThenExtended(+text: String) -> IO(Unit):
+  do IO<Unit>:
+    IO.print(text)
+    IO.print(text ++ "!")
+
 # Keep both operands and the concatenation alive while inspecting the result.
 # Equality and the empty predicate run before any IO materializes the text.
 def describe(+a: String,+b: String) -> IO(Unit):
@@ -12,6 +18,9 @@ def describe(+a: String,+b: String) -> IO(Unit):
     IO.print(String.take(text,3n))
     IO.print(String.drop(text,3n))
     IO.print(Bool.show(String.eq(text,a ++ b)))
+    IO.print(text ++ "!")
+    IO.print(text)
+    observedThenExtended(a ++ b)
 
 # Each append shares its prefix with a retained snapshot. Workers inspect the
 # resulting string after an effect, rather than evaluating it in the parent.
