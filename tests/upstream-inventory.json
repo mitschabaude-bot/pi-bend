@@ -3431,9 +3431,14 @@
     },
     {
       "source": "packages/coding-agent/test/package-command-paths.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b3b0ba5f7a84f0e102860b6d1601c3d010dac3fbc85fac960d519deaff31dd9a"
+      "status": "partial",
+      "ports": [
+        "tests/config-selector-smoke.bend",
+        "tests/package_command_check.py",
+        "tests/package_git_command_check.py"
+      ],
+      "sha256": "b3b0ba5f7a84f0e102860b6d1601c3d010dac3fbc85fac960d519deaff31dd9a",
+      "notes": "The named cycles project package overrides in config local mode assertion is ported to Bend and passes on Bun/native one/four threads. Package command differential checks cover local persistence, removal, list/trust and configured Git update; remaining named upstream cases are not fully ported. Self-update is excluded by docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/package-distribution.test.ts",

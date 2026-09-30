@@ -1725,3 +1725,56 @@ SCENARIOS.append({
               ("keys", "next"), ("key", "Enter"),
               ("wait", "After cancellation", "recovered"), ("settle", 0.2), ("snap", "recovered")],
 })
+
+SCENARIOS.append({
+    "name": "config-resources", "args": ["config", "-a"],
+    "files": {
+        "home/.pi/agent/prompts/alpha.md": "Alpha prompt.\n",
+        "home/.pi/agent/prompts/beta.md": "Beta prompt.\n",
+        "project/.pi/prompts/local.md": "Project prompt.\n",
+    },
+    "steps": [("wait", "Global Resources", "startup"), ("settle", .2), ("snap", "global"),
+              ("keys", "beta"), ("settle", .2), ("snap", "search"),
+              ("key", "Enter"), ("settle", .2), ("snap", "disabled"),
+              ("key", "Tab"), ("settle", .2), ("snap", "project"),
+              ("key", "Enter"), ("settle", .2), ("snap", "loaded"),
+              ("key", "Enter"), ("settle", .2), ("snap", "unloaded"),
+              ("key", "Enter"), ("settle", .2), ("snap", "inherited"),
+              ("key", "Escape"), ("wait", r"shell\$", "exit"), ("snap", "exit")],
+})
+
+SCENARIOS.append({
+    "name": "config-navigation", "args": ["config", "-a"],
+    "files": {
+        **{f"home/.pi/agent/prompts/prompt-{i:02}.md": f"Prompt {i}.\n" for i in range(30)},
+        "home/.pi/agent/skills/check/SKILL.md": "---\nname: check\ndescription: Check changes.\n---\nCheck the changes.\n",
+        "project/.pi/prompts/local.md": "Project prompt.\n",
+        "home/.pi/agent/keybindings.json": '{"tui.input.tab":"ctrl+t"}',
+    },
+    "steps": [("wait", "Global Resources", "startup"), ("settle", .2), ("snap", "global"),
+              ("key", "PageDown"), ("settle", .2), ("snap", "page-down"),
+              ("key", "Up"), ("settle", .2), ("snap", "previous"),
+              ("key", "PageUp"), ("settle", .2), ("snap", "page-up"),
+              ("keys", " prompt"), ("settle", .2), ("snap", "spaces"),
+              ("key", "C-u"), ("keys", "prompt-29"), ("settle", .2), ("snap", "search"),
+              ("key", "C-t"), ("settle", .2), ("snap", "rebound-ignored"),
+              ("key", "Tab"), ("settle", .2), ("snap", "project"),
+              ("key", "Escape"), ("wait", r"shell\$", "exit"), ("snap", "exit")],
+})
+
+SCENARIOS.append({
+    "name": "config-package-overrides", "args": ["config", "-l", "-a"],
+    "files": {
+        "home/.pi/agent/settings.json": '{"packages":["../../../tools"]}',
+        "tools/package.json": '{"name":"tools","pi":{"prompts":["prompts"]}}',
+        "tools/prompts/tool.md": "Package prompt.\n",
+    },
+    "steps": [("wait", "Project Local Resources", "startup"), ("settle", .2), ("snap", "inherited"),
+              ("key", "Enter"), ("settle", .2), ("snap", "unloaded"),
+              ("json-file", "project/.pi/settings.json", "unloaded-settings"),
+              ("key", "Enter"), ("settle", .2), ("snap", "loaded"),
+              ("json-file", "project/.pi/settings.json", "loaded-settings"),
+              ("key", "Enter"), ("settle", .2), ("snap", "restored"),
+              ("json-file", "project/.pi/settings.json", "restored-settings"),
+              ("key", "Escape"), ("wait", r"shell\$", "exit"), ("snap", "exit")],
+})

@@ -307,6 +307,8 @@ def run_side(label, argv, scenario, keep):
                 target.write_text(step[2])
             elif kind == "file":
                 snaps[step[2]] = (root / step[1]).read_text()
+            elif kind == "json-file":
+                snaps[step[2]] = json.dumps(json.loads((root / step[1]).read_text()), indent=1, sort_keys=True)
             elif kind == "wait-file":
                 target = root / step[1]
                 deadline = time.monotonic() + scenario.get("timeout", 30)

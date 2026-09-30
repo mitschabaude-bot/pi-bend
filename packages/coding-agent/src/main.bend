@@ -5,6 +5,7 @@ import ./core/settings-diagnostics.bend as SettingsDiagnostics
 import ./cli/auth-login.bend as AuthLogin
 import ./cli/auth-command.bend as AuthCommand
 import ./cli/package-command.bend as PackageCommand
+import ./cli/config-selector.bend as ConfigCommand
 import ./cli/auth-check.bend as AuthCheck
 import ./cli/credential-print.bend as CredentialPrint
 import ./cli/file-processor.bend as Files
@@ -62,8 +63,7 @@ import ../../runtime/src/case-map.bend as CaseMap
 import ../../ai/src/utils/uuid.bend as Uuid
 
 # The pi entry point: argument parsing, mode selection, session selection,
-# initial message assembly, runtime creation and exit behavior. Extensions
-# and the update/config package commands remain to be ported.
+# initial message assembly, runtime creation and exit behavior.
 
 type AppMode is Data:
   Interactive{}
@@ -1820,6 +1820,18 @@ def runPackageCommand(values: List<&2, String>) -> IO(Unit):
     directory : Config.Located() <- Config.getAgentDir()
     packageLoaded(values, environment, directory)
 
+def configLoaded(values: List<&2, String>, environment: Result<&2, &2, FS.Error, Paths.Environment>, directory: Config.Located(), assetsRoot: String) -> IO(Unit):
+  match environment directory:
+    case Done{environment} Done{agentDir}: ConfigCommand.run(values, environment, agentDir, assetsRoot)
+    case _ _: IO.die(Unit, 1, "Could not resolve config directories")
+
+def runConfigCommand(values: List<&2, String>) -> IO(Unit):
+  do IO<Unit>:
+    environment : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(Runtime.urlContext())
+    directory : Config.Located() <- Config.getAgentDir()
+    assetsRoot : String <- authPackageDir()
+    configLoaded(values, environment, directory, assetsRoot)
+
 def runValues(values: List<&2, String>) -> IO(Unit):
   match values:
     case "auth" <> "login" <> Nil{}: AuthLogin.run()
@@ -1831,6 +1843,7 @@ def runValues(values: List<&2, String>) -> IO(Unit):
     case "uninstall" <> rest: runPackageCommand("uninstall" <> rest)
     case "list" <> rest: runPackageCommand("list" <> rest)
     case "update" <> rest: runPackageCommand("update" <> rest)
+    case "config" <> rest: runConfigCommand("config" <> rest)
     case other: run(Args.parseArgs(other))
 
 # upstream cli/setup.ts setupCli and main's offline switch: variables the
