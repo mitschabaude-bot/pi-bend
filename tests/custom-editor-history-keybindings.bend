@@ -17,7 +17,10 @@ def check(value: Bool,+name: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),value,_ => IO.print("ok " ++ name),_ => IO.die(Unit,1,"FAIL " ++ name))(Unit{})
 def identity(ignored: Unit,value: String) -> IO(String): IO.pure(String,value)
 def consumed(+key: String) -> Bool: String.eq(key,"\u{10}") || String.eq(key,"x")
-def consumes(_: Unit,key: String) -> IO(Bool): IO.pure(Bool,consumed(key))
+def consumes(calls: Ref.Ref<Nat>,key: String) -> IO(Bool):
+  do IO<Bool>:
+    Ref.modify(Nat,Unit,calls,count => (count + 1n,Unit{}))
+    return consumed(key)
 def counted(cycles: Ref.Ref<Nat>,action: CustomEditor.AppAction) -> IO(Unit):
   match action:
     case CustomEditor.AppAction{"app.model.cycleForward",_}: Ref.modify(Nat,Unit,cycles,count => (count + 1n,Unit{}))
@@ -48,7 +51,7 @@ def exerciseDefault(borrowed: CustomEditor.Owner & Component.Component,cycles: R
         count : Nat <- Ref.read(Nat,cycles)
         check(Nat.is_eq(count,1n),"default Ctrl+P cycles models")
         CustomEditor.dispose(custom)
-def exerciseShortcuts(borrowed: CustomEditor.Owner & Component.Component,+editor: Live.Handle,cycles: Ref.Ref<Nat>) -> IO(Unit):
+def exerciseShortcuts(borrowed: CustomEditor.Owner & Component.Component,+editor: Live.Handle,cycles: Ref.Ref<Nat>,calls: Ref.Ref<Nat>) -> IO(Unit):
   match borrowed:
     case (custom,+component):
       do IO<Unit>:
@@ -63,6 +66,8 @@ def exerciseShortcuts(borrowed: CustomEditor.Owner & Component.Component,+editor
         Component.handleInput(component,"y")
         forwarded : String <- Live.text(editor)
         check(String.eq(forwarded,"drafty"),"unhandled extension key reaches editor")
+        count : Nat <- Ref.read(Nat,calls)
+        check(Nat.is_eq(count,3n),"extension callback runs once per key")
         CustomEditor.dispose(custom)
 def run(pair: Live.Owner & Component.Component & Live.Handle,+cycles: Ref.Ref<Nat>,+onAction: Callback.Callback<CustomEditor.AppAction,Unit>) -> IO(Unit):
   match pair:
@@ -73,10 +78,12 @@ def run(pair: Live.Owner & Component.Component & Live.Handle,+cycles: Ref.Ref<Na
         exercise(CustomEditor.borrow(custom),editor,cycles)
         defaults : CustomEditor.Owner <- CustomEditor.create(CustomEditor.Host{editor,inner,Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),["app.model.cycleForward"],onAction,None{}})
         exerciseDefault(CustomEditor.borrow(defaults),cycles)
-        +hook : Callback.Callback<String,Bool> <- Callback.create(~Unit,~String,~Bool,~consumes,Unit{})
+        +calls : Ref.Ref<Nat> <- Ref.new(Nat,0n)
+        +hook : Callback.Callback<String,Bool> <- Callback.create(~Ref.Ref<Nat>,~String,~Bool,~consumes,calls)
         intercepted : CustomEditor.Owner <- CustomEditor.create(CustomEditor.Host{editor,inner,bindings(),Keys.defaults(),["app.model.cycleForward"],onAction,Some{hook}})
-        exerciseShortcuts(CustomEditor.borrow(intercepted),editor,cycles)
+        exerciseShortcuts(CustomEditor.borrow(intercepted),editor,cycles,calls)
         Callback.dispose(String,Bool,hook)
+        oldCalls : Nat <- Ref.dispose(Nat,calls)
         Live.dispose(owner)
 
 def main() -> IO(Unit):

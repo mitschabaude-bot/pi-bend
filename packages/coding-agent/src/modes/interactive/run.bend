@@ -3739,13 +3739,14 @@ type StartupInput is Data:
   StartupInput{host: CustomEditor.Host,ready: Ref.Ref<StartupState>}
 def startupInput(input: StartupInput,data: String) -> IO(Unit):
   match input:
-    case StartupInput{CustomEditor.Host{+editor,inner,+bindings,+keyboard,actions,onAction,shortcut},+ready}:
+    case StartupInput{CustomEditor.Host{+editor,+inner,+bindings,+keyboard,+actions,+onAction,+shortcut},+ready}:
       do IO<Unit>:
         +shared : String = data
         +state : StartupState <- Ref.read(StartupState,ready)
-        Bool.pick(Unit -> IO(Unit),Bool.not(startupInitialized(state)) && Keybindings.matches(bindings,keyboard,shared,"app.clipboard.pasteImage"),
+        handled : Bool <- CustomEditor.handleExtensionShortcut(CustomEditor.Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},shared)
+        Bool.pick(Unit -> IO(Unit),handled,_ => IO.pure(Unit,Unit{}),_ => Bool.pick(Unit -> IO(Unit),Bool.not(startupInitialized(state)) && Keybindings.matches(bindings,keyboard,shared,"app.clipboard.pasteImage"),
           _ => IO.pure(Unit,Unit{}),
-          _ => CustomEditor.handleInput(startupHost(CustomEditor.Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},startupInitialized(state)),shared))(Unit{})
+          _ => CustomEditor.defaultInput(startupHost(CustomEditor.Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},startupInitialized(state)),shared))(Unit{}))(Unit{})
         draft : Maybe<&2,String> <- Ref.modify(StartupState,Maybe<&2,String>,ready,takeStartupDraft)
         restoreStartupDraft(editor,draft)
 def startupEditor(host: CustomEditor.Host,ready: Ref.Ref<StartupState>) -> IO(CustomEditor.Owner):
@@ -3871,10 +3872,6 @@ def configureTools(transcript: Transcript.Handle,builtinDir: String,key: String,
     +environment : Image.Environment <- Image.processEnvironment("linux",directory)
     +capabilities : Image.TerminalCapabilities = Image.detectCapabilities(environment,False{})
     Transcript.setToolContext(transcript,Tool.ToolContext{cwd,compute,redraw,Some{ReadRenderer.Context{paths,Path.normalize(builtinDir ++ "/../../../../../.."),key}},Some{markdown},Some{Tool.ImageConfig{environment,capabilities,F.fromU64(imageWidth),showImages}}})
-def shortcutCreated(bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Shortcuts.Owner & Shortcuts.Host):
-  do IO<Shortcuts.Owner & Shortcuts.Host>:
-    owner : Shortcuts.Owner <- Shortcuts.create(bindings,keyboard,transcript,redraw)
-    return Shortcuts.borrow(owner)
 def withShortcuts(borrowed: Shortcuts.Owner & Shortcuts.Host,body: Shortcuts.Host -> IO(Result<&2,&2,Error,Unit>)) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (owner,host):
@@ -3939,8 +3936,8 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +bashActivity : Ref.Ref<BashActivity> <- Ref.new(BashActivity,BashActivity{False{},False{},None{}})
         +autocomplete : AutocompleteSlot <- autocompleteSlot(home,builtinDir)
-        borrowedShortcuts : Shortcuts.Owner & Shortcuts.Host <- shortcutCreated(bindings,Keys.defaults(),transcriptHandle,redraw)
-        withShortcuts(borrowedShortcuts,shortcuts => do IO<Result<&2,&2,Error,Unit>>:
+        shortcutOwner : Shortcuts.Owner <- Shortcuts.create(bindings,Keys.defaults(),transcriptHandle,redraw,View.headerHandle(viewHandle))
+        withShortcuts(Shortcuts.borrow(shortcutOwner),shortcuts => do IO<Result<&2,&2,Error,Unit>>:
             +shortcuts : Shortcuts.Host <- IO.pure(Shortcuts.Host,shortcuts)
             commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),status,redraw,cwd,builtinDir,importStateOf(mode,extensionDialogHost,status,redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,status,redraw,bashActivity},settingsSelectorRef,TrustContext{trustSelectorRef,Trust.create(Path.normalize(customDir ++ "/..")),autoTrustOnReloadOf(mode)},View.headerHandle(viewHandle),bindings,autocomplete,ExportTheme{liveTheme,customDir},shortcuts})
             +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})

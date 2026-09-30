@@ -11,6 +11,7 @@ import ../../../../../runtime/src/record.bend as Record
 import ../../../core/system-prompt.bend as Prompt
 import ../../../core/skills.bend as Skills
 import ../../../core/keybindings.bend as AppKeys
+import ../../../core/diagnostics.bend as Diagnostics
 import ../../../config.bend as Config
 import ../theme/theme.bend as Theme
 import ../theme/color.bend as Color
@@ -20,7 +21,8 @@ import ./keybinding-hints.bend as Hints
 # The built-in header belongs to the scrollable document, but survives a
 # transcript replacement. Expansion and theme changes are read at render time.
 # Loaded resource metadata is refreshed by /reload.
-type Loaded is Data: Loaded{contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>,themes: List<&2,Theme.ThemeInfo>,themeDir: String}
+type ExtensionIssue is Data: ExtensionIssue{diagnostic: Diagnostics.ResourceDiagnostic,source: Maybe<&2,Skills.SourceInfo>}
+type Loaded is Data: Loaded{contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>,themes: List<&2,Theme.ThemeInfo>,themeDir: String,issues: List<&2,ExtensionIssue>}
 type Header is Data: Header{expanded: Ref.Ref<Bool>,theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,String>,loaded: Ref.Ref<Loaded>,heading: Ref.Ref<Text.Text>,resources: Ref.Ref<Text.Text>,bindings: Ref.Ref<Bindings.KeybindingsManager>}
 type Owner is Type: Owner{expanded: Ref.Ref<Bool>,loaded: Ref.Ref<Loaded>,heading: Ref.Ref<Text.Text>,resources: Ref.Ref<Text.Text>,bindings: Ref.Ref<Bindings.KeybindingsManager>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 type Handle is Data: Handle{expanded: Ref.Ref<Bool>,loaded: Ref.Ref<Loaded>,bindings: Ref.Ref<Bindings.KeybindingsManager>}
@@ -199,18 +201,75 @@ def themeSection(+theme: Theme.Theme,+items: List<&2,Theme.ThemeInfo>,home: Mayb
             return "  " ++ scope ++ "\n" ++ String.join(paths,"\n"),
           _ => colored(theme,"dim","  " ++ String.join(Theme.names(items),", ")))(Unit{})
         return title ++ "\n" ++ body
+def sourceLabel(source: Skills.SourceInfo) -> String:
+  match source:
+    case Skills.SourceInfo{_,"local",Skills.User{},_,_}: "user"
+    case Skills.SourceInfo{_,"local",Skills.Project{},_,_}: "project"
+    case Skills.SourceInfo{_,"local",Skills.Temporary{},_,_}: "path (temp)"
+    case Skills.SourceInfo{_,"cli",Skills.Temporary{},_,_}: "path (temp)"
+    case Skills.SourceInfo{_,"cli",_,_,_}: "path"
+    case Skills.SourceInfo{_,source,Skills.User{},_,_}: source ++ " (user)"
+    case Skills.SourceInfo{_,source,Skills.Project{},_,_}: source ++ " (project)"
+    case Skills.SourceInfo{_,source,Skills.Temporary{},_,_}: source ++ " (temp)"
+def issuePath(+path: String,source: Maybe<&2,Skills.SourceInfo>,home: Maybe<&2,String>) -> String:
+  match source:
+    case None{}: displayPath(path,home)
+    case Some{+source}: sourceLabel(source) ++ " " ++ displayPath(path,home)
+def issueWithPath(+theme: Theme.Theme,+color: String,message: String,path: Maybe<&2,String>,source: Maybe<&2,Skills.SourceInfo>,home: Maybe<&2,String>) -> IO(List<&2,String>):
+  match path:
+    case None{}:
+      do IO<List<&2,String>>:
+        line : String <- colored(theme,color,"  " ++ message)
+        return [line]
+    case Some{path}:
+      do IO<List<&2,String>>:
+        location : String <- colored(theme,color,"  " ++ issuePath(path,source,home))
+        detail : String <- colored(theme,color,"    " ++ message)
+        return [location,detail]
+def issueLines(+theme: Theme.Theme,issues: List<&2,ExtensionIssue>,+home: Maybe<&2,String>) -> IO(List<&2,String>):
+  match issues:
+    case Nil{}: IO.pure(List<&2,String>,Nil{})
+    case ExtensionIssue{Diagnostics.ResourceDiagnostic{kind,message,path,_},source} <> rest:
+      do IO<List<&2,String>>:
+        +color : String = Bool.pick(String,String.eq(Diagnostics.typeName(kind),"error"),"error","warning")
+        lines : List<&2,String> <- issueWithPath(theme,color,message,path,source,home)
+        more : List<&2,String> <- issueLines(theme,rest,home)
+        return List.append(&2,String,lines,more)
+def issueText(+theme: Theme.Theme,issues: List<&2,ExtensionIssue>,home: Maybe<&2,String>) -> IO(String):
+  match issues:
+    case Nil{}: IO.pure(String,"")
+    case _:
+      do IO<String>:
+        title : String <- colored(theme,"warning","[Extension issues]")
+        lines : List<&2,String> <- issueLines(theme,issues,home)
+        return title ++ "\n" ++ String.join(lines,"\n")
+def sections(+first: String,+second: String) -> String:
+  Bool.pick(String,String.is_empty(first) || String.is_empty(second),first ++ second,first ++ "\n\n" ++ second)
 def listedText(+theme: Theme.Theme,listed: Loaded,cwd: String,+home: Maybe<&2,String>,+expanded: Bool) -> IO(String):
   match listed:
-    case Loaded{contexts,skills,themes,_}:
+    case Loaded{contexts,skills,themes,_,issues}:
       do IO<String>:
         +existing : String <- resourceText(theme,contexts,skills,cwd,home,expanded)
         +themeText : String <- themeSection(theme,themes,home,expanded)
-        return Bool.pick(String,Strings.equal(existing,"") || Strings.equal(themeText,""),existing ++ themeText,existing ++ "\n\n" ++ themeText)
+        diagnostics : String <- issueText(theme,issues,home)
+        return sections(sections(existing,themeText),diagnostics)
+def quietDraw(listed: Loaded,theme: Ref.Ref<Theme.Theme>,resources: Ref.Ref<Text.Text>,home: Maybe<&2,String>,width: Nat) -> IO(List<&2,String>):
+  match listed:
+    case Loaded{_,_,_,_,Nil{}}: IO.pure(List<&2,String>,Nil{})
+    case Loaded{_,_,_,_,issues}:
+      do IO<List<&2,String>>:
+        current : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        text : String <- issueText(current,issues,home)
+        returnLines : List<&2,String> <- cached(resources,text,width)
+        return List.append(&2,String,returnLines,[""])
 def draw(input: Header,width: Nat) -> IO(List<&2,String>):
   match input:
     case Header{state,theme,quiet,cwd,home,loaded,heading,resources,keybindings}:
       match quiet:
-        case True{}: IO.pure(List<&2,String>,Nil{})
+        case True{}:
+          do IO<List<&2,String>>:
+            listed : Loaded <- Ref.read(Loaded,loaded)
+            quietDraw(listed,theme,resources,home,width)
         case False{}:
           do IO<List<&2,String>>:
             +size : Nat <- IO.pure(Nat,width)
@@ -231,7 +290,7 @@ def create(theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,St
   do IO<Owner>:
     +state : Ref.Ref<Bool> <- Ref.new(Bool,False{})
     themes : List<&2,Theme.ThemeInfo> <- loadThemes(themeDir)
-    +loaded : Ref.Ref<Loaded> <- Ref.new(Loaded,Loaded{contexts,skills,themes,themeDir})
+    +loaded : Ref.Ref<Loaded> <- Ref.new(Loaded,Loaded{contexts,skills,themes,themeDir,Nil{}})
     +heading : Ref.Ref<Text.Text> <- Ref.new(Text.Text,Text.new("",Some{1n},Some{0n},None{}))
     +resources : Ref.Ref<Text.Text> <- Ref.new(Text.Text,Text.new("",Some{0n},Some{0n},None{}))
     +bindings : Ref.Ref<Bindings.KeybindingsManager> <- Ref.new(Bindings.KeybindingsManager,Bindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)))
@@ -249,10 +308,16 @@ def setBindings(handle: Handle,bindings: Bindings.KeybindingsManager) -> IO(Unit
 # upstream showLoadedResources after /reload: refresh metadata from disk.
 def refreshedResources(previous: Loaded,+loaded: Ref.Ref<Loaded>,contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>) -> IO(Unit):
   match previous:
-    case Loaded{_,_,_,+directory}:
+    case Loaded{_,_,_,+directory,issues}:
       do IO<Unit>:
         themes : List<&2,Theme.ThemeInfo> <- loadThemes(directory)
-        Ref.write(Loaded,loaded,Loaded{contexts,skills,themes,directory})
+        Ref.write(Loaded,loaded,Loaded{contexts,skills,themes,directory,issues})
+def issuesChanged(previous: Loaded,issues: List<&2,ExtensionIssue>) -> Loaded & Unit:
+  match previous:
+    case Loaded{contexts,skills,themes,directory,_}: (Loaded{contexts,skills,themes,directory,issues},Unit{})
+def setExtensionIssues(handle: Handle,issues: List<&2,ExtensionIssue>) -> IO(Unit):
+  match handle:
+    case Handle{_,loaded,_}: Ref.modify(Loaded,Unit,loaded,previous => issuesChanged(previous,issues))
 def setResources(handle: Handle,contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>) -> IO(Unit):
   match handle:
     case Handle{_,+loaded,_}:

@@ -21,7 +21,7 @@ def scenario(extension):
         "files": {"home/.pi/agent/keybindings.json": '{"app.tools.expand":"alt+o","app.editor.external":"alt+g"}'},
         "timeout": 15,
         "steps": [
-            ("wait", READY, "startup"), ("settle", .3),
+            ("wait", READY, "startup"), ("wait", r"\[Extension issues\]", "issues"), ("settle", .3),
             ("key", "C-v"), ("wait", "SHORTCUT-OK", "immediate"),
             ("key", "C-u"), ("key", "C-o"),
             ("keys", "draft"), ("wait", "draft", "while-pending"),
@@ -54,7 +54,7 @@ def reserved(extension):
         "args": MODEL + ["--extension", str(extension)],
         "timeout": 15,
         "steps": [
-            ("wait", READY, "startup"), ("settle", .3),
+            ("wait", READY, "startup"), ("wait", r"\[Extension issues\]", "issues"), ("settle", .3),
             ("key", "C-o"), ("keys", "draft"), ("wait", "draft", "while-pending"),
             ("settle", 1.2), ("keys", "!"), ("wait", "draft!", "reserved"),
             ("key", "C-u"), ("key", "C-d"), ("wait", "shell\\$", "exit"),
@@ -62,15 +62,35 @@ def reserved(extension):
     }
 
 
+def quiet(extension):
+    value = scenario(extension)
+    value["name"] = "extension-shortcuts-quiet"
+    value["files"]["home/.pi/agent/settings.json"] = '{"quietStartup":true}'
+    value["steps"] = [("wait", READY, "startup"), ("wait", r"\[Extension issues\]", "issues"),
+                      ("snap", "quiet"), ("key", "C-v"), ("wait", "SHORTCUT-OK", "immediate"),
+                      ("key", "C-u"), ("key", "C-d"), ("wait", "shell\\$", "exit")]
+    return value
+
+
+def check_quiet(result, name):
+    assert all(value is not None for value in result["timings"].values()), (name, result["timings"])
+    screen = result["snaps"]["quiet"]
+    assert "[Extension issues]" in screen and "Extension shortcut conflict:" in screen, (name, screen)
+    assert "Pi can explain" not in screen and "escape interrupt" not in screen, (name, screen)
+    print(name, "quiet startup retains shortcut warnings", flush=True)
+
+
 def main():
     upstream = ROOT / "tests/fixtures/extension-shortcuts.ts"
     native = ROOT / "tests/fixtures/extension-shortcuts.bend"
     check(run_side("pi", [shutil.which("pi") or "pi"], scenario(upstream), False), "pi")
     check(run_side("pi", [shutil.which("pi") or "pi"], reserved(upstream), False), "pi reserved")
+    check_quiet(run_side("pi", [shutil.which("pi") or "pi"], quiet(upstream), False), "pi quiet")
     for threads in ("1", "4"):
         os.environ["BEND_THREADS"] = threads
         check(run_side("bend", [str(BINARY)], scenario(native), False), f"native {threads}")
         check(run_side("bend", [str(BINARY)], reserved(native), False), f"native {threads} reserved")
+        check_quiet(run_side("bend", [str(BINARY)], quiet(native), False), f"native {threads} quiet")
 
 
 if __name__ == "__main__":

@@ -101,11 +101,11 @@ def resourceSections(result: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Un
     case Done{+theme}:
       do IO<Unit>:
         +themes : List<&2,Theme.ThemeInfo> <- IO.pure(List<&2,Theme.ThemeInfo>,[Theme.ThemeInfo{"bar","/home/user/.pi/agent/themes/foo.json"}])
-        onlyThemes : String <- Header.listedText(theme,Header.Loaded{Nil{},Nil{},themes,""},"/project",Some{"/home/user"},False{})
+        onlyThemes : String <- Header.listedText(theme,Header.Loaded{Nil{},Nil{},themes,"",Nil{}},"/project",Some{"/home/user"},False{})
         same(Utils.stripTerminalSequences(onlyThemes),"[Themes]\n  bar")
-        withContext : String <- Header.listedText(theme,Header.Loaded{[Prompt.ContextFile{"/project/AGENTS.md","rules"}],Nil{},themes,""},"/project",Some{"/home/user"},False{})
+        withContext : String <- Header.listedText(theme,Header.Loaded{[Prompt.ContextFile{"/project/AGENTS.md","rules"}],Nil{},themes,"",Nil{}},"/project",Some{"/home/user"},False{})
         same(Utils.stripTerminalSequences(withContext),"\n[Context]\n  AGENTS.md\n\n[Themes]\n  bar")
-        expanded : String <- Header.listedText(theme,Header.Loaded{Nil{},Nil{},themes,""},"/project",Some{"/home/user"},True{})
+        expanded : String <- Header.listedText(theme,Header.Loaded{Nil{},Nil{},themes,"",Nil{}},"/project",Some{"/home/user"},True{})
         same(Utils.stripTerminalSequences(expanded),"[Themes]\n  user\n    ~/.pi/agent/themes/foo.json")
 def main() -> IO(Unit):
   do IO<Unit>:

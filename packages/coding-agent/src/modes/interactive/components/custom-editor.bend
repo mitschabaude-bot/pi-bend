@@ -72,16 +72,17 @@ def defaultInput(+host: Host,+data: String) -> IO(Unit):
           _ => exitKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data),
           _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction,shortcut},data))(Unit{}))(Unit{}))(Unit{})
 
-def extensionInput(+host: Host,+data: String,hook: Maybe<&2,Callback.Callback<String,Bool>>) -> IO(Unit):
+def extensionHandled(hook: Maybe<&2,Callback.Callback<String,Bool>>,data: String) -> IO(Bool):
   match hook:
-    case None{}: defaultInput(host,data)
-    case Some{callback}:
-      do IO<Unit>:
-        handled : Bool <- Callback.call(String,Bool,callback,data)
-        Bool.pick(Unit -> IO(Unit),handled,_ => IO.pure(Unit,Unit{}),_ => defaultInput(host,data))(Unit{})
-def handleInput(+host: Host,+data: String) -> IO(Unit):
+    case None{}: IO.pure(Bool,False{})
+    case Some{callback}: Callback.call(String,Bool,callback,data)
+def handleExtensionShortcut(host: Host,data: String) -> IO(Bool):
   match host:
-    case Host{_,_,_,_,_,_,hook}: extensionInput(host,data,hook)
+    case Host{_,_,_,_,_,_,hook}: extensionHandled(hook,data)
+def handleInput(+host: Host,+data: String) -> IO(Unit):
+  do IO<Unit>:
+    handled : Bool <- handleExtensionShortcut(host,data)
+    Bool.pick(Unit -> IO(Unit),handled,_ => IO.pure(Unit,Unit{}),_ => defaultInput(host,data))(Unit{})
 
 def receive(host: Host,data: String) -> IO(Unit): handleInput(host,data)
 # The wrapped editor keeps its id, rendering, mouse and focus callbacks.
