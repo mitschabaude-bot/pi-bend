@@ -3413,19 +3413,56 @@ def queueProcessed(+session: AgentSession, behavior: StreamingBehavior, processe
         expanded : String <- expandInput(session, text)
         queueExpanded(session, behavior, expanded, images)
 
-# upstream _queueUserInput: queued input passes the input handlers and is
-# expanded like a prompt. Upstream also refuses extension commands here;
-# steer and followUp do not report failures, so that check is not ported.
-def queueFrom(+session: AgentSession, +behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>, source: ExtensionTypes.InputSource) -> IO(Unit):
-  do IO<Unit>:
-    processed : Maybe<&2, ProcessedInput> <- runInputHandlers(session, text, images, source, Some{behavior})
-    queueProcessed(session, behavior, processed)
+type CommandText is Data:
+  CommandText{name: String, args: String}
 
-def queue(session: AgentSession, behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit):
+def splitCommand(chars: List<&2, Char>, reversed: List<&2, Char>) -> CommandText:
+  match chars:
+    case Nil{}: CommandText{String.from_list(List.reverse(&2, Char, reversed)), ""}
+    case ' ' <> rest: CommandText{String.from_list(List.reverse(&2, Char, reversed)), String.from_list(rest)}
+    case char <> rest: splitCommand(rest, char <> reversed)
+
+# `/name args`: the name up to the first space, the rest after it.
+def commandText(text: String) -> CommandText:
+  splitCommand(String.to_list(String.drop(text, 1n)), Nil{})
+
+def nameOf(command: CommandText) -> String:
+  match command:
+    case CommandText{name, _}: name
+
+def commandName(text: String) -> String: nameOf(commandText(text))
+
+# Direct queueing rejects registered commands before running input handlers.
+# Extension sendUserMessage deliveries remain raw unless expansion is requested.
+def queuedCommand(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, +text: String) -> IO(Maybe<&2, String>):
+  match runner:
+    case None{}: IO.pure(Maybe<&2, String>, None{})
+    case Some{found}:
+      do IO<Maybe<&2, String>>:
+        command : Maybe<&2, ExtensionTypes.ResolvedCommand> <- ExtensionRunner.getCommand(found, commandName(text))
+        return Maybe.map(&2, ExtensionTypes.ResolvedCommand, String, _ => "/" ++ commandName(text), command)
+
+def queueUnlessCommand(+session: AgentSession, +behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>, source: ExtensionTypes.InputSource, command: Maybe<&2, String>) -> IO(Result<&2, &2, String, Unit>):
+  match command:
+    case Some{command}: IO.pure(Result<&2, &2, String, Unit>, Fail{"Extension command " ++ Decode.quote(command) ++ " cannot be queued. Use prompt() or execute the command when not streaming."})
+    case None{}:
+      do IO<Result<&2, &2, String, Unit>>:
+        processed : Maybe<&2, ProcessedInput> <- runInputHandlers(session, text, images, source, Some{behavior})
+        queueProcessed(session, behavior, processed)
+        return Done{Unit{}}
+
+def queueFrom(+session: AgentSession, +behavior: StreamingBehavior, +text: String, images: List<&2, Ai.ImageContent>, source: ExtensionTypes.InputSource) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    runner : Maybe<&2, ExtensionRunner.ExtensionRunner> = runnerIn(loadout)
+    command : Maybe<&2, String> <- Bool.pick(Unit -> IO(Maybe<&2, String>), String.starts_with(text, "/"), _ => queuedCommand(runner, text), _ => IO.pure(Maybe<&2, String>, None{}))(Unit{})
+    queueUnlessCommand(session, behavior, text, images, source, command)
+
+def queue(session: AgentSession, behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>) -> IO(Result<&2, &2, String, Unit>):
   queueFrom(session, behavior, text, images, ExtensionTypes.InteractiveSource{})
 
-def steer(session: AgentSession, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit): queue(session, Steer{}, text, images)
-def followUp(session: AgentSession, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit): queue(session, FollowUp{}, text, images)
+def steer(session: AgentSession, text: String, images: List<&2, Ai.ImageContent>) -> IO(Result<&2, &2, String, Unit>): queue(session, Steer{}, text, images)
+def followUp(session: AgentSession, text: String, images: List<&2, Ai.ImageContent>) -> IO(Result<&2, &2, String, Unit>): queue(session, FollowUp{}, text, images)
 
 type QueuedMessages is Data:
   QueuedMessages{steering: List<&2, String>, followUp: List<&2, String>}
@@ -3559,25 +3596,6 @@ def runnerOf(loadout: Runtime.Loadout) -> Maybe<&2, ExtensionRunner.ExtensionRun
 def extensionRunner(session: AgentSession) -> IO(Maybe<&2, ExtensionRunner.ExtensionRunner>):
   match session:
     case AgentSession{_,_,_,_,_,loadout,_,_}: currentRunner(loadout)
-
-type CommandText is Data:
-  CommandText{name: String, args: String}
-
-def splitCommand(chars: List<&2, Char>, reversed: List<&2, Char>) -> CommandText:
-  match chars:
-    case Nil{}: CommandText{String.from_list(List.reverse(&2, Char, reversed)), ""}
-    case ' ' <> rest: CommandText{String.from_list(List.reverse(&2, Char, reversed)), String.from_list(rest)}
-    case char <> rest: splitCommand(rest, char <> reversed)
-
-# `/name args`: the name up to the first space, the rest after it.
-def commandText(text: String) -> CommandText:
-  splitCommand(String.to_list(String.drop(text, 1n)), Nil{})
-
-def nameOf(command: CommandText) -> String:
-  match command:
-    case CommandText{name, _}: name
-
-def commandName(text: String) -> String: nameOf(commandText(text))
 
 def commandFailed(+runner: ExtensionRunner.ExtensionRunner, name: String, result: Result<&2, &2, String, Unit>) -> IO(Unit):
   match result:
@@ -5131,6 +5149,22 @@ def appendSessionEntry(+session: AgentSession, record: SessionRecord()) -> IO(Re
 def queuedCount(state: Shared) -> Nat:
   match state:
     case Shared{_, steeringTexts, followUpTexts, _, _, _, _, _, _, _, _}: List.length(&2, String, steeringTexts) + List.length(&2, String, followUpTexts)
+
+# Queue inspection returns immutable snapshots of queued text.
+def queueTexts(state: Shared, behavior: StreamingBehavior) -> List<&2, String>:
+  match state behavior:
+    case Shared{_, steering, _, _, _, _, _, _, _, _, _} Steer{}: steering
+    case Shared{_, _, following, _, _, _, _, _, _, _, _} FollowUp{}: following
+
+def getSteeringMessages(session: AgentSession) -> IO(List<&2, String>):
+  do IO<List<&2, String>>:
+    state : Shared <- R.read(Shared, sharedOf(session))
+    return queueTexts(state, Steer{})
+
+def getFollowUpMessages(session: AgentSession) -> IO(List<&2, String>):
+  do IO<List<&2, String>>:
+    state : Shared <- R.read(Shared, sharedOf(session))
+    return queueTexts(state, FollowUp{})
 
 # upstream pendingMessageCount: the texts queued to steer or follow up.
 def pendingMessageCount(session: AgentSession) -> IO(Nat):

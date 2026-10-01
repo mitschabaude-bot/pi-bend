@@ -696,13 +696,16 @@ def rebind(handle: Handle,+session: Session.AgentSession) -> IO(Unit):
         bindExtensions(extensions,session)
         Session.subscribe(session,listener)
 
-def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool>,jobs: Chan(Work),id: Maybe<&2,String>,text: String,images: List<&2,Ai.ImageContent>,active: Bool,behavior: Maybe<&2,Session.StreamingBehavior>) -> IO(Unit):
+def acceptedPrompt(session: Session.AgentSession,+sink: Sink(),busy: Ref.Ref<Bool>,jobs: Chan(Work),+id: Maybe<&2,String>,text: String,images: List<&2,Ai.ImageContent>,active: Bool,behavior: Maybe<&2,Session.StreamingBehavior>) -> IO(Unit):
   match active behavior:
-    case True{} None{}: output(sink,failure(id,"prompt","Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message."))
+    case True{} None{}:
+      do IO<Unit>:
+        handled : Bool <- Session.tryExecuteExtensionCommand(session,text)
+        output(sink,Bool.pick(V.Value,handled,ok(id,"prompt"),failure(id,"prompt","Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.")))
     case True{} Some{chosen}:
       do IO<Unit>:
-        Session.queueFrom(session,chosen,text,images,ExtensionTypes.RpcSource{})
-        output(sink,ok(id,"prompt"))
+        result : Result<&2,&2,String,Unit> <- Session.promptWith(session,text,Session.PromptOptions{True{},images,Some{chosen},ExtensionTypes.RpcSource{},None{}})
+        output(sink,resultResponse(id,"prompt",result))
     case False{} _:
       do IO<Unit>:
         +started : Started <- newStarted()
@@ -732,8 +735,8 @@ def queueText(handle: Command,id: Maybe<&2,String>,+command: String,+text: Strin
   match handle:
     case Command{+session,sink,_,_,_,_}:
       do IO<Unit>:
-        Session.queueFrom(session,Bool.pick(Session.StreamingBehavior,String.eq(command,"steer"),Session.Steer{},Session.FollowUp{}),text,images,ExtensionTypes.RpcSource{})
-        output(sink,ok(id,command))
+        result : Result<&2,&2,String,Unit> <- Session.queueFrom(session,Bool.pick(Session.StreamingBehavior,String.eq(command,"steer"),Session.Steer{},Session.FollowUp{}),text,images,ExtensionTypes.RpcSource{})
+        output(sink,resultResponse(id,command,result))
 def queued(handle: Command,id: Maybe<&2,String>,+command: String,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>) -> IO(Unit):
   match message images:
     case Fail{error} _: commandFailure(handle,id,command,error)

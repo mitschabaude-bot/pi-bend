@@ -378,14 +378,14 @@ def roleOf(message: Session.Message()) -> String:
     case T.CustomMessage{Messages.BashExecution{_}}: "bashExecution"
     case T.CustomMessage{Messages.Custom{_}}: "custom"
 
-def entryShape(entry: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>) -> V.Value:
+def entryShape(entry: S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>) -> V.Value:
   match entry:
     case S.SessionMessageEntry{_, message}: Json.object(Json.field("type", Json.text("message"), Json.field("role", Json.text(roleOf(message)), Nil{})))
     case S.CustomMessageEntry{_, _, _, _, _}: Json.object(Json.field("type", Json.text("custom_message"), Nil{}))
     case S.Compaction{_}: Json.object(Json.field("type", Json.text("compaction"), Nil{}))
     case _: Json.object(Json.field("type", Json.text("other"), Nil{}))
 
-def entryShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
+def entryShapes(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
   match entries:
     case Nil{}: Nil{}
     case entry <> rest: entryShape(entry) <> entryShapes(rest)
@@ -393,12 +393,12 @@ def entryShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Valu
 def reportEntries(+label: String, +session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    H.printed(Done{Json.object(Json.field("type", Json.text(label), Json.field("entries", V.ArrayValue{entryShapes(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))}, Nil{})))})
+    H.printed(Done{Json.object(Json.field("type", Json.text(label), Json.field("entries", V.ArrayValue{entryShapes(S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))}, Nil{})))})
 
 def reportBranch(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    +branch : List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>> = Result.default(&2, &2, S.Error, List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, S.getBranch(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored), S.Latest{}), Nil{})
+    +branch : List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>> = Result.default(&2, &2, S.Error, List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>, S.getBranch(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored), S.Latest{}), Nil{})
     H.printed(Done{Json.object(Json.field("type", Json.text("branch"), Json.field("entries", V.ArrayValue{entryShapes(branch)}, Nil{})))})
 
 def prompted(+session: Session.AgentSession, +text: String) -> IO(Unit):
@@ -638,7 +638,7 @@ def branchRoles(found: Maybe<&2, Session.AgentSession>) -> IO(Unit):
     case Some{session}:
       do IO<Unit>:
         +stored : Session.Session() <- Session.sessionOf(session)
-        +branch : List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>> = Result.default(&2, &2, S.Error, List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, S.getBranch(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored), S.Latest{}), Nil{})
+        +branch : List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>> = Result.default(&2, &2, S.Error, List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>, S.getBranch(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored), S.Latest{}), Nil{})
         print("roles_at_tool_call", Json.field("entries", V.ArrayValue{entryShapes(branch)}, Nil{}))
 
 def rolesAtToolCall(env: R.Ref<Maybe<&2, Session.AgentSession>>, call: Ext.HandlerCall<Ext.ToolCallEvent>) -> IO(Handled(Ext.ToolCallEventResult)):
@@ -872,7 +872,7 @@ def cancelTreeFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>)
 def currentLeaf(+session: Session.AgentSession) -> IO(Maybe<&2, String>):
   do IO<Maybe<&2, String>>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    return S.getLeafId(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))
+    return S.getLeafId(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored))
 
 def reportLeafValue(+label: String, +session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
@@ -960,12 +960,12 @@ def reasonName(reason: Ext.CompactionReason) -> String:
     case Ext.ThresholdReason{}: "threshold"
     case Ext.OverflowReason{}: "overflow"
 
-def preparationFields(preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>) -> List<&2, Rec.Property<V.Value>>:
+def preparationFields(preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>) -> List<&2, Rec.Property<V.Value>>:
   match preparation:
     case Compaction.CompactionPreparation{firstKept, _, _, _, _, _, _, Compaction.CompactionSettings{enabled, reserve, keep}}:
       Json.field("firstKeptEntryId", Json.text(firstKept), Json.field("settings", Json.object(Json.field("enabled", V.Boolean{enabled}, Json.field("reserveTokens", V.Number{reserve}, Json.field("keepRecentTokens", V.Number{keep}, Nil{})))), Nil{}))
 
-def suppliedCompaction(preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, +summary: String) -> Compaction.CompactionResult:
+def suppliedCompaction(preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>, +summary: String) -> Compaction.CompactionResult:
   match preparation:
     case Compaction.CompactionPreparation{firstKept, _, _, _, tokensBefore, _, _, _}: Compaction.CompactionResult{summary, firstKept, tokensBefore, None{}, None{}, None{}}
 
@@ -985,9 +985,9 @@ def supplyFactory(summary: String, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, S
 def reportSeeded(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    print("seeded", Json.field("userIds", V.ArrayValue{Reg.texts(H.userIds(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))))}, Nil{}))
+    print("seeded", Json.field("userIds", V.ArrayValue{Reg.texts(H.userIds(S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored))))}, Nil{}))
 
-def compactionShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
+def compactionShapes(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
   match entries:
     case Nil{}: Nil{}
     case S.Compaction{S.CompactionEntry{_, summary, keep, _, _, _, _, _}} <> rest: Json.object(Json.field("summary", Json.text(summary), Json.field("firstKeptEntryId", Json.text(keep), Nil{}))) <> compactionShapes(rest)
@@ -996,7 +996,7 @@ def compactionShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V
 def reportCompactions(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    print("compactions", Json.field("entries", V.ArrayValue{compactionShapes(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))}, Nil{}))
+    print("compactions", Json.field("entries", V.ArrayValue{compactionShapes(S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))}, Nil{}))
 
 def overrideReplies(+path: String) -> List<&2, Reg.Reply>:
   match path:
@@ -1087,13 +1087,13 @@ def reportContextMessages(result: Result<&2, &2, S.Error, List<&2, Session.Messa
     case Done{messages}: print("context_messages", Json.field("messages", V.ArrayValue{JsonEvent.messages(messages)}, Nil{}))
     case Fail{_}: print("entry_invalid", Nil{})
 
-def reportContextOf(entry: Maybe<&2, S.FileEntry<Unit, Tools.ToolDetails, V.Value>>) -> IO(Unit):
+def reportContextOf(entry: Maybe<&2, S.FileEntry<V.Value, Tools.ToolDetails, V.Value>>) -> IO(Unit):
   match entry:
-    case Some{S.Entry{value}}: reportContextMessages(S.sessionEntryToContextMessages(Unit, Tools.ToolDetails, V.Value, value))
+    case Some{S.Entry{value}}: reportContextMessages(S.sessionEntryToContextMessages(V.Value, Tools.ToolDetails, V.Value, value))
     case _: print("entry_invalid", Nil{})
 
 def entryMessages(+line: String) -> IO(Unit):
-  reportContextOf(SessionJson.parseSessionEntryLine(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.readUnit, ~Session.readDetails, ~Session.readRaw, line))
+  reportContextOf(SessionJson.parseSessionEntryLine(~V.Value, ~Tools.ToolDetails, ~V.Value, ~Session.readRaw, ~Session.readDetails, ~Session.readRaw, line))
 
 # The in-memory cases of lax-message-content with the native value for
 # "no content" (an empty list): a tool result without content, a message_end
@@ -1220,7 +1220,7 @@ def sendAll(+api: Ext.ExtensionAPI, sends: List<&2, Send>) -> IO(Unit):
         sent : Result<&2, &2, String, Unit> <- Loader.sendMessage(api, Ext.CustomMessageInput{customType, Ai.UserText{text}, False{}, None{}}, Ext.SendMessageOptions{Some{triggerTurn}, None{}})
         sendAll(api, rest)
 
-def lastUserId(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, found: String) -> String:
+def lastUserId(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>, found: String) -> String:
   match entries:
     case Nil{}: found
     case S.SessionMessageEntry{S.SessionEntryBase{id, _, _}, T.LlmMessage{Ai.User{_}}} <> rest: lastUserId(rest, id)
@@ -1232,9 +1232,9 @@ def branchUserId(found: Maybe<&2, Session.AgentSession>) -> IO(String):
     case Some{session}:
       do IO<String>:
         +stored : Session.Session() <- Session.sessionOf(session)
-        return lastUserId(Result.default(&2, &2, S.Error, List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, S.getBranch(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored), S.Latest{}), Nil{}), "missing-user")
+        return lastUserId(Result.default(&2, &2, S.Error, List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>, S.getBranch(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored), S.Latest{}), Nil{}), "missing-user")
 
-def messageIds(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, String>:
+def messageIds(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, String>:
   match entries:
     case Nil{}: Nil{}
     case S.SessionMessageEntry{S.SessionEntryBase{id, _, _}, T.LlmMessage{Ai.User{_}}} <> rest: id <> messageIds(rest)
@@ -1248,7 +1248,7 @@ def branchMessageIds(found: Maybe<&2, Session.AgentSession>) -> IO(List<&2, Stri
     case Some{session}:
       do IO<List<&2, String>>:
         +stored : Session.Session() <- Session.sessionOf(session)
-        return messageIds(Result.default(&2, &2, S.Error, List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, S.getBranch(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored), S.Latest{}), Nil{}))
+        return messageIds(Result.default(&2, &2, S.Error, List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>, S.getBranch(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored), S.Latest{}), Nil{}))
 
 def omitted(+ids: List<&2, String>) -> List<&2, Ext.SessionBoundaryDraft>:
   match ids:
@@ -1418,7 +1418,7 @@ def withSettle(action: Action) -> BoundaryScript: BoundaryScript{None{}, Some{ac
 
 def handoff() -> Ext.SessionBoundaryDraft: Ext.CompactionEntryDraft{"exact handoff", None{}, Some{Json.object(Json.field("source", Json.text("test"), Nil{}))}, None{}}
 
-def compactionIdShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
+def compactionIdShapes(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
   match entries:
     case Nil{}: Nil{}
     case S.Compaction{S.CompactionEntry{S.SessionEntryBase{id, _, _}, summary, keep, _, _, _, _, _}} <> rest: Json.object(Json.field("id", Json.text(id), Json.field("summary", Json.text(summary), Json.field("firstKeptEntryId", Json.text(keep), Nil{})))) <> compactionIdShapes(rest)
@@ -1431,7 +1431,7 @@ def compactionIdShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails,
 def reportSessionEntries(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    print("session_entries", Json.field("entries", V.ArrayValue{compactionIdShapes(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))}, Json.field("projected", V.ArrayValue{JsonEvent.messages(Session.sessionMessages(stored))}, Nil{})))
+    print("session_entries", Json.field("entries", V.ArrayValue{compactionIdShapes(S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))}, Json.field("projected", V.ArrayValue{JsonEvent.messages(Session.sessionMessages(stored))}, Nil{})))
 
 def usageValue(result: Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>) -> V.Value:
   match result:
@@ -1539,7 +1539,7 @@ def refreshNotifications(+dir: String, agentDir: String) -> IO(Unit):
 def compactKeeping(+session: Session.AgentSession, kept: Result<&2, &2, String, String>) -> IO(Result<&2, &2, String, String>):
   match kept:
     case Fail{error}: IO.pure(Result<&2, &2, String, String>, Fail{error})
-    case Done{+id}: Session.appendSessionEntry(session, target => Sessions.appendCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.unitValue, ~Tools.detailsValue, ~Session.rawValue, target, "summary", Some{id}, 10001n, None{}, None{}, None{}))
+    case Done{+id}: Session.appendSessionEntry(session, target => Sessions.appendCompaction(~V.Value, ~Tools.ToolDetails, ~V.Value, ~Session.rawValue, ~Tools.detailsValue, ~Session.rawValue, target, "summary", Some{id}, 10001n, None{}, None{}, None{}))
 
 def retainedUsage(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
@@ -2291,7 +2291,7 @@ def bashDefinitionScenario(+dir: String,agentDir: String) -> IO(Unit):
     +harness : Harness <- resourceHarness(dir,agentDir,setup(Nil{}),ref,[inline("bash-hook",factory)],noResources())
     +session : Session.AgentSession = sessionOf(harness)
     +record : Session.Session() <- Session.sessionOf(session)
-    print("bash_expected",Json.field("PI_SESSION_ID",Json.text(Sessions.getSessionId(Unit,Tools.ToolDetails,V.Value,record)),Json.field("PI_SESSION_FILE",Json.text("<missing>"),Json.field("PI_PROVIDER",Json.text("faux"),Json.field("PI_MODEL",Json.text("faux-model"),Json.field("PI_REASONING_LEVEL",Json.text("off"),Nil{}))))))
+    print("bash_expected",Json.field("PI_SESSION_ID",Json.text(Sessions.getSessionId(V.Value,Tools.ToolDetails,V.Value,record)),Json.field("PI_SESSION_FILE",Json.text("<missing>"),Json.field("PI_PROVIDER",Json.text("faux"),Json.field("PI_MODEL",Json.text("faux-model"),Json.field("PI_REASONING_LEVEL",Json.text("off"),Nil{}))))))
     firstTool : Maybe<&2,Tools.Tool()> <- activeBash(session,"bash")
     bashResult("bash",firstTool)
     secondTool : Maybe<&2,Tools.Tool()> <- activeBash(session,"bash_without_session_env")
@@ -2336,12 +2336,12 @@ def reloadSettingsScenario(+dir: String, +agentDir: String) -> IO(Unit):
 type CompactMode is Data:
   CompactMode{label: String, mode: String}
 
-def compactEntryFields(entry: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>) -> List<&2, Rec.Property<V.Value>>:
+def compactEntryFields(entry: S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>) -> List<&2, Rec.Property<V.Value>>:
   match entry:
     case S.Compaction{S.CompactionEntry{_, summary, _, tokens, _, _, _, _}}: Json.field("entryType", Json.text("compaction"), Json.field("summary", Json.text(summary), Json.field("tokensBefore", V.Number{U32.to_f64(U32.from_nat(tokens))}, Nil{})))
     case _: Json.field("entryType", Json.text("other"), Nil{})
 
-def preparationShape(preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, branch: Nat) -> List<&2, Rec.Property<V.Value>>:
+def preparationShape(preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>, branch: Nat) -> List<&2, Rec.Property<V.Value>>:
   match preparation:
     case Compaction.CompactionPreparation{firstKept, summarize, prefix, split, tokens, _, _, _}:
       Json.field("firstKeptEntryId", Json.text(firstKept), Json.field("messagesToSummarize", V.Number{U32.to_f64(U32.from_nat(List.length(&2, Session.Message(), summarize)))}, Json.field("turnPrefixMessages", V.Number{U32.to_f64(U32.from_nat(List.length(&2, Session.Message(), prefix)))}, Json.field("isSplitTurn", V.Boolean{split}, Json.field("tokensBefore", V.Number{tokens}, Json.field("branchEntries", V.Number{U32.to_f64(U32.from_nat(branch))}, Nil{}))))))
@@ -2350,7 +2350,7 @@ def withTokens(result: Compaction.CompactionResult, +tokens: F64) -> Compaction.
   match result:
     case Compaction.CompactionResult{summary, kept, _, after, usage, details}: Compaction.CompactionResult{summary, kept, tokens, after, usage, details}
 
-def beforeCompactReply(+mode: String, preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>) -> Handled(Ext.SessionBeforeCompactResult):
+def beforeCompactReply(+mode: String, preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>) -> Handled(Ext.SessionBeforeCompactResult):
   match mode:
     case "cancel": Done{Some{Ext.SessionBeforeCompactResult{Some{True{}}, None{}}}}
     case "supply": Done{Some{Ext.SessionBeforeCompactResult{None{}, Some{suppliedCompaction(preparation, "Custom summary from extension")}}}}
@@ -2362,7 +2362,7 @@ def beforeCompactRecorded(env: CompactMode, call: Ext.HandlerCall<Ext.SessionBef
   match env call:
     case CompactMode{label, mode} Ext.HandlerCall{Ext.SessionBeforeCompactEvent{+preparation, branch, _, _, _, _}, _}:
       do IO<Handled(Ext.SessionBeforeCompactResult)>:
-        print("before_compact", Json.field("extension", Json.text(label), preparationShape(preparation, List.length(&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>, branch))))
+        print("before_compact", Json.field("extension", Json.text(label), preparationShape(preparation, List.length(&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>, branch))))
         return beforeCompactReply(mode, preparation)
 
 def compactRecorded(label: String, call: Ext.HandlerCall<Ext.SessionCompactEvent>) -> IO(Handled(Unit)):
@@ -2567,8 +2567,143 @@ def promptScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
     case "switch_tools_override": switchScenario(dir, agentDir, "override")
     case _: IO.die(Unit, 1, "unknown prompt scenario")
 
+# suite/agent-session-queue.test.ts: block the wait tool so delivery boundaries
+# are observed without timing assumptions. Queue mode laws cover selection;
+# these cases cover its integration with input, extension and session events.
+def queueSource(source: Ext.InputSource) -> String:
+  match source:
+    case Ext.RpcSource{}: "rpc"
+    case Ext.InteractiveSource{}: "interactive"
+    case _: "extension"
+
+def queueInput(env: Unit, call: Ext.HandlerCall<Ext.InputEvent>) -> IO(Handled(Ext.InputEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.InputEvent{+text, _, source, behavior}, _}:
+      do IO<Handled(Ext.InputEventResult)>:
+        print("input", Json.field("text", Json.text(text), Json.field("source", Json.text(queueSource(source)), Json.field("streamingBehavior", deliveryName(behavior), Nil{}))))
+        return Done{Some{Bool.pick(Ext.InputEventResult, String.starts_with(text, "handle"), Ext.InputHandled{}, Ext.InputTransform{"transformed: " ++ text, None{}})}}
+
+def queueFactory(apiRef: R.Ref<Maybe<&2, Ext.ExtensionAPI>>, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    registered : Result<&2, &2, String, Unit> <- testCommandFactory(apiRef, api)
+    handler : Ext.ExtensionHandler(Ext.InputEvent, Ext.InputEventResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.InputEvent>, ~Handled(Ext.InputEventResult), ~queueInput, Unit{})
+    subscribe(api, Ext.OnInput{handler})
+
+def reportPending(+session: Session.AgentSession, label: String) -> IO(Unit):
+  do IO<Unit>:
+    pending : Nat <- Session.pendingMessageCount(session)
+    print("pending", Json.field("label", Json.text(label), Json.field("count", Json.natural(pending), Nil{})))
+
+def pendingStarted(session: Session.AgentSession, text: Maybe<&2, String>) -> IO(Unit):
+  match text:
+    case Some{value}: reportPending(session, value)
+    case None{}: IO.pure(Unit, Unit{})
+
+def queueStart(session: Session.AgentSession, event: Session.AgentSessionEvent) -> IO(Unit):
+  match event:
+    case Session.AgentEvent{T.MessageStart{message}}: pendingStarted(session, Session.userText(message))
+    case _: IO.pure(Unit, Unit{})
+
+def queueDelivery(+session: Session.AgentSession, +behavior: Session.StreamingBehavior, +text: String) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Unit> <- Session.queueFrom(session, behavior, text, Nil{}, Ext.RpcSource{})
+    H.reportOutcome("queued", result)
+
+def queueExtension(found: Maybe<&2, Ext.ExtensionAPI>, behavior: Ext.UserDelivery, text: String) -> IO(Unit):
+  match found:
+    case None{}: IO.die(Unit, 1, "queue extension missing")
+    case Some{api}:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Unit> <- Loader.sendUserMessage(api, Ai.UserText{text}, Ext.SendUserMessageOptions{Some{behavior}, None{}})
+        H.reportOutcome("queued", result)
+
+def queueActions(+session: Session.AgentSession, api: Maybe<&2, Ext.ExtensionAPI>, +name: String, +behavior: Session.StreamingBehavior) -> IO(Unit):
+  match name:
+    case "input":
+      do IO<Unit>:
+        queueDelivery(session, Session.Steer{}, "steer me")
+        queueDelivery(session, Session.Steer{}, "handle steer")
+        queueDelivery(session, Session.FollowUp{}, "follow me")
+        queueDelivery(session, Session.FollowUp{}, "handle follow")
+    case "reject":
+      do IO<Unit>:
+        queueDelivery(session, Session.Steer{}, "/testcmd queued")
+        queueDelivery(session, Session.FollowUp{}, "/testcmd queued")
+    case "extension-steer": queueExtension(api, Ext.UserSteer{}, "steer now")
+    case "extension-follow": queueDelivery(session, Session.FollowUp{}, "after current run")
+    case "custom-steer":
+      do IO<Unit>:
+        result : Result<&2, &2, String, Unit> <- Session.sendCustomMessage(session, Ext.CustomMessageInput{"queue-test", Ai.UserText{"steer custom"}, True{}, Some{Json.object(Json.field("value", Json.natural(1n), Nil{}))}}, Ext.SendMessageOptions{None{}, Some{Ext.DeliverSteer{}}})
+        H.reportOutcome("queued", result)
+    case "custom-follow":
+      do IO<Unit>:
+        result : Result<&2, &2, String, Unit> <- Session.sendCustomMessage(session, Ext.CustomMessageInput{"queue-test", Ai.UserText{"follow-up custom"}, True{}, Some{Json.object(Json.field("value", Json.natural(1n), Nil{}))}}, Ext.SendMessageOptions{None{}, Some{Ext.DeliverFollowUp{}}})
+        H.reportOutcome("queued", result)
+    case "pending": queueDelivery(session, behavior, "queued")
+    case _:
+      do IO<Unit>:
+        queueDelivery(session, behavior, Bool.pick(String, String.starts_with(name, "mode-steer"), "steer 1", "follow-up 1"))
+        queueDelivery(session, behavior, Bool.pick(String, String.starts_with(name, "mode-steer"), "steer 2", "follow-up 2"))
+
+def queueReplies(+name: String, +follow: Bool, all: Bool) -> List<&2, Reg.Reply>:
+  +next = Bool.pick(List<&2, Reg.Reply>, all, [Reg.Text{"batched response"}], [Reg.Text{"handled 1"}, Reg.Text{"handled 2"}])
+  +replies = Bool.pick(List<&2, Reg.Reply>, String.starts_with(name, "mode-"), next, [Reg.Text{"done"}])
+  Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"} <> Bool.pick(List<&2, Reg.Reply>, follow || String.eq(name, "input"), Reg.Text{"original turn complete"} <> replies, replies)
+
+def queueScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +apiRef : R.Ref<Maybe<&2, Ext.ExtensionAPI>> <- R.new(Maybe<&2, Ext.ExtensionAPI>, None{})
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Unit) <- Chan.new(Unit, 1)
+    +transform : Bool = String.eq(name, "input")
+    +follow : Bool = String.starts_with(name, "mode-follow") || String.ends_with(name, "follow")
+    +all : Bool = String.ends_with(name, "all")
+    +factory : Ext.ExtensionFactory() <- Bool.pick(Unit -> IO(Ext.ExtensionFactory()), transform,
+      _ => C.create(~R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(ref => api => queueFactory(ref, api)), apiRef),
+      _ => C.create(~R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(ref => api => testCommandFactory(ref, api)), apiRef))(Unit{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{started, release}}]}, setup(queueReplies(name, follow, all)), ref, [inline("queue", factory)])
+    +session : Session.AgentSession = sessionOf(harness)
+    mode : Result<&2, &2, String, Unit> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), follow, _ => Session.setFollowUpMode(session, Bool.pick(T.QueueMode, all, T.All{}, T.OneAtATime{})), _ => Session.setSteeringMode(session, Bool.pick(T.QueueMode, all, T.All{}, T.OneAtATime{})))(Unit{})
+    +listener : Session.Listener() <- C.create(~Session.AgentSession, ~Session.AgentSessionEvent, ~Unit, ~queueStart, session)
+    Session.subscribe(session, listener)
+    IO.spawn(Unit, promptInBackground(session, "start", done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    api : Maybe<&2, Ext.ExtensionAPI> <- R.read(Maybe<&2, Ext.ExtensionAPI>, apiRef)
+    queueActions(session, api, name, Bool.pick(Session.StreamingBehavior, follow, Session.FollowUp{}, Session.Steer{}))
+    steering : List<&2, String> <- Session.getSteeringMessages(session)
+    following : List<&2, String> <- Session.getFollowUpMessages(session)
+    H.observe(Unit{}, Session.QueueUpdate{steering, following})
+    reportPending(session, "before_release")
+    print("release", Nil{})
+    sent : Bool <- Chan.send(Unit, release, Unit{})
+    finished : Maybe<&1, Unit> <- Chan.recv(Unit, done)
+    reportPending(session, "after_run")
+    H.reportMessages(session)
+    Session.unsubscribe(session, listener)
+    C.dispose(Session.AgentSessionEvent, Unit, listener)
+    cleanup(harness)
+    retired : Maybe<&2, Ext.ExtensionAPI> <- R.dispose(Maybe<&2, Ext.ExtensionAPI>, apiRef)
+    Chan.close(Unit, started)
+    Chan.close(Unit, release)
+    Chan.close(Unit, done)
+
+# nextTurn custom content is not queued as a user message; it is flushed
+# between the next prompt and its provider request.
+def nextTurnCustom(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +harness : Harness <- createHarness(dir, agentDir, Scripted{Nil{}}, setup([Reg.Text{"done"}]))
+    sent : Result<&2, &2, String, Unit> <- Session.sendCustomMessage(sessionOf(harness), Ext.CustomMessageInput{"next-turn", Ai.UserText{"carry this"}, True{}, Some{Json.object(Nil{})}}, Ext.SendMessageOptions{None{}, Some{Ext.DeliverNextTurn{}}})
+    H.reportOutcome("queued", sent)
+    prompted(sessionOf(harness), "normal")
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
+    case "queue" <> dir <> agentDir <> name <> Nil{}: queueScenario(dir, agentDir, name)
+    case "next_turn_custom" <> dir <> agentDir <> Nil{}: nextTurnCustom(dir, agentDir)
     case "custom_order" <> dir <> agentDir <> Nil{}: customOrder(dir, agentDir)
     case "bash_recorded" <> dir <> agentDir <> Nil{}: bashRecorded(dir, agentDir)
     case "bash_abort" <> dir <> agentDir <> Nil{}: bashAbort(dir, agentDir)

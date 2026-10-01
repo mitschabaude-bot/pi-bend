@@ -48,7 +48,7 @@ import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
 # withUsageEstimate (prompt and output estimates, with the prompt cache).
 # tests/regressions_check.py reads the printed JSON lines.
 
-def EventStream() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
+def EventStream() -> Data: Stream.AssistantMessageEventStream(V.Value, V.Value)
 
 type Reply is Data:
   Text{text: String}
@@ -91,7 +91,7 @@ def blockTexts(blocks: List<&2, Ai.TextImageContent>) -> String:
     case Ai.TextImageText{Ai.TextContent{text, _}} <> rest: text ++ blockTexts(rest)
     case _ <> rest: blockTexts(rest)
 
-def lastUserIn(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>, found: Maybe<&2, String>) -> Maybe<&2, String>:
+def lastUserIn(messages: List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>>, found: Maybe<&2, String>) -> Maybe<&2, String>:
   match messages:
     case Nil{}: found
     case Ai.User{Ai.UserMessage{Ai.UserText{text}, _}} <> rest: lastUserIn(rest, Some{text})
@@ -203,26 +203,26 @@ def systemText(+message: Ai.SystemMessage<V.Value>) -> String:
   match message:
     case Ai.SystemMessage{_, _, added, removed, _}: String.join(nonEmptyParts(AiText.renderComplete(V.Value, message) <> List.append(&2, String, removedTools(removed), addedTools(added))), "\n")
 
-def messageText(message: Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>) -> String:
+def messageText(message: Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>) -> String:
   match message:
     case Ai.System{system}: "system:" ++ systemText(system)
     case Ai.User{Ai.UserMessage{content, _}}: "user:" ++ userContentText(content)
     case Ai.Assistant{Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}: "assistant:" ++ String.join(assistantTexts(content), "\n")
     case Ai.ToolResult{result}: "toolResult:" ++ toolResultText(result)
 
-def messageTexts(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>) -> List<&2, String>:
+def messageTexts(messages: List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>>) -> List<&2, String>:
   match messages:
     case Nil{}: Nil{}
     case message <> rest: messageText(message) <> messageTexts(rest)
 
-def roleName(message: Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>) -> String:
+def roleName(message: Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>) -> String:
   match message:
     case Ai.System{_}: "\"system\""
     case Ai.User{_}: "\"user\""
     case Ai.Assistant{_}: "\"assistant\""
     case Ai.ToolResult{_}: "\"toolResult\""
 
-def rolesOf(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>) -> List<&2, String>:
+def rolesOf(messages: List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>>) -> List<&2, String>:
   match messages:
     case Nil{}: Nil{}
     case message <> rest: roleName(message) <> rolesOf(rest)
@@ -239,7 +239,7 @@ def sectionJson(fields: List<&2, Rec.Property<Maybe<&2, String>>>) -> List<&2, S
 
 # Each system message's sections (null without any), as upstream tests read
 # `request.messages[i].sections`.
-def systemSections(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>) -> List<&2, String>:
+def systemSections(messages: List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>>) -> List<&2, String>:
   match messages:
     case Nil{}: Nil{}
     case Ai.System{Ai.SystemMessage{_, Some{sections}, _, _, _}} <> rest: ("{" ++ String.join(sectionJson(Rec.entries(Maybe<&2, String>, sections)), ",") ++ "}") <> systemSections(rest)
@@ -255,15 +255,24 @@ def toolNamesJson(tools: List<&2, Ai.Tool<V.Value>>) -> List<&2, String>:
 # and getCurrentSystemPrompt over the request context).
 def requestTools(input: H.Input()) -> List<&2, String>:
   match input:
-    case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: toolNamesJson(Transcript.getCurrentTools(V.Value, V.Value, Unit, Tools.ToolDetails, messages))
+    case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: toolNamesJson(Transcript.getCurrentTools(V.Value, V.Value, V.Value, Tools.ToolDetails, messages))
 
 def requestSystemPrompt(input: H.Input()) -> String:
   match input:
-    case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: Transcript.getCurrentSystemPrompt(V.Value, V.Value, Unit, Tools.ToolDetails, messages)
+    case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: Transcript.getCurrentSystemPrompt(V.Value, V.Value, V.Value, Tools.ToolDetails, messages)
 
 def requestSections(input: H.Input()) -> List<&2, String>:
   match input:
     case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: systemSections(messages)
+
+def requestMessages(values: List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>>) -> List<&2, V.Value>:
+  match values:
+    case Nil{}: Nil{}
+    case message <> rest: Json.message(~V.Value, ~Tools.ToolDetails, ~(_ => V.Null{}), ~Tools.detailsValue, message) <> requestMessages(rest)
+
+def requestTranscript(input: H.Input()) -> String:
+  match input:
+    case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: H.line(V.ArrayValue{requestMessages(messages)})
 
 def serializeContext(input: H.Input()) -> String:
   match input:
@@ -306,7 +315,7 @@ def promptUsage(+previous: Rec.Record<String>, +input: H.Input()) -> Rec.Record<
 def costedUsage() -> Ai.Usage:
   Ai.Usage{U32.to_f64(1), U32.to_f64(1), zero(), zero(), None{}, None{}, U32.to_f64(2), Ai.UsageCost{zero(), zero(), zero(), zero(), F64.div(U32.to_f64(1), U32.to_f64(4))}}
 
-def replyMessage(content: List<&2, Ai.AssistantContent<V.Value>>, stop: Ai.StopReason, usage: Ai.Usage, now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
+def replyMessage(content: List<&2, Ai.AssistantContent<V.Value>>, stop: Ai.StopReason, usage: Ai.Usage, now: Stamp) -> Ai.AssistantMessage<V.Value, V.Value>:
   match now:
     case Stamp{model, time, _}: Ai.AssistantMessage{content, "openai-responses", "faux", model, None{}, None{}, None{}, None{}, usage, stop, None{}, None{}, None{}, None{}, time}
 
@@ -326,8 +335,8 @@ def chunks(text: String) -> List<&2, String>:
     case SNil{}: "" <> Nil{}
     case SCon{c, rest}: gather(SCon{c, rest}, "", 0n)
 
-def push(stream: EventStream(), event: Ai.AssistantMessageEvent<V.Value, Unit>) -> IO(Unit):
-  Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, stream, event)
+def push(stream: EventStream(), event: Ai.AssistantMessageEvent<V.Value, V.Value>) -> IO(Unit):
+  Stream.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, stream, event)
 
 def textDeltas(+stream: EventStream(), parts: List<&2, String>, +sofar: String, +usage: Ai.Usage, +now: Stamp) -> IO(Unit):
   match parts:
@@ -338,7 +347,7 @@ def textDeltas(+stream: EventStream(), parts: List<&2, String>, +sofar: String, 
         push(stream, Ai.TextDelta{zero(), part, replyMessage(textBlock(next), Ai.Pending{}, usage, now)})
         textDeltas(stream, rest, next, usage, now)
 
-def callDeltas(+stream: EventStream(), parts: List<&2, String>, +partial: Ai.AssistantMessage<V.Value, Unit>) -> IO(Unit):
+def callDeltas(+stream: EventStream(), parts: List<&2, String>, +partial: Ai.AssistantMessage<V.Value, V.Value>) -> IO(Unit):
   match parts:
     case Nil{}: IO.pure(Unit, Unit{})
     case +part <> rest:
@@ -352,7 +361,7 @@ def callsBlock(calls: List<&2, Ai.ToolCall<V.Value>>) -> List<&2, Ai.AssistantCo
     case call <> rest: Ai.AssistantToolCall{call} <> callsBlock(rest)
 
 # Several tool calls in one reply, each announced by its start and end.
-def callEvents(+stream: EventStream(), calls: List<&2, Ai.ToolCall<V.Value>>, +index: U32, +partial: Ai.AssistantMessage<V.Value, Unit>) -> IO(Unit):
+def callEvents(+stream: EventStream(), calls: List<&2, Ai.ToolCall<V.Value>>, +index: U32, +partial: Ai.AssistantMessage<V.Value, V.Value>) -> IO(Unit):
   match calls:
     case Nil{}: IO.pure(Unit, Unit{})
     case call <> rest:
@@ -399,11 +408,11 @@ def interruptedReply(+stream: EventStream(), +text: String, started: Chan(Unit),
   interruptedChunks(stream, chunks(text), text, started, signal, now)
 
 # An error reply: no content, stop reason error, the error message.
-def failedWith(errorMessage: String, usage: Ai.Usage, content: List<&2, Ai.AssistantContent<V.Value>>, now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
+def failedWith(errorMessage: String, usage: Ai.Usage, content: List<&2, Ai.AssistantContent<V.Value>>, now: Stamp) -> Ai.AssistantMessage<V.Value, V.Value>:
   match now:
     case Stamp{model, time, _}: Ai.AssistantMessage{content, "openai-responses", "faux", model, None{}, None{}, None{}, None{}, usage, Ai.Error{}, None{}, Some{errorMessage}, None{}, None{}, time}
 
-def failedMessage(errorMessage: String, +now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
+def failedMessage(errorMessage: String, +now: Stamp) -> Ai.AssistantMessage<V.Value, V.Value>:
   +usage = usageAt(now, zero())
   failedWith(errorMessage, usage, Nil{}, now)
 
@@ -500,7 +509,7 @@ def providing(faux: Faux, +input: H.Input()) -> IO(H.Output()):
       +signal = signalOf(input)
       do IO<H.Output()>:
         R.write(Maybe<&2, Signal()>, signals, signal)
-        IO.print("{\"type\":\"request\",\"model\":" ++ Decode.quote(model) ++ ",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ ",\"maxTokens\":" ++ maxTokensOf(input) ++ ",\"roles\":[" ++ String.join(requestRoles(input), ",") ++ "],\"tools\":[" ++ String.join(requestTools(input), ",") ++ "],\"systemPrompt\":" ++ Decode.quote(requestSystemPrompt(input)) ++ ",\"systemSections\":[" ++ String.join(requestSections(input), ",") ++ "],\"context\":" ++ Decode.quote(serializeContext(input)) ++ "}")
+        IO.print("{\"type\":\"request\",\"model\":" ++ Decode.quote(model) ++ ",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ ",\"maxTokens\":" ++ maxTokensOf(input) ++ ",\"roles\":[" ++ String.join(requestRoles(input), ",") ++ "],\"tools\":[" ++ String.join(requestTools(input), ",") ++ "],\"systemPrompt\":" ++ Decode.quote(requestSystemPrompt(input)) ++ ",\"systemSections\":[" ++ String.join(requestSections(input), ",") ++ "],\"context\":" ++ Decode.quote(serializeContext(input)) ++ ",\"messages\":" ++ requestTranscript(input) ++ "}")
         gate : Maybe<&2, H.Gate> <- R.modify(List<&2, Hold>, Maybe<&2, H.Gate>, gates, remaining => popHold(remaining))
         H.holdAt(gate)
         aborted : Bool <- isAborted(signal)
@@ -508,10 +517,10 @@ def providing(faux: Faux, +input: H.Input()) -> IO(H.Output()):
         IO.sleep(1)
         +usage : PromptUsage <- R.modify(Rec.Record<String>, PromptUsage, prompts, previous => promptUsage(previous, input))
         +now : F64 <- Date.now()
-        +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
+        +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~V.Value)
         R.modify(List<&2, EventStream()>, Unit, streams, old => (stream <> old, Unit{}))
         Bool.pick(Unit -> IO(Unit), aborted, _ => abortedReply(stream, Stamp{model, now, usage}), _ => answerAsync(stream, reply, Stamp{model, now, usage}, signal))(Unit{})
-        return Done{T.borrowedStream(Unit, Tools.ToolError, stream)}
+        return Done{T.borrowedStream(V.Value, Tools.ToolError, stream)}
 
 def provider(faux: Faux, input: H.Input()) -> IO(H.Output()): providing(faux, input)
 
@@ -528,19 +537,19 @@ def observed(+event: Session.AgentSessionEvent) -> IO(Unit):
 def observe(env: Unit, event: Session.AgentSessionEvent) -> IO(Unit): observed(event)
 
 type Fixture is Data:
-  Fixture{session: Session.AgentSession, listener: Session.Listener(), stream: Runtime.Stream(), validator: Loop.Validator(Tools.ToolError), converter: Runtime.Converter(), registry: StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError), faux: Faux}
+  Fixture{session: Session.AgentSession, listener: Session.Listener(), stream: Runtime.Stream(), validator: Loop.Validator(Tools.ToolError), converter: Runtime.Converter(), registry: StreamFn.Registry(V.Value, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError), faux: Faux}
 
 def emptyLoadout() -> Runtime.Loadout: Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}, Nil{}}
 
 # The agent starts from the stored session's context, as the upstream
 # harness's `agent.state.messages = buildSessionContext().messages`.
-def contextList(context: Result<&2, &2, S.Error, S.SessionContext<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, Session.Message()>:
+def contextList(context: Result<&2, &2, S.Error, S.SessionContext<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, Session.Message()>:
   match context:
     case Done{S.SessionContext{messages, _, _}}: messages
     case Fail{_}: Nil{}
 
 def contextOf(stored: Session.Session()) -> List<&2, Session.Message()>:
-  contextList(S.sessionContext(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))
+  contextList(S.sessionContext(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))
 
 type Setup is Data:
   Setup{replies: List<&2, Reply>, gates: List<&2, Hold>, model: Ai.Model<Ai.JsonValue>}
@@ -549,7 +558,7 @@ type Setup is Data:
 # runner shares it).
 # upstream's harness Agent has no session id, so the faux's prompt cache
 # never applies (withUsageEstimate's cache branch needs one).
-def harnessOptions(stream: Runtime.Stream(), converter: Runtime.Converter(), selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> Agent.AgentOptions<Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit>:
+def harnessOptions(stream: Runtime.Stream(), converter: Runtime.Converter(), selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> Agent.AgentOptions<V.Value, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit>:
   Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, selected, Some{Ai.Off{}}, Some{Nil{}}, None{}}}, Some{converter}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
 # `others` are further faux models the model runtime lists after the
@@ -564,12 +573,12 @@ def fixtureModels(+stored: Session.Session(), +cwd: String, +settings: Settings.
         +signalRef : R.Ref<Maybe<&2, Signal()>> <- R.new(Maybe<&2, Signal()>, None{})
         +promptRef : R.Ref<Rec.Record<String>> <- R.new(Rec.Record<String>, Rec.new(String))
         +stream : Runtime.Stream() <- C.create(~Faux, ~H.Input(), ~H.Output(), ~provider, Faux{replyRef, streams, gateRef, Ai.modelId(model), signalRef, promptRef})
-        +registry : StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError) <- StreamFn.create(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError)
+        +registry : StreamFn.Registry(V.Value, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError) <- StreamFn.create(V.Value, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError)
         +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError, ~Runtime.validationError)
         +converter : Runtime.Converter() <- Runtime.createConverter(False{})
-        created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, harnessOptions(stream, converter, Some{model}), registry, validator, Tools.emptyDetails())
+        created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~V.Value, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, harnessOptions(stream, converter, Some{model}), registry, validator, Tools.emptyDetails())
         +agent : Runtime.Owner() <- H.requireAgent(created)
-        Agent.replaceMessages(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent, contextOf(stored))
+        Agent.replaceMessages(V.Value, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent, contextOf(stored))
         +models : Models.ModelRuntime <- ModelFixture.create(ModelFixture.Source{"faux", "PI_FAUX_API_KEY", model <> others} <> Nil{})
         loadout : Runtime.Loadout <- build(models)
         +session : Session.AgentSession <- Session.create(agent, stored, settings, cwd, loadout, models, Nil{})
@@ -599,8 +608,8 @@ def teardown(value: Fixture) -> IO(Unit):
         C.dispose(Session.AgentSessionEvent, Unit, listener)
         +agent : Runtime.Owner() = Session.agentOf(session)
         Session.dispose(session)
-        Agent.dispose(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent)
-        StreamFn.dispose(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError, registry)
+        Agent.dispose(V.Value, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent)
+        StreamFn.dispose(V.Value, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError, registry)
         Loop.disposeValidation(Tools.ToolError, validator)
         Runtime.disposeConverter(converter)
         C.dispose(H.Input(), H.Output(), stream)
@@ -622,7 +631,7 @@ def fixtureLoaded(+stored: Session.Session(), +cwd: String, +settings: Settings.
   fixtureWithLoadout(stored, cwd, settings, plainSetup(Nil{}), loadout)
 
 
-def requireAppended(result: Sessions.Outcome(Sessions.Appended<Unit, Tools.ToolDetails, V.Value>)) -> IO(Session.Session()):
+def requireAppended(result: Sessions.Outcome(Sessions.Appended<V.Value, Tools.ToolDetails, V.Value>)) -> IO(Session.Session()):
   match result:
     case Done{Sessions.Appended{session, _}}: IO.pure(Session.Session(), session)
     case Fail{error}: IO.die(Session.Session(), 1, Sessions.message(error))
@@ -633,7 +642,7 @@ def seeded(seed: List<&2, Session.Message()>, +stored: Session.Session()) -> IO(
     case Nil{}: IO.pure(Session.Session(), stored)
     case message <> rest:
       do IO<Session.Session()>:
-        appended : Sessions.Outcome(Sessions.Appended<Unit, Tools.ToolDetails, V.Value>) <- Sessions.appendMessage(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.unitValue, ~Tools.detailsValue, ~Session.rawValue, stored, message)
+        appended : Sessions.Outcome(Sessions.Appended<V.Value, Tools.ToolDetails, V.Value>) <- Sessions.appendMessage(~V.Value, ~Tools.ToolDetails, ~V.Value, ~Session.rawValue, ~Tools.detailsValue, ~Session.rawValue, stored, message)
         next : Session.Session() <- requireAppended(appended)
         seeded(rest, next)
 
@@ -659,7 +668,7 @@ def promptWith(+text: String, +session: Session.AgentSession) -> IO(Unit):
 def reportName(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    IO.print("{\"type\":\"session_name\",\"name\":" ++ H.maybeQuoted(S.getSessionName(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))) ++ "}")
+    IO.print("{\"type\":\"session_name\",\"name\":" ++ H.maybeQuoted(S.getSessionName(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored))) ++ "}")
 
 def named(+name: String, +session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
@@ -710,7 +719,7 @@ def reloadScenario(+dir: String, +initial: Settings.Outcome(Settings.Settings)) 
 
 # suite/regressions/8989: a fork removes the context-invisible label that a
 # compaction's boundary pointed to. Ids are the stamps upstream generates.
-def Manager() -> Data: S.SessionManager<Unit, Tools.ToolDetails, V.Value>
+def Manager() -> Data: S.SessionManager<V.Value, Tools.ToolDetails, V.Value>
 def Step() -> Data: Result<&2, &2, S.Error, Manager()>
 
 def then(step: Step(), next: Manager() -> Step()) -> Step():
@@ -721,20 +730,20 @@ def stamp(+id: String) -> S.EntryStamp: S.EntryStamp{id, "2026-01-01T00:00:00.00
 def userMsg(text: String) -> Session.Message(): T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, zero()}}}
 
 def forkedAtLabel() -> Step():
-  start = S.inMemory(Unit, Tools.ToolDetails, V.Value, S.SessionHeader{Some{3n}, "session", "2026-01-01T00:00:00.000Z", "/tmp", None{}})
-  old = then(start, state => S.appendMessage(Unit, Tools.ToolDetails, V.Value, state, stamp("old"), userMsg("old")))
-  labeled = then(old, state => S.appendLabelChange(Unit, Tools.ToolDetails, V.Value, state, stamp("label"), "old", Some{"checkpoint"}))
-  kept = then(labeled, state => S.appendMessage(Unit, Tools.ToolDetails, V.Value, state, stamp("kept"), userMsg("kept")))
-  compacted = then(kept, state => S.appendCompaction(Unit, Tools.ToolDetails, V.Value, state, stamp("compaction"), "summary", Some{"label"}, 100n, None{}, None{}, None{}))
-  after = then(compacted, state => S.appendMessage(Unit, Tools.ToolDetails, V.Value, state, stamp("after"), userMsg("after")))
-  then(after, state => S.createBranchedSession(Unit, Tools.ToolDetails, V.Value, state, "after", stamp("fork"), "copied-label" <> Nil{}))
+  start = S.inMemory(V.Value, Tools.ToolDetails, V.Value, S.SessionHeader{Some{3n}, "session", "2026-01-01T00:00:00.000Z", "/tmp", None{}})
+  old = then(start, state => S.appendMessage(V.Value, Tools.ToolDetails, V.Value, state, stamp("old"), userMsg("old")))
+  labeled = then(old, state => S.appendLabelChange(V.Value, Tools.ToolDetails, V.Value, state, stamp("label"), "old", Some{"checkpoint"}))
+  kept = then(labeled, state => S.appendMessage(V.Value, Tools.ToolDetails, V.Value, state, stamp("kept"), userMsg("kept")))
+  compacted = then(kept, state => S.appendCompaction(V.Value, Tools.ToolDetails, V.Value, state, stamp("compaction"), "summary", Some{"label"}, 100n, None{}, None{}, None{}))
+  after = then(compacted, state => S.appendMessage(V.Value, Tools.ToolDetails, V.Value, state, stamp("after"), userMsg("after")))
+  then(after, state => S.createBranchedSession(V.Value, Tools.ToolDetails, V.Value, state, "after", stamp("fork"), "copied-label" <> Nil{}))
 
-def firstKept(entry: Maybe<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> V.Value:
+def firstKept(entry: Maybe<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> V.Value:
   match entry:
     case Some{S.Compaction{S.CompactionEntry{_, _, keep, _, _, _, _, _}}}: V.Text{keep}
     case _: V.Null{}
 
-def contextMessages(context: Result<&2, &2, S.Error, S.SessionContext<Unit, Tools.ToolDetails, V.Value>>) -> V.Value:
+def contextMessages(context: Result<&2, &2, S.Error, S.SessionContext<V.Value, Tools.ToolDetails, V.Value>>) -> V.Value:
   match context:
     case Done{S.SessionContext{messages, _, _}}: V.ArrayValue{JsonEvent.messages(messages)}
     case Fail{_}: V.Null{}
@@ -742,7 +751,7 @@ def contextMessages(context: Result<&2, &2, S.Error, S.SessionContext<Unit, Tool
 def reportFork(step: Step()) -> IO(Unit):
   match step:
     case Fail{_}: IO.print("{\"type\":\"fork_failed\"}")
-    case Done{+state}: H.printed(Done{Json.object(Json.field("type", Json.text("fork"), Json.field("firstKeptEntryId", firstKept(S.getEntry(Unit, Tools.ToolDetails, V.Value, state, "compaction")), Json.field("messages", contextMessages(S.sessionContext(Unit, Tools.ToolDetails, V.Value, state)), Nil{}))))})
+    case Done{+state}: H.printed(Done{Json.object(Json.field("type", Json.text("fork"), Json.field("firstKeptEntryId", firstKept(S.getEntry(V.Value, Tools.ToolDetails, V.Value, state, "compaction")), Json.field("messages", contextMessages(S.sessionContext(V.Value, Tools.ToolDetails, V.Value, state)), Nil{}))))})
 
 # A faux model with upstream's `models: [{ id: "faux-1", contextWindow, maxTokens }]`.
 def namedModel(+id: String, window: U32, maxTokens: U32) -> Ai.Model<Ai.JsonValue>:
@@ -767,7 +776,7 @@ def repliesOf(value: Fixture) -> R.Ref<List<&2, Reply>>:
     case Fixture{_, _, _, _, _, _, Faux{replies, _, _, _, _, _}}: replies
 
 # Persisted entries as JSON messages (upstream sessionManager.getEntries()).
-def entryMessages(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
+def entryMessages(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
   match entries:
     case Nil{}: Nil{}
     case S.SessionMessageEntry{_, message} <> rest: JsonEvent.message(message) <> entryMessages(rest)
@@ -776,7 +785,7 @@ def entryMessages(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Va
 def reportPersisted(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    H.printed(Done{Json.object(Json.field("type", Json.text("persisted"), Json.field("messages", V.ArrayValue{entryMessages(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))}, Nil{})))})
+    H.printed(Done{Json.object(Json.field("type", Json.text("persisted"), Json.field("messages", V.ArrayValue{entryMessages(S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))}, Nil{})))})
     H.reportEntries(session)
 
 def seededFixture(+dir: String, agentDir: String, seed: List<&2, Session.Message()>, setup: Setup) -> IO(Fixture):
@@ -891,7 +900,7 @@ def firstId(ids: List<&2, String>) -> String:
     case Nil{}: "missing-entry"
 
 def firstUser(stored: Session.Session()) -> String:
-  firstId(H.userIds(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))))
+  firstId(H.userIds(S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored))))
 
 # tree-during-streaming: navigation from inside the active response.
 def treeDuringStreaming(+dir: String, agentDir: String) -> IO(Unit):
@@ -922,7 +931,7 @@ def baseFields(base: S.SessionEntryBase, rest: List<&2, Rec.Property<V.Value>>) 
 
 # Entries in order, message entries with their message (upstream
 # sessionManager.getEntries()).
-def entryShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
+def entryShapes(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
   match entries:
     case Nil{}: Nil{}
     case S.SessionMessageEntry{base, message} <> rest: Json.object(Json.field("type", Json.text("message"), baseFields(base, Json.field("message", JsonEvent.message(message), Nil{})))) <> entryShapes(rest)
@@ -933,7 +942,7 @@ def entryShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Valu
 def reportEntryShapes(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    H.printed(Done{Json.object(Json.field("type", Json.text("entry_shapes"), Json.field("entries", V.ArrayValue{entryShapes(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))}, Nil{})))})
+    H.printed(Done{Json.object(Json.field("type", Json.text("entry_shapes"), Json.field("entries", V.ArrayValue{entryShapes(S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))}, Nil{})))})
 
 def signalsOf(value: Fixture) -> R.Ref<Maybe<&2, Signal()>>:
   match value:
@@ -1039,7 +1048,7 @@ def toolExtension(ask: Bool, static: Bool, +api: Ext.ExtensionAPI) -> IO(Result<
     subscribed : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, Ext.OnSessionStart{handler})
     return Result.map(&2, &2, String, Loader.Unsubscribe, Unit, done => Unit{}, subscribed)
 
-def toolExtensionFor(kind: String, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+def toolExtensionFor(+kind: String, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
   toolExtension(String.eq(kind, "extensions"), String.eq(kind, "static"), api)
 
 def toolRunner(+extensions: String, +cwd: String) -> IO(Maybe<&2, Runner.ExtensionRunner>):
@@ -1048,7 +1057,7 @@ def toolRunner(+extensions: String, +cwd: String) -> IO(Maybe<&2, Runner.Extensi
     case other:
       do IO<Maybe<&2, Runner.ExtensionRunner>>:
         +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
-        +factory : Ext.ExtensionFactory() <- C.create(~String, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~toolExtensionFor, other)
+        +factory : Ext.ExtensionFactory() <- C.create(~String, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(kind => api => toolExtensionFor(kind, api)), other)
         errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.InlineExtension{"tools", factory, False{}}])
         C.dispose(Ext.ExtensionAPI, Result<&2, &2, String, Unit>, factory)
         models : Models.ModelRuntime <- ModelFixture.create(Nil{})
@@ -1141,15 +1150,15 @@ def branchSummaryScenario(+dir: String, agentDir: String) -> IO(Unit):
 # assistant reply and prompts once more, then the navigation runs. Targets:
 # first-user, user:N, assistant:N (1-based) or leaf. `hold` holds the summary
 # request and aborts the branch summary while it is held.
-def roleOf(entry: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>) -> String:
+def roleOf(entry: S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>) -> String:
   match entry:
     case S.SessionMessageEntry{_, T.LlmMessage{Ai.User{_}}}: "user"
     case S.SessionMessageEntry{_, T.LlmMessage{Ai.Assistant{_}}}: "assistant"
     case _: "other"
 
-def idOfEntry(entry: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>) -> String: S.entryId(Unit, Tools.ToolDetails, V.Value, entry)
+def idOfEntry(entry: S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>) -> String: S.entryId(V.Value, Tools.ToolDetails, V.Value, entry)
 
-def entryIds(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, +role: String) -> List<&2, String>:
+def entryIds(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>, +role: String) -> List<&2, String>:
   match entries:
     case Nil{}: Nil{}
     case +entry <> rest:
@@ -1161,7 +1170,7 @@ def nth(ids: List<&2, String>, index: Nat) -> String:
 
 def indexOf(+text: String) -> Nat: Maybe.default(&2, Nat, Nat.read(text), 0n)
 
-def selectTarget(parts: List<&2, String>, +entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, +leaf: String) -> String:
+def selectTarget(parts: List<&2, String>, +entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>, +leaf: String) -> String:
   match parts:
     case "user" <> index <> Nil{}: nth(entryIds(entries, "user"), indexOf(index))
     case "assistant" <> index <> Nil{}: nth(entryIds(entries, "assistant"), indexOf(index))
@@ -1169,7 +1178,7 @@ def selectTarget(parts: List<&2, String>, +entries: List<&2, S.SessionEntry<Unit
     case _: nth(entryIds(entries, "user"), 1n)
 
 def targetIn(+stored: Session.Session(), +target: String) -> String:
-  selectTarget(String.split(target, ':'), S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)), H.currentLeaf(stored))
+  selectTarget(String.split(target, ':'), S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)), H.currentLeaf(stored))
 
 def reply(+index: Nat) -> Reply: Text{"reply " ++ Nat.show(index)}
 
@@ -1186,7 +1195,7 @@ def navigateOptions(+summarize: String, +custom: String) -> Session.NavigateTree
 def reportLeafState(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     stored : Session.Session() <- Session.sessionOf(session)
-    IO.print("{\"type\":\"leaf\",\"leafId\":" ++ H.maybeQuoted(S.getLeafId(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))) ++ "}")
+    IO.print("{\"type\":\"leaf\",\"leafId\":" ++ H.maybeQuoted(S.getLeafId(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored))) ++ "}")
     reportEntryShapes(session)
 
 def promptAll(+session: Session.AgentSession, prompts: List<&2, String>) -> IO(Unit):
@@ -1288,7 +1297,7 @@ def number(+text: String) -> Nat: Maybe.default(&2, Nat, Nat.read(text), 0n)
 # agent-session-auto-compaction-queue: _checkCompaction's decision for a
 # checked assistant message (upstream spies on _runAutoCompaction; here the
 # decision, Session.planCompaction, says whether compaction runs).
-def assistantMessage(text: String, stop: Ai.StopReason, errorMessage: Maybe<&2, String>, usage: Ai.Usage, +timestamp: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+def assistantMessage(text: String, stop: Ai.StopReason, errorMessage: Maybe<&2, String>, usage: Ai.Usage, +timestamp: F64) -> Ai.AssistantMessage<V.Value, V.Value>:
   Ai.AssistantMessage{textBlock(text), "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, usage, stop, None{}, errorMessage, None{}, None{}, timestamp}
 
 def totalUsage(+input: U32, +output: U32) -> Ai.Usage:
@@ -1304,7 +1313,7 @@ def planName(plan: Plan.CompactionPlan) -> String:
 
 def noFacts() -> Session.Facts: Session.Facts{False{}, False{}, False{}, None{}}
 
-def planCase(+label: String, +settings: Compaction.CompactionSettings, +assistant: Ai.AssistantMessage<V.Value, Unit>, +boundary: Maybe<&2, F64>, messages: List<&2, Session.Message()>) -> IO(Unit):
+def planCase(+label: String, +settings: Compaction.CompactionSettings, +assistant: Ai.AssistantMessage<V.Value, V.Value>, +boundary: Maybe<&2, F64>, messages: List<&2, Session.Message()>) -> IO(Unit):
   IO.print("{\"type\":\"plan\",\"label\":" ++ Decode.quote(label) ++ ",\"plan\":\"" ++ planName(Session.planCompaction(settings, False{}, assistant, H.fauxModel(), boundary, messages, False{}, noFacts())) ++ "\"}")
 
 def compactionPlanScenario(+dir: String, agentDir: String) -> IO(Unit):
@@ -1313,19 +1322,19 @@ def compactionPlanScenario(+dir: String, agentDir: String) -> IO(Unit):
     +settings : Compaction.CompactionSettings = Session.compactionSettingsFor(H.settingsOf(loaded), H.fauxModel())
     +now : F64 <- Date.now()
     # should ignore stale pre-compaction assistant usage on pre-prompt compaction checks
-    +stale : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("large response before compaction", Ai.Stop{}, None{}, totalUsage(600000, 10000), before(now, 10000))
+    +stale : Ai.AssistantMessage<V.Value, V.Value> = assistantMessage("large response before compaction", Ai.Stop{}, None{}, totalUsage(600000, 10000), before(now, 10000))
     planCase("stale", settings, stale, Some{before(now, 5000)}, [userAt("before compaction", before(now, 11000)), T.LlmMessage{Ai.Assistant{stale}}, userAt("session recovery payload", now)])
     # should trigger threshold compaction for error messages using last successful usage
     +threshold : U32 = 111617
-    +successful : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("large successful response", Ai.Stop{}, None{}, totalUsage(U32.sub(threshold, 10000), 10000), now)
-    +overloaded : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("", Ai.Error{}, Some{"529 overloaded"}, totalUsage(0, 0), F.add(now, U32.to_f64(1000)))
+    +successful : Ai.AssistantMessage<V.Value, V.Value> = assistantMessage("large successful response", Ai.Stop{}, None{}, totalUsage(U32.sub(threshold, 10000), 10000), now)
+    +overloaded : Ai.AssistantMessage<V.Value, V.Value> = assistantMessage("", Ai.Error{}, Some{"529 overloaded"}, totalUsage(0, 0), F.add(now, U32.to_f64(1000)))
     planCase("error_after_success", settings, overloaded, None{}, [userAt("hello", before(now, 1000)), T.LlmMessage{Ai.Assistant{successful}}, userAt("another prompt", F.add(now, U32.to_f64(500))), T.LlmMessage{Ai.Assistant{overloaded}}])
     # should not trigger threshold compaction for error messages when no prior usage exists
-    +alone : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("", Ai.Error{}, Some{"529 overloaded"}, totalUsage(0, 0), now)
+    +alone : Ai.AssistantMessage<V.Value, V.Value> = assistantMessage("", Ai.Error{}, Some{"529 overloaded"}, totalUsage(0, 0), now)
     planCase("error_alone", settings, alone, None{}, [userAt("hello", before(now, 1000)), T.LlmMessage{Ai.Assistant{alone}}])
     # should not trigger threshold compaction for error messages when only kept pre-compaction usage exists
-    +kept : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("kept response from before compaction", Ai.Stop{}, None{}, totalUsage(180000, 10000), before(now, 10000))
-    +later : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("", Ai.Error{}, Some{"529 overloaded"}, totalUsage(0, 0), now)
+    +kept : Ai.AssistantMessage<V.Value, V.Value> = assistantMessage("kept response from before compaction", Ai.Stop{}, None{}, totalUsage(180000, 10000), before(now, 10000))
+    +later : Ai.AssistantMessage<V.Value, V.Value> = assistantMessage("", Ai.Error{}, Some{"529 overloaded"}, totalUsage(0, 0), now)
     planCase("error_after_kept", settings, later, Some{before(now, 5000)}, [userAt("kept user msg", before(now, 11000)), T.LlmMessage{Ai.Assistant{kept}}, userAt("new prompt", before(now, 500)), T.LlmMessage{Ai.Assistant{later}}])
 
 # "should resume after threshold compaction when only agent-level queued
@@ -1336,9 +1345,9 @@ def queuedThresholdScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +now : F64 <- Date.now()
     +value : Fixture <- seededFixture(dir, agentDir, userAt("message to compact", before(now, 1000)) <> assistantAt("assistant response to compact", Ai.Stop{}, totalUsage(100, 0), before(now, 500)) <> Nil{}, Setup{Text{"compacted"} <> Nil{}, Nil{}, H.fauxModel()})
-    Agent.followUp(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(sessionOf(value)), T.CustomMessage{Messages.Custom{Messages.CustomMessage{"test", Ai.UserBlocks{[Ai.TextImageText{Ai.TextContent{"Queued custom", None{}}}]}, False{}, None{}, now}}})
+    Agent.followUp(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(sessionOf(value)), T.CustomMessage{Messages.Custom{Messages.CustomMessage{"test", Ai.UserBlocks{[Ai.TextImageText{Ai.TextContent{"Queued custom", None{}}}]}, False{}, None{}, now}}})
     pending : Nat <- Session.pendingMessageCount(sessionOf(value))
-    queued : Bool <- Agent.hasQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(sessionOf(value)))
+    queued : Bool <- Agent.hasQueuedMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(sessionOf(value)))
     IO.print("{\"type\":\"queue\",\"pending\":" ++ Nat.show(pending) ++ ",\"agentQueued\":" ++ Bool.pick(String, queued, "true", "false") ++ "}")
     settings : Settings.SettingsManager <- Session.getSettings(sessionOf(value))
     compacted : Bool <- Session.runAutoCompaction(Session.agentOf(sessionOf(value)), Session.sharedOf(sessionOf(value)), settings, H.fauxModel(), Session.Threshold{}, False{})

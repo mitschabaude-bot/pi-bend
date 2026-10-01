@@ -762,6 +762,73 @@ def trigger_compact_checks(f):
     return 1
 
 
+def queue_checks(f):
+    """suite/agent-session-queue.test.ts: all 15 queue characterization contracts.
+
+    Queue selection/FIFO laws are in laws/agent.bend; gated integration cases
+    observe provider transcripts and public events rather than scheduling delays.
+    """
+    events = run(f, 'prompt', 'command')
+    assert [e['args'] for e in of_type(events, 'command_run')] == ['hello world']
+    assert messages(events) == [] and last(events, 'remaining')['count'] == 1
+    checks = 1
+    for delivery in ['steer', 'follow']:
+        for mode in ['one', 'all']:
+            events = run(f, 'queue', f'mode-{delivery}-{mode}')
+            expected = [f'{"steer" if delivery == "steer" else "follow-up"} {i}' for i in [1, 2]]
+            assert [text_of(m) for m in messages(events) if m['role'] == 'user'] == ['start', *expected]
+            contexts = [e['messages'] for e in of_type(events, 'request')]
+            offset = 1 if delivery == 'steer' else 2
+            delivered = [[text_of(m) for m in context if m['role'] == 'user'] for context in contexts[offset:]]
+            assert delivered == ([['start', *expected]] if mode == 'all' else [['start', expected[0]], ['start', *expected]]), delivered
+            texts = [text_of(m) for m in messages(events) if m['role'] == 'assistant']
+            assert texts == ['', *(['original turn complete'] if delivery == 'follow' else []), *(['batched response'] if mode == 'all' else ['handled 1', 'handled 2'])], texts
+            checks += 1
+    for delivery, text in [('steer', 'steer now'), ('follow', 'after current run')]:
+        events = run(f, 'queue', 'extension-' + delivery)
+        contexts = [e['messages'] for e in of_type(events, 'request')]
+        assert [text_of(m) for m in messages(events) if m['role'] == 'user'] == ['start', text]
+        assert [text_of(m) for m in contexts[-1] if m['role'] == 'user'] == ['start', text]
+        if delivery == 'steer':
+            assert len(contexts) == 2
+        else:
+            assert [text_of(m) for m in contexts[-1] if m['role'] == 'assistant'] == ['', 'original turn complete']
+        checks += 1
+    events = run(f, 'queue', 'input')
+    assert of_type(events, 'input')[1:] == [dict(type='input', text=text, source='rpc', streamingBehavior=behavior) for text, behavior in [('steer me', 'steer'), ('handle steer', 'steer'), ('follow me', 'followUp'), ('handle follow', 'followUp')]]
+    assert any(e['steering'] == ['transformed: steer me'] and not e['followUp'] for e in of_type(events, 'queue_update'))
+    assert any(e['steering'] == ['transformed: steer me'] and e['followUp'] == ['transformed: follow me'] for e in of_type(events, 'queue_update'))
+    assert [text_of(m) for m in messages(events) if m['role'] == 'user'] == ['transformed: start', 'transformed: steer me', 'transformed: follow me']
+    checks += 1
+    for delivery, text in [('steer', 'steer custom'), ('follow', 'follow-up custom')]:
+        events = run(f, 'queue', 'custom-' + delivery)
+        contexts = [e['messages'] for e in of_type(events, 'request')]
+        custom = [m for m in messages(events) if m['role'] == 'custom']
+        assert len(custom) == 1 and custom[0]['customType'] == 'queue-test' and custom[0]['display'] is True and custom[0]['details'] == {'value': 1}, custom
+        assert any(m['role'] == 'user' and isinstance(m['content'], list) and any(part.get('text') == text for part in m['content']) for m in contexts[-1]), contexts[-1]
+        assert len(contexts) == (2 if delivery == 'steer' else 3)
+        checks += 1
+    events = run(f, 'next_turn_custom')
+    assert roles(messages(events)) == ['system', 'user', 'custom', 'assistant']
+    context = last(events, 'request')['messages']
+    assert any(m['role'] == 'user' and isinstance(m['content'], list) and any(part.get('text') == 'carry this' for part in m['content']) for m in context)
+    checks += 1
+    events = run(f, 'queue', 'pending')
+    pending = {e['label']: e['count'] for e in of_type(events, 'pending')}
+    assert pending['before_release'] == 1 and pending['queued'] == 0 and pending['after_run'] == 0, pending
+    checks += 1
+    events = run(f, 'queue', 'reject')
+    error = 'Extension command "/testcmd" cannot be queued. Use prompt() or execute the command when not streaming.'
+    assert of_type(events, 'queued') == [dict(type='queued', ok=False, error=error)] * 2
+    assert [text_of(m) for m in messages(events) if m['role'] == 'user'] == ['start']
+    assert not of_type(events, 'command_run')
+    checks += 2
+    events = run(f, 'settled_follow_up')
+    assert [text_of(m) for m in messages(events) if m['role'] == 'user'] == ['hello', 'status follow-up']
+    assert len(of_type(events, 'agent_end')) == 2 and len(of_type(events, 'agent_settled')) == 1
+    return checks + 1
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in RUNNERS:
@@ -771,7 +838,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures) + extension_tool_checks(fixtures) + reload_settings_checks(fixtures) + compaction_extension_checks(fixtures) + branch_summary_extension_checks(fixtures) + trigger_compact_checks(fixtures)
+    checks = queue_checks(fixtures) + bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures) + extension_tool_checks(fixtures) + reload_settings_checks(fixtures) + compaction_extension_checks(fixtures) + branch_summary_extension_checks(fixtures) + trigger_compact_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

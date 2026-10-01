@@ -1,0 +1,11 @@
+--- a/bend.ts
++++ b/bend.ts
+@@ -2149,7 +2149,7 @@
+       if (out.$ === "Ref" && tm !== undefined) {
+         const env = p.sc.stk.reduce((env: Env, e) => list_set(env, e[1], Ref("\0")), null);
+         const key = ts.map((x) => term_show(term_lower(term_higher(x, env)))).join("\n");
+-        if (!key.includes("\0") && key.length <= 2048) {
++        if (!key.includes("\0")) {
+           if (tm.is[key] === undefined) {
+             tm.is[key] = out.k + "~" + Object.keys(tm.is).length;
+             parse_def({ ...tm.p, sc: { stk: [], frs: p.sc.frs }, os: [], inst: { k: tm.is[key], xs: ts } }, p.book, tm.u);

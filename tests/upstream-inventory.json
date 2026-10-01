@@ -4130,14 +4130,17 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-queue.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
-        "tests/agent-session.bend",
-        "tests/agent_session_check.py"
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md",
+        "laws/agent.bend",
+        "proofs/agent.bend"
       ],
       "sha256": "6419227d98849f6aed17e9262cfa13d85bb18f59b1040ba8b687f9f487771fdb",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'delivers follow-up messages only after the current run finishes' is the queue scenario of tests/agent_session_check.py over a text-only turn (steering joins the first turn, the follow-up starts the second). Extension-origin messages, input handlers, one-at-a-time/all modes and custom-message delivery remain pending."
+      "notes": "All 15 queue characterization contracts: idle command dispatch, extension-origin steering, follow-up turn boundary, RPC-source input transformation/handling, FIFO one-at-a-time and all modes, custom steer/follow-up/nextTurn delivery and provider conversion, pending count before message_start, direct extension-command rejection, and agent_end follow-ups. Existing agent queue laws prove mode isolation and selection; gated native integration asserts transcripts and event ordering. The agent_end case reuses the #6363 fixture; response predicates are asserted against captured structured provider messages."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-retry-events.test.ts",

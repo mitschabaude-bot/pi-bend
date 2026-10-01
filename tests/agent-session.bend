@@ -40,9 +40,9 @@ import ../packages/ai/src/utils/uuid.bend as Uuid
 # checker tests/agent_session_check.py reads the printed JSON events and the
 # session file.
 
-def Input() -> Data: T.StreamInput<Unit, Tools.ToolDetails, Runtime.LoopConfig()>
-def Output() -> Type: Result<&2, &1, Tools.ToolError, T.StreamLease<Unit, Tools.ToolError>>
-def EventStream() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
+def Input() -> Data: T.StreamInput<V.Value, Tools.ToolDetails, Runtime.LoopConfig()>
+def Output() -> Type: Result<&2, &1, Tools.ToolError, T.StreamLease<V.Value, Tools.ToolError>>
+def EventStream() -> Data: Stream.AssistantMessageEventStream(V.Value, V.Value)
 
 # A gate holds one request open: the provider reports `started` and waits
 # for `release`, which keeps the session streaming for the busy scenario.
@@ -93,13 +93,13 @@ def zero() -> F64: U32.to_f64(0)
 def usageOf(+tokens: F64) -> Ai.Usage:
   Ai.Usage{tokens, zero(), zero(), zero(), None{}, None{}, tokens, Ai.UsageCost{zero(), zero(), zero(), zero(), zero()}}
 
-def reply(text: String, stop: Ai.StopReason, tokens: F64, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+def reply(text: String, stop: Ai.StopReason, tokens: F64, now: F64) -> Ai.AssistantMessage<V.Value, V.Value>:
   Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text, None{}}} <> Nil{}, "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, usageOf(tokens), stop, None{}, None{}, None{}, None{}, now}
 
-def toolCallReply(name: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+def toolCallReply(name: String, now: F64) -> Ai.AssistantMessage<V.Value, V.Value>:
   Ai.AssistantMessage{Ai.AssistantToolCall{Ai.ToolCall{"call-1", name, V.ObjectValue{Rec.Record{Nil{}}}, None{}, None{}}} <> Nil{}, "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, Agent.emptyUsage(), Ai.ToolUse{}, None{}, None{}, None{}, None{}, now}
 
-def failure(message: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+def failure(message: String, now: F64) -> Ai.AssistantMessage<V.Value, V.Value>:
   Ai.AssistantMessage{Nil{}, "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, Agent.emptyUsage(), Ai.Error{}, None{}, Some{message}, None{}, None{}, now}
 
 def popResponse(responses: List<&2, String>) -> List<&2, String> & String:
@@ -107,8 +107,8 @@ def popResponse(responses: List<&2, String>) -> List<&2, String> & String:
     case Nil{}: (Nil{}, "(no scripted response)")
     case text <> rest: (rest, text)
 
-def push(stream: EventStream(), event: Ai.AssistantMessageEvent<V.Value, Unit>) -> IO(Unit):
-  Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, stream, event)
+def push(stream: EventStream(), event: Ai.AssistantMessageEvent<V.Value, V.Value>) -> IO(Unit):
+  Stream.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, stream, event)
 
 def withTokens(stop: Ai.StopReason, text: String, parts: List<&2, String>) -> Scripted:
   match parts:
@@ -159,10 +159,10 @@ def provider(faux: Faux, input: Input()) -> IO(Output()):
         text : String <- R.modify(List<&2, String>, String, responses, remaining => popResponse(remaining))
         IO.sleep(U32.from_nat(delay))
         +now : F64 <- Date.now()
-        +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
+        +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~V.Value)
         R.modify(List<&2, EventStream()>, Unit, streams, old => (stream <> old, Unit{}))
         answer(stream, scripted(text), now)
-        return Done{T.borrowedStream(Unit, Tools.ToolError, stream)}
+        return Done{T.borrowedStream(V.Value, Tools.ToolError, stream)}
 
 def line(value: V.Value) -> String:
   Maybe.default(&2, String, Render.stringify(SchemaJson.toJson(value)), "null")
@@ -176,9 +176,9 @@ def observe(env: Unit, event: Session.AgentSessionEvent) -> IO(Unit):
   printed(JsonEvent.toSessionJsonEvent(event))
 
 type Fixture is Data:
-  Fixture{session: Session.AgentSession, listener: Session.Listener(), stream: Runtime.Stream(), validator: Loop.Validator(Tools.ToolError), converter: Runtime.Converter(), registry: StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError), faux: Faux}
+  Fixture{session: Session.AgentSession, listener: Session.Listener(), stream: Runtime.Stream(), validator: Loop.Validator(Tools.ToolError), converter: Runtime.Converter(), registry: StreamFn.Registry(V.Value, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError), faux: Faux}
 
-def options(stream: Runtime.Stream(), converter: Runtime.Converter(), sessionId: String, selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> Agent.AgentOptions<Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit>:
+def options(stream: Runtime.Stream(), converter: Runtime.Converter(), sessionId: String, selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> Agent.AgentOptions<V.Value, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit>:
   Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, selected, Some{Ai.Off{}}, Some{Nil{}}, None{}}}, Some{converter}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{sessionId}, None{}, None{}, None{}, None{}}
 
 def requireAgent(result: Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()>) -> IO(Runtime.Owner()):
@@ -201,10 +201,10 @@ def fixtureWithModelDelay(+stored: Session.Session(), +cwd: String, agentDir: St
     +streams : R.Ref<List<&2, EventStream()>> <- R.new(List<&2, EventStream()>, Nil{})
     +gateRef : R.Ref<List<&2, Gate>> <- R.new(List<&2, Gate>, gates)
     +stream : Runtime.Stream() <- C.create(~Faux, ~Input(), ~Output(), ~provider, Faux{responseRef, streams, gateRef, delay})
-    +registry : StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError) <- StreamFn.create(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError)
+    +registry : StreamFn.Registry(V.Value, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError) <- StreamFn.create(V.Value, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError)
     +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError, ~Runtime.validationError)
     +converter : Runtime.Converter() <- Runtime.createConverter(False{})
-    created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, options(stream, converter, Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored), selected), registry, validator, Tools.emptyDetails())
+    created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~V.Value, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, options(stream, converter, Sessions.getSessionId(V.Value, Tools.ToolDetails, V.Value, stored), selected), registry, validator, Tools.emptyDetails())
     +agent : Runtime.Owner() <- requireAgent(created)
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
     models : Models.ModelRuntime <- ModelFixture.create(sources)
@@ -237,7 +237,7 @@ def disposeStreams(streams: List<&2, EventStream()>) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case stream <> rest:
       do IO<Unit>:
-        Stream.disposeAssistantMessageEventStream(V.Value, Unit, stream)
+        Stream.disposeAssistantMessageEventStream(V.Value, V.Value, stream)
         disposeStreams(rest)
 
 def teardown(value: Fixture) -> IO(Unit):
@@ -248,8 +248,8 @@ def teardown(value: Fixture) -> IO(Unit):
         C.dispose(Session.AgentSessionEvent, Unit, listener)
         +agent : Runtime.Owner() = Session.agentOf(session)
         Session.dispose(session)
-        Agent.dispose(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent)
-        StreamFn.dispose(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError, registry)
+        Agent.dispose(V.Value, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent)
+        StreamFn.dispose(V.Value, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError, registry)
         Loop.disposeValidation(Tools.ToolError, validator)
         Runtime.disposeConverter(converter)
         C.dispose(Input(), Output(), stream)
@@ -267,7 +267,7 @@ def reportPrompt(result: Result<&2, &2, String, Unit>) -> IO(Unit):
 def reportSession(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    IO.print("{\"type\":\"session\",\"file\":" ++ Maybe.default(&2, String, Maybe.map(&2, String, String, Decode.quote, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)), "null") ++ ",\"entries\":" ++ Nat.show(List.length(&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>, S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))) ++ "}")
+    IO.print("{\"type\":\"session\",\"file\":" ++ Maybe.default(&2, String, Maybe.map(&2, String, String, Decode.quote, Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, stored)), "null") ++ ",\"entries\":" ++ Nat.show(List.length(&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>, S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))) ++ "}")
     last : Maybe<&2, String> <- Session.getLastAssistantText(session)
     IO.print("{\"type\":\"last_assistant_text\",\"text\":" ++ Maybe.default(&2, String, Maybe.map(&2, String, String, Decode.quote, last), "null") ++ "}")
 
@@ -295,8 +295,8 @@ def queueScenario(+dir: String, agentDir: String) -> IO(Unit):
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, "answer" <> "again" <> Nil{}, Nil{})
-    Session.steer(sessionOf(value), "steered", Nil{})
-    Session.followUp(sessionOf(value), "later", Nil{})
+    queuedSteer : Result<&2, &2, String, Unit> <- Session.steer(sessionOf(value), "steered", Nil{})
+    queuedFollowUp : Result<&2, &2, String, Unit> <- Session.followUp(sessionOf(value), "later", Nil{})
     result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "hello", Nil{}, None{})
     reportPrompt(result)
     reportSession(sessionOf(value))
@@ -307,7 +307,7 @@ def reportOutcome(+label: String, result: Result<&2, &2, String, Unit>) -> IO(Un
     case Done{Unit{}}: IO.print("{\"type\":\"" ++ label ++ "\",\"ok\":true}")
     case Fail{error}: IO.print("{\"type\":\"" ++ label ++ "\",\"ok\":false,\"error\":" ++ Decode.quote(error) ++ "}")
 
-def entryKinds(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, String>:
+def entryKinds(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, String>:
   match entries:
     case Nil{}: Nil{}
     case S.ThinkingLevelChangeEntry{_, level} <> rest: ("thinking_level_change:" ++ level) <> entryKinds(rest)
@@ -327,7 +327,7 @@ def quotedAll(values: List<&2, String>) -> List<&2, String>:
 def reportEntries(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     +stored : Session.Session() <- Session.sessionOf(session)
-    IO.print("{\"type\":\"entries\",\"kinds\":[" ++ String.join(quotedAll(entryKinds(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))), ",") ++ "]}")
+    IO.print("{\"type\":\"entries\",\"kinds\":[" ++ String.join(quotedAll(entryKinds(S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))), ",") ++ "]}")
 
 # mutate: thinking level, model and name changes become entries and events.
 def mutateScenario(+dir: String, agentDir: String) -> IO(Unit):
@@ -540,7 +540,7 @@ type ErrorAborter is Data:
 
 def failedAssistant(message: Session.Message()) -> Bool:
   match message:
-    case T.LlmMessage{Ai.Assistant{assistant}}: Session.isErrorStop(Ai.assistantStopReason(V.Value, Unit, assistant))
+    case T.LlmMessage{Ai.Assistant{assistant}}: Session.isErrorStop(Ai.assistantStopReason(V.Value, V.Value, assistant))
     case _: False{}
 
 def counted(previous: Nat) -> Nat & Nat:
@@ -610,7 +610,7 @@ def reportMessages(session: Session.AgentSession) -> IO(Unit):
     current : List<&2, Session.Message()> <- Session.messages(session)
     printed(Done{Json.object(Json.field("type", Json.text("messages"), Json.field("messages", V.ArrayValue{JsonEvent.messages(current)}, Nil{})))})
 
-def userIds(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, String>:
+def userIds(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> List<&2, String>:
   match entries:
     case Nil{}: Nil{}
     case S.SessionMessageEntry{S.SessionEntryBase{id,_,_}, T.LlmMessage{Ai.User{_}}} <> rest: id <> userIds(rest)
@@ -625,10 +625,10 @@ def maybeQuoted(value: Maybe<&2, String>) -> String:
   Maybe.default(&2, String, Maybe.map(&2, String, String, Decode.quote, value), "null")
 
 def secondUserInSession(stored: Session.Session()) -> String:
-  secondUserId(userIds(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))))
+  secondUserId(userIds(S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored))))
 
 def currentLeaf(stored: Session.Session()) -> String:
-  Maybe.default(&2, String, S.getLeafId(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)), "missing-leaf")
+  Maybe.default(&2, String, S.getLeafId(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)), "missing-leaf")
 
 def reportNavigation(result: Result<&2, &2, String, Session.Navigation>) -> IO(Unit):
   match result:
@@ -761,7 +761,7 @@ def beforePrompts(+session: Session.AgentSession, action: String) -> IO(Maybe<&2
   match action:
     case "queued":
       do IO<Maybe<&2, Session.Listener()>>:
-        Session.followUp(session, "later", Nil{})
+        queuedFollowUp : Result<&2, &2, String, Unit> <- Session.followUp(session, "later", Nil{})
         return None{}
     case "abort_on_error": cancellerFor(session, False{})
     case "cancel_on_start": cancellerFor(session, True{})
@@ -1031,7 +1031,7 @@ def expandScenario(+dir: String, agentDir: String) -> IO(Unit):
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixtureWith(stored, dir, agentDir, "a1" <> "a2" <> "a3" <> "a4" <> "a5" <> Nil{}, Nil{}, expandLoadout(dir))
-    Session.steer(sessionOf(value), "/greet queued", Nil{})
+    queuedSteer : Result<&2, &2, String, Unit> <- Session.steer(sessionOf(value), "/greet queued", Nil{})
     first : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "/skill:demo please help", Nil{}, None{})
     reportPrompt(first)
     second : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "/greet world \"big day\"", Nil{}, None{})
