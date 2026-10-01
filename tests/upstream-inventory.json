@@ -4809,14 +4809,17 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8337-utf8-bom-parsing.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/regressions_check.py",
         "tests/frontmatter.bend",
-        "tests/settings-files.bend"
+        "tests/settings-files.bend",
+        "packages/coding-agent/src/utils/text.bend",
+        "laws/text.bend",
+        "proofs/text.bend"
       ],
       "sha256": "c747d81f18f6929cffa7b9228fb99552f15c36116ef3a4396d2582804ad2b62f",
-      "notes": "parseFrontmatter with a BOM and SettingsManager.create over BOM-prefixed global/project files (getters read from the global/project settings; setTheme+flush writes without BOM) pass. Pending: splitBom, which the port has no helper for (five private stripBom copies instead). Bun lane."
+      "notes": "The complete upstream case runs through bom_parsing_checks in tests/regressions_check.py: splitBom returns the separate leading mark and payload, BOM-prefixed frontmatter parses exactly, SettingsManager.create exposes the actual global model/project provider getters before a setter, and setTheme/flush writes a BOM-free settings file. Native one/four-thread parsing and file checks supplement the source assertions. Generic text laws prove lossless split/reconstruction for every String and preservation of every payload after a leading BOM. Shared splitBom/stripBom replace private helpers; authentication/theme file decoders preserve metadata until the helper removes it exactly once."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8423-extension-factory-failure.test.ts",

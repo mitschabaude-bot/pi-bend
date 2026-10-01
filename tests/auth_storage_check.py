@@ -65,6 +65,10 @@ for backend, command in [('bun', ['bun', str(PREFIX) + '.js']), ('native-1', [st
         assert json.loads(auth.read_text()) == {'openai': {'type': 'api_key', 'key': 'fresh'}}
         auth.write_text('﻿' + json.dumps({'openai': {'type': 'api_key', 'key': 'bom'}}))
         assert run('read', str(auth), 'openai') == [{'type': 'api_key', 'key': 'bom'}]
+        doubled = '\ufeff\ufeff' + json.dumps({'openai': {'type': 'api_key', 'key': 'invalid'}})
+        auth.write_text(doubled)
+        assert run('modify', str(auth), 'openai', json.dumps({'type': 'api_key', 'key': 'new'}))[0].get('error')
+        assert auth.read_text() == doubled
         # Reads serve the last valid snapshot (upstream reload() preserves it); writes reject invalid files.
         for bad in [{'openai': {'type': 'api_key', 'key': 5}}, {'openai': {'type': 'oauth', 'access': 'a'}}, ['x'], {'openai': 'x'}]:
             write(bad)

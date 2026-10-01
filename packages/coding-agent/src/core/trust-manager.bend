@@ -6,6 +6,7 @@ import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/utf8.bend as Utf8
+import ../utils/text.bend as TextUtils
 
 # upstream core/trust-manager.ts: saved project trust decisions in
 # <agentDir>/trust.json, keyed by canonical folder path. The nearest saved
@@ -58,10 +59,6 @@ def getProjectTrustOptions(cwd: String,includeSessionOnly: Bool) -> IO(List<&2,P
 
 # The trust file maps paths to true, false or null.
 type Entry is Data: Entry{path: String,decision: Maybe<&2,Bool>}
-def stripBom(text: String) -> String:
-  match text:
-    case SCon{'\u{feff}',rest}: rest
-    case _: text
 def invalidValue(+path: String,key: String) -> Result<&2,&2,Error,List<&2,Entry>>:
   Fail{Error{"Invalid trust store " ++ path ++ ": value for " ++ Json.quote(key) ++ " must be true, false, or null"}}
 def withEntry(+key: String,decision: Maybe<&2,Bool>,rest: Result<&2,&2,Error,List<&2,Entry>>) -> Result<&2,&2,Error,List<&2,Entry>>:
@@ -83,7 +80,7 @@ def trustRead(+path: String,read: Result<&2,&2,FS.Error,List<&2,U32>>) -> Result
   match read:
     case Fail{FS.System{2,_}}: Done{Nil{}}
     case Fail{cause}: Fail{Error{"Failed to read trust store " ++ path ++ ": " ++ FS.errorMessage(cause)}}
-    case Done{bytes}: trustData(path,Json.parse(stripBom(Utf8.decodeBuffer(bytes))))
+    case Done{bytes}: trustData(path,Json.parse(TextUtils.stripBom(Utf8.decodeBuffer(bytes))))
 def readTrustFile(+path: String) -> IO(Result<&2,&2,Error,List<&2,Entry>>):
   do IO<Result<&2,&2,Error,List<&2,Entry>>>:
     read : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)

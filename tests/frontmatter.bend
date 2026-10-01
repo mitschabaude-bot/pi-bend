@@ -1,4 +1,5 @@
 import Base
+import ../packages/coding-agent/src/utils/text.bend as TextUtils
 import ../packages/runtime/src/yaml.bend as Y
 import ../packages/runtime/src/json.bend as Json
 import ../packages/runtime/src/record.bend as R
@@ -42,8 +43,19 @@ def run(values: List<String>,+raw: Bool) -> IO(Unit):
       do IO<Unit>:
         IO.print(Bool.pick(Unit -> String,raw,_ => yaml(Y.parse(value)),_ => frontmatter(FM.parseFrontmatter(value)))(Unit{}))
         run(rest,raw)
+def bomResult(parts: TextUtils.SplitBom) -> String:
+  match parts:
+    case TextUtils.SplitBom{bom,text}: "{\"bom\":" ++ Json.quote(bom) ++ ",\"text\":" ++ Json.quote(text) ++ "}"
+def splitInputs(values: List<String>) -> IO(Unit):
+  match values:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case value <> rest:
+      do IO<Unit>:
+        IO.print(bomResult(TextUtils.splitBom(value)))
+        splitInputs(rest)
 def args(values: List<String>) -> IO(Unit):
   match values:
+    case "--split-bom" <> rest: splitInputs(rest)
     case "--yaml" <> rest: run(rest,True{})
     case other: run(other,False{})
 def main() -> IO(Unit):

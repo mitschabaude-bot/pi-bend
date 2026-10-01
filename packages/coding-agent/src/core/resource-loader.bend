@@ -18,6 +18,7 @@ import ./extensions/types.bend as ExtensionTypes
 import ./extensions/loader.bend as ExtensionLoader
 import ../modes/interactive/theme/theme.bend as Theme
 import ../modes/interactive/theme/color.bend as Color
+import ../utils/text.bend as TextUtils
 
 # upstream core/resource-loader.ts: the ResourceLoader interface a session
 # takes its extensions, skills, prompt templates, themes, context files and
@@ -31,10 +32,6 @@ type ContextFiles is Data:
   ContextFiles{files: List<&2,Prompt.ContextFile>,diagnostics: List<&2,D.ResourceDiagnostic>}
 type Candidate is Data:
   Candidate{file: Maybe<&2,Prompt.ContextFile>,diagnostics: List<&2,D.ResourceDiagnostic>}
-def stripBom(content: String) -> String:
-  match content:
-    case SCon{Chr{65279},rest}: rest
-    case other: other
 def systemMessage(error: FS.Error) -> String:
   match error:
     case FS.System{_,message}: message
@@ -44,7 +41,7 @@ def systemMessage(error: FS.Error) -> String:
 def decoded(value: Result<&2,&2,Utf8.Error,String>,path: String) -> Candidate:
   match value:
     case Fail{_}: Candidate{None{},D.warning("Invalid UTF-8 in context file",path) <> Nil{}}
-    case Done{content}: Candidate{Some{Prompt.ContextFile{path,stripBom(content)}},Nil{}}
+    case Done{content}: Candidate{Some{Prompt.ContextFile{path,TextUtils.stripBom(content)}},Nil{}}
 def readCandidate(value: Result<&2,&2,FS.Error,List<&2,U32>>,path: String) -> Candidate:
   match value:
     case Fail{cause}: Candidate{None{},D.warning(systemMessage(cause),path) <> Nil{}}
@@ -474,7 +471,7 @@ def discoveredPromptFile(+cwd: String, +agentDir: String, +trusted: Bool, +name:
 
 def fileText(result: Result<&2, &2, FS.Error, List<&2, U32>>, +fallback: String) -> String:
   match result:
-    case Done{bytes}: stripBom(Result.default(&2, &2, Utf8.Error, String, Utf8.decodeWith(Utf8.Preserve{}, bytes), fallback))
+    case Done{bytes}: TextUtils.stripBom(Result.default(&2, &2, Utf8.Error, String, Utf8.decodeWith(Utf8.Preserve{}, bytes), fallback))
     case Fail{_}: fallback
 
 def fileRead(+text: String) -> IO(Maybe<&2, String>):

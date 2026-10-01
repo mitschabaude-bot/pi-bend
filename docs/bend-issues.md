@@ -4,7 +4,7 @@ This is the living investigation log for problems encountered while building pi-
 
 Missing primitives are our implementation responsibilities, not defects awaiting an upstream fix. Track their implementation and integration with the code and [architecture plan](architecture.md#runtime-and-standard-library-implementation). Historical facility entries below retain their identifiers for existing links; their absence is not an external blocker.
 
-Last updated: 2026-09-19. Current local compiler: Bend 2.0.7, Bun 1.4.0, with eight local patches listed in [patches/README.md](../patches/README.md). Automatic updates remain enabled; reproduce against recorded source hashes as well as version strings. No upstream issue/PR submission is recorded for these entries.
+Toolchain installation and local patches are described in [patches/README.md](../patches/README.md). Findings below record the versions and fixture scope used for their investigations.
 
 ## BEND-001 — Native compilation consumes tens of GiB
 
@@ -1533,3 +1533,7 @@ Interactive Ctrl+Z needs to stop the foreground job after the TUI releases raw m
 Native resource-lifetime defect, not a compiler defect. A thinking-level extension handler paused before its first context read, while `Sdk.dispose` completed; releasing it then made `Ctx.thinkingLevel` exit with `Ref: backing channel closed`. The fixture's own references remained live. The runner had closed its borrowed context bindings while the detached dispatch still held them.
 
 `ExtensionRunner` now counts detached dispatches. Disposal unbinds immediately and marks retirement; it closes the owned references immediately if there are no borrowers, or when the final dispatch finishes. Disposal does not wait for extension code. Regression: `packages/coding-agent/test/sdk-model-events.bend`, verdict `detached thinking handler can finish after SDK disposal`, run through `tests/sdk_suites_check.py`. This establishes native lifetime safety, not full stale-context parity: upstream rejects stale context access; native unbound readers currently return empty/default values, and typed stale-access rejection remains unported.
+
+## Proof restriction — fallback after a literal character pattern
+
+On the installed Bend 2.0.7 toolchain, a reflexivity proof in the fallback arm of a literal-headed String match did not reduce another literal match on the symbolic character code. The checker retained `rejoinBom(splitBom(SCon{Chr{code}, rest}))`, so the fallback alone did not establish the desired equality. The text split now selects on character equality and preserves the actual leading character; its generic losslessness proof checks both Boolean choices, without requiring a negative literal refinement. The complete proof gate accepts the result. No compiler change or negative law fixture was added.

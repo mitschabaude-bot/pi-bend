@@ -19,6 +19,7 @@ import ../../../runtime/src/random.bend as Random
 import ../../../runtime/src/date.bend as Date
 import ../utils/paths.bend as Paths
 import ../../../runtime/src/ref.bend as Ref
+import ../utils/text.bend as TextUtils
 
 # CredentialStore implementation backed by auth.json. Provider auth
 # orchestration belongs to the model runtime and pi-ai auth resolution.
@@ -116,17 +117,13 @@ def parsedData(value: Result<&2, &2, Json.ParseError, V.Value>) -> Outcome(AuthS
     case Done{V.ObjectValue{R.Record{entries}}}: credentialEntries(entries, Done{Nil{}})
     case Done{_}: Fail{"Invalid auth.json: expected an object"}
 
-def stripBom(text: String) -> String:
-  match text:
-    case SCon{'\u{FEFF}', rest}: rest
-    case other: other
 
 # Missing storage is an empty store; malformed storage is an error and is
 # never overwritten.
 def parseStorageData(content: Maybe<&2, String>) -> Outcome(AuthStorageData()):
   match content:
     case None{}: Done{R.new(Auth.Credential)}
-    case Some{text}: parsedData(Json.parse(stripBom(text)))
+    case Some{text}: parsedData(Json.parse(TextUtils.stripBom(text)))
 
 def optionalText(key: String, value: Maybe<&2, String>, fields: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
   match value:
@@ -185,7 +182,7 @@ def decoded(result: Result<&2, &2, FS.Error, List<&2, U32>>) -> Outcome(Maybe<&2
   match result:
     case Fail{FS.System{2, _}}: Done{None{}}
     case Fail{_}: Fail{"Failed to read auth.json"}
-    case Done{bytes}: Done{Some{Utf8.decodeBytes(bytes)}}
+    case Done{bytes}: Done{Some{Utf8.decodeBuffer(bytes)}}
 
 def readContent(backend: Backend) -> IO(Outcome(Maybe<&2, String>)):
   match backend:

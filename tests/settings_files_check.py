@@ -15,7 +15,7 @@ def main():
    value=subprocess.run(command+[json.dumps(args)],capture_output=True,text=True,cwd=ROOT,timeout=30)
    assert value.returncode==0,(value.returncode,value.stderr)
    return json.loads(value.stdout)
-  assert run()=={'global':{},'project':{},'errors':[],'errorPaths':[]};assert not agent.exists() and not (cwd/'.pi').exists();checks+=1
+  assert run()=={'global':{},'project':{},'defaultModel':None,'defaultProvider':None,'errors':[],'errorPaths':[]};assert not agent.exists() and not (cwd/'.pi').exists();checks+=1
   result=run(key='theme',value='dark');assert result['global']=={'theme':'dark'} and result['errors']==[];checks+=1
   file=agent/'settings.json';assert json.loads(file.read_text())=={'theme':'dark'};assert not (agent/'settings.json.lock').exists();checks+=1
   file.write_text(json.dumps({'theme':'external','skills':[],'unknown':{'a':1}}))

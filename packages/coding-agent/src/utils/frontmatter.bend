@@ -1,4 +1,5 @@
 import Base
+import ./text.bend as TextUtils
 import ../../../runtime/src/yaml.bend as Yaml
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/string.bend as Strings
@@ -15,9 +16,7 @@ def newlines(value: String,reversed: String,afterCR: Bool) -> String:
       +reversed = reversed
       newlines(rest,Bool.pick(String,Char.is_eq(char,'\n') && afterCR,reversed,SCon{Bool.pick(Char,Char.is_eq(char,'\r'),'\n',char),reversed}),Char.is_eq(char,'\r'))
 def normalized(value: String) -> String:
-  match value:
-    case SCon{Chr{65279},rest}: newlines(rest,"",False{})
-    case other: newlines(other,"",False{})
+  newlines(TextUtils.stripBom(value),"",False{})
 def withoutFirst(value: String) -> String:
   match value:
     case SCon{_,rest}: rest

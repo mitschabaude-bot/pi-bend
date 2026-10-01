@@ -498,7 +498,12 @@ def settings_checks(f):
     state = settings_state(f, {'images': {'autoResize': False}, 'compaction': {'enabled': False}}, None, [{'op': 'set', 'key': 'theme', 'value': 'dark'}, 'flush', 'reload', 'getTheme', 'getImageAutoResize', 'getCompactionEnabled', 'getGlobalSettings'])
     assert state['results'] == ['dark', False, False, {'images': {'autoResize': False}, 'compaction': {'enabled': False}, 'theme': 'dark'}], state
     checks += 1
+    return checks + bom_parsing_checks(f)
+
+
+def bom_parsing_checks(f):
     # 8337-utf8-bom-parsing: loads frontmatter and settings with a leading BOM
+    assert f.call('frontmatter', '--split-bom', '\ufeffcontent') == [{'bom': '\ufeff', 'text': 'content'}]
     assert f.call('frontmatter', '﻿---\nname: demo\ndescription: Test\n---\nBody')[0] == {'ok': True, 'frontmatter': {'name': 'demo', 'description': 'Test'}, 'body': 'Body'}
     base = Path(tempfile.mkdtemp(prefix='bom-', dir=f.work))
     agent, project = base / 'agent', base / 'project'
@@ -507,11 +512,13 @@ def settings_checks(f):
     global_path = agent / 'settings.json'
     global_path.write_text('﻿' + json.dumps({'defaultModel': 'global-model'}), encoding='utf-8')
     (project / '.pi' / 'settings.json').write_text('﻿' + json.dumps({'defaultProvider': 'project-provider'}), encoding='utf-8')
-    result = f.call('settings-files', json.dumps({'cwd': str(project), 'agentDir': str(agent), 'key': 'theme', 'value': 'dark'}))[0]
+    result = f.call('settings-files', json.dumps({'cwd': str(project), 'agentDir': str(agent)}))[0]
     assert result['errors'] == [] and result['global'].get('defaultModel') == 'global-model' and result['project'].get('defaultProvider') == 'project-provider', result
+    assert result['defaultModel'] == 'global-model' and result['defaultProvider'] == 'project-provider', result
+    flushed = f.call('settings-files', json.dumps({'cwd': str(project), 'agentDir': str(agent), 'key': 'theme', 'value': 'dark'}))[0]
+    assert flushed['errors'] == [] and flushed['global']['theme'] == 'dark', flushed
     assert not global_path.read_text(encoding='utf-8').startswith('﻿')
-    checks += 1
-    return checks
+    return 1
 
 
 def input_transform_streaming_checks(f):

@@ -12,6 +12,7 @@ import ../../../../runtime/src/utf8.bend as Utf8
 import ../../../../runtime/src/callback.bend as Callback
 import ../extensions/tool-context.bend as Ctx
 import ../../../../runtime/src/abort.bend as Abort
+import ../../utils/text.bend as TextUtils
 
 type EditToolInput is Data:
   EditToolInput{path: String, edits: List<&2, Edits.Edit>}
@@ -151,15 +152,14 @@ def applied(bom: String, ending: String, +path: String, +count: Nat, result: Res
 def normalized(bom: String, +content: String, edits: List<&2, Edits.Edit>, path: String, count: Nat) -> ResultOf(Prepared):
   applied(bom, Edits.detectLineEnding(content), path, count, Edits.applyEditsToNormalizedContent(Edits.normalizeToLF(content), edits))
 
-def withoutBOM(+content: String, edits: List<&2, Edits.Edit>, path: String, count: Nat) -> ResultOf(Prepared):
+def withoutBOM(content: TextUtils.SplitBom, edits: List<&2, Edits.Edit>, path: String, count: Nat) -> ResultOf(Prepared):
   match content:
-    case SCon{Chr{65279}, rest}: normalized(SCon{Chr{65279}, SNil{}}, rest, edits, path, count)
-    case _: normalized("", content, edits, path, count)
+    case TextUtils.SplitBom{bom, text}: normalized(bom, text, edits, path, count)
 
 def prepareContent(edits: List<&2, Edits.Edit>, path: String, count: Nat, decoded: Result<&2, &2, Utf8.Error, String>) -> ResultOf(Prepared):
   match decoded:
     case Fail{cause}: Fail{InvalidEncoding{cause}}
-    case Done{content}: withoutBOM(content, edits, path, count)
+    case Done{content}: withoutBOM(TextUtils.splitBom(content), edits, path, count)
 
 def resultDetails(path: String, count: Nat, patch: String, result: Diff.DiffResult) -> Agent.AgentToolResult<EditToolDetails>:
   match result:

@@ -9,6 +9,7 @@ import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/posix-path.bend as Path
 import ../../runtime/src/utf8.bend as Utf8
+import ./utils/text.bend as TextUtils
 
 # upstream migrations.ts: one-time startup migrations of the agent directory.
 # The agent and project directories are explicit arguments instead of
@@ -45,10 +46,6 @@ def yellow(console: Console, text: String) -> IO(Unit): say(console, "\u{1b}[33m
 
 def exists(path: String) -> IO(Bool): FS.accessible(path, 0)
 
-def stripBom(text: String) -> String:
-  match text:
-    case SCon{'\u{feff}', rest}: rest
-    case other: other
 
 def parsedJson(result: Result<&2, &2, Json.ParseError, V.Value>) -> Maybe<&2, V.Value>:
   match result:
@@ -59,7 +56,7 @@ def parsedJson(result: Result<&2, &2, Json.ParseError, V.Value>) -> Maybe<&2, V.
 def jsonOf(bytes: Result<&2, &2, FS.Error, List<&2, U32>>) -> Maybe<&2, V.Value>:
   match bytes:
     case Fail{_}: None{}
-    case Done{content}: parsedJson(Json.parse(stripBom(Utf8.decodeBuffer(content))))
+    case Done{content}: parsedJson(Json.parse(TextUtils.stripBom(Utf8.decodeBuffer(content))))
 
 def readJson(path: String) -> IO(Maybe<&2, V.Value>):
   do IO<Maybe<&2, V.Value>>:

@@ -87,6 +87,10 @@ with tempfile.TemporaryDirectory() as temporary:
         edit(document)
         invalid.append(json.dumps(document))
     invalid.append('{"broken":')
+    doubled_path = Path(temporary) / 'double-bom.json'
+    doubled = '\ufeff\ufeff' + json.dumps(originals['dark'])
+    doubled_path.write_text(doubled)
+    invalid.append(doubled)
     invalid_path = Path(temporary) / 'invalid-utf8.json'
     invalid_path.write_bytes(b'\xff')
     for backend, command in backends:
@@ -94,6 +98,7 @@ with tempfile.TemporaryDirectory() as temporary:
             actual = run([*command, content, 'truecolor'])
             assert actual.returncode != 0, (backend, content)
         assert run([*command, 'file', str(invalid_path), 'truecolor']).returncode != 0
+        assert run([*command, 'file', str(doubled_path), 'truecolor']).returncode != 0
         assert run([*command, 'lookup', str(builtin_dir), temporary, 'missing', 'truecolor']).returncode != 0
         assert run([*command, 'lookup', str(builtin_dir), temporary, '../dark', 'truecolor']).returncode != 0
         print(f'{backend}: 10 parsed, file-loaded, and named palettes match pi; {len(invalid)+3} invalid themes rejected')

@@ -10,6 +10,7 @@ import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/utf8.bend as Utf8
 import ../../../runtime/src/big-nat.bend as B
 import ../../../runtime/src/f64.bend as F
+import ../utils/text.bend as TextUtils
 
 # Immutable, credential-blind models.json snapshot (upstream model-config.ts).
 #
@@ -155,10 +156,6 @@ def stripJsonComments(input: String) -> String:
   +uncommented = withoutComments(input)
   commaLoop(1n + String.length(uncommented), Strip{uncommented, ""})
 
-def stripBom(content: String) -> String:
-  match content:
-    case SCon{Chr{65279}, rest}: rest
-    case other: other
 
 # Schema (TypeBox ModelsConfigSchema)
 # -----------------------------------
@@ -530,7 +527,7 @@ def loaded(result: Result<&2, &2, FS.Error, List<&2, U32>>, +path: String) -> Mo
   match result:
     case Fail{FS.System{2, _}}: empty()
     case Fail{error}: failed("Failed to load models.json: " ++ readError(error, path) ++ fileSuffix(path))
-    case Done{bytes}: parsed(Json.parse(stripJsonComments(stripBom(Utf8.decodeBuffer(bytes)))), path)
+    case Done{bytes}: parsed(Json.parse(stripJsonComments(TextUtils.stripBom(Utf8.decodeBuffer(bytes)))), path)
 
 # A missing file is an empty configuration; read, parse and schema failures
 # leave no providers and record the error.

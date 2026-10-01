@@ -17,6 +17,7 @@ import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/utf8.bend as Utf8
 import ../../../runtime/src/file-lock.bend as Lock
+import ../utils/text.bend as TextUtils
 
 # Sparse typed settings. Constructors express known values; JSON is confined to
 # decoding, persistence, and uninterpreted fields preserved for other versions.
@@ -967,13 +968,9 @@ def strictJson(fuel: Nat,+parser: J.Parser,input: J.Lexeme) -> Outcome(V.Value):
     case _ J.Parser{J.Finished{_},_} _: Fail{InvalidJson{J.TrailingInput{}}}
     case 1n+n _ J.Lexeme{+token,rest}:
       Bool.pick(Unit -> Outcome(V.Value),duplicate(parser,token),_ => Fail{DuplicateSetting{"JSON object"}},_ => strictJson(n,J.parserStep(parser,token),J.lex(rest)))(Unit{})
-def stripBom(value: String) -> String:
-  match value:
-    case SCon{Chr{65279},rest}: rest
-    case other: other
 def parse(+content: String) -> Outcome(Settings):
   do Result<&2,&2,Error,Settings>:
-    value : V.Value <- strictJson(2n+String.length(content),J.Parser{J.Value{},Nil{}},J.lex(stripBom(content)))
+    value : V.Value <- strictJson(2n+String.length(content),J.Parser{J.Value{},Nil{}},J.lex(TextUtils.stripBom(content)))
     decode(migrate(value))
 
 def prefer(-A: Data,base: Maybe<&2,A>,override: Maybe<&2,A>) -> Maybe<&2,A>:

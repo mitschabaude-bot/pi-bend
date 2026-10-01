@@ -1,5 +1,6 @@
 import Base
 import ../packages/runtime/src/text.bend as Budget
+import ../packages/coding-agent/src/utils/text.bend as FileText
 
 law chunk_composition:
   for first: String
@@ -30,3 +31,16 @@ law nonfitting_character_is_not_split:
 law empty_input_is_unchanged:
   for budget: Nat
   {Budget.take("", budget) == Budget.Cut{"", 0n} : Budget.Cut}
+
+# Splitting file metadata must conserve every character of the original.
+def rejoinBom(value: FileText.SplitBom) -> String:
+  match value:
+    case FileText.SplitBom{bom, text}: bom ++ text
+
+law split_bom_is_lossless:
+  for +content: String
+  {rejoinBom(FileText.splitBom(content)) == content : String}
+
+law leading_bom_preserves_payload:
+  for content: String
+  {FileText.splitBom(SCon{'\u{feff}', content}) == FileText.SplitBom{"\u{feff}", content} : FileText.SplitBom}

@@ -4,6 +4,7 @@ import ../../../runtime/src/json.bend as Json
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/utf8.bend as Utf8
+import ../utils/text.bend as TextUtils
 
 # package.json's pi field is the package's declared resource list. A missing
 # or malformed field is absent; an empty array is an explicit empty list.
@@ -39,13 +40,9 @@ def parsed(result: Result<&2, &2, Json.ParseError, V.Value>) -> Maybe<&2, PiMani
   match result:
     case Done{value}: manifest(value)
     case Fail{_}: None{}
-def stripBom(text: String) -> String:
-  match text:
-    case SCon{'\u{feff}', rest}: rest
-    case other: other
 def bytes(result: Result<&2, &2, FS.Error, List<&2, U32>>) -> Maybe<&2, PiManifest>:
   match result:
-    case Done{data}: parsed(Json.parse(stripBom(Utf8.decodeBuffer(data))))
+    case Done{data}: parsed(Json.parse(TextUtils.stripBom(Utf8.decodeBuffer(data))))
     case Fail{_}: None{}
 def readPiManifest(path: String) -> IO(Maybe<&2, PiManifest>):
   do IO<Maybe<&2, PiManifest>>:

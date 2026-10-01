@@ -44,7 +44,7 @@ def errorPath(value: S.SettingsError) -> V.Value:
 def output(value: S.SettingsManager & List<&2,S.SettingsError>) -> IO(Unit):
   match value:
     case (+state,+issues):
-      IO.print(Maybe.default(&2,String,Render.stringify(SchemaJson.toJson(V.ObjectValue{R.Record{R.Property{"global",S.toValue(S.getGlobalSettings(state))} <> R.Property{"project",S.toValue(S.getProjectSettings(state))} <> R.Property{"errors",V.ArrayValue{S.encodeValues(~S.SettingsError,~errorValue,issues,Nil{})}} <> R.Property{"errorPaths",V.ArrayValue{S.encodeValues(~S.SettingsError,~errorPath,issues,Nil{})}} <> Nil{}}})),"null"))
+      IO.print(Maybe.default(&2,String,Render.stringify(SchemaJson.toJson(V.ObjectValue{R.Record{R.Property{"global",S.toValue(S.getGlobalSettings(state))} <> R.Property{"project",S.toValue(S.getProjectSettings(state))} <> R.Property{"defaultModel",Maybe.default(&2,V.Value,Maybe.map(&2,String,V.Value,value => V.Text{value},S.getDefaultModel(state)),V.Null{})} <> R.Property{"defaultProvider",Maybe.default(&2,V.Value,Maybe.map(&2,String,V.Value,value => V.Text{value},S.getDefaultProvider(state)),V.Null{})} <> R.Property{"errors",V.ArrayValue{S.encodeValues(~S.SettingsError,~errorValue,issues,Nil{})}} <> R.Property{"errorPaths",V.ArrayValue{S.encodeValues(~S.SettingsError,~errorPath,issues,Nil{})}} <> Nil{}}})),"null"))
 
 def finished(value: S.FileSettingsStorage & S.SettingsManager) -> IO(Unit):
   match value:

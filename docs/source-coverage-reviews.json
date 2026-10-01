@@ -625,10 +625,10 @@
     },
     "packages/coding-agent/src/core/tools/edit.ts": {
       "state": "partial",
-      "note": "Native edit execution works; complete upstream edit behavior is not established by the current source review. A registerable native Edit ToolDefinition reuses this engine and the shared mutation queue; its prepareArguments accepts the upstream legacy pair and its execution applies the prepared edit on native one/four. Preferred JSON-schema sampling and native edit rendering are wired.",
+      "note": "Native edit execution works; complete upstream edit behavior is not established by the current source review. A registerable native Edit ToolDefinition reuses this engine and the shared mutation queue; its prepareArguments accepts the upstream legacy pair and its execution applies the prepared edit on native one/four. Preferred JSON-schema sampling and native edit rendering are wired. BOM metadata now uses utils/text.bend; byte decoding preserves the mark until that split, preventing removal of payload after the first mark.",
       "source_sha256": "31a368c14cf5437ecac157765660001b16063302d9bd746303d6d1b1dcb5625d",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/edit.bend": "3808ca61df86a02bbf61edd84dd090b7a05645ecfe8c7ba3ff75f71198557372"
+        "packages/coding-agent/src/core/tools/edit.bend": "80347b7dc7953036ce1b484a5ec267ad642eaa7ff68e954f5512dd49376baf8e"
       }
     },
     "packages/coding-agent/src/core/tools/find.ts": {
@@ -1001,10 +1001,10 @@
     },
     "packages/coding-agent/src/modes/interactive/theme/theme.ts": {
       "state": "partial",
-      "note": "Built-in and custom theme loading, JSON-name discovery, sorted catalog and theme render equality are implemented. All five text effects, including inverse, preserve empty strings, reopen nested closing escapes, and close/reopen across LF and CRLF; Markdown callbacks use these same effects. Focused effect and real Markdown-theme comparisons cover nested escapes and multiline quotes. Registered themes, reload and export behavior remain partial.",
+      "note": "Built-in and custom theme loading, JSON-name discovery, sorted catalog and theme render equality are implemented. All five text effects, including inverse, preserve empty strings, reopen nested closing escapes, and close/reopen across LF and CRLF; Markdown callbacks use these same effects. Focused effect and real Markdown-theme comparisons cover nested escapes and multiline quotes. Registered themes, reload and export behavior remain partial. BOM metadata now uses utils/text.bend; byte decoding preserves the mark until that split, preventing removal of payload after the first mark.",
       "source_sha256": "c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "c667c5ab0a17b88f5c482966ea40111b03d0f81d038245357d4ab38bb492828d",
+        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "f6d39d1e8e788f1fe87ef8bb29e914ef1e052066d5d1582410f9beaa17592786",
         "packages/coding-agent/src/modes/interactive/theme/markdown-theme.bend": "b4fb414d618b747a7a8bbdc5cde762866c4f0eb12c34a999852d98475b1f41b9"
       },
       "ports": [
@@ -1260,7 +1260,7 @@
       ],
       "source_sha256": "59fc18cedfcbecd993918bb335e5e76a9f9c899c61ecf9eab110f86d976af1bc",
       "port_sha256": {
-        "packages/coding-agent/src/migrations.bend": "187839ef06cf808643fbd73877ecb05281b07de66e0263bf0d330d944174cf63"
+        "packages/coding-agent/src/migrations.bend": "445ef59cb796c8f82e9960c1f312a5e411dabe9f0ba0fcd116b8c898274c4b0e"
       }
     },
     "packages/coding-agent/src/cli/auth-command.ts": {
@@ -1331,7 +1331,7 @@
       ],
       "source_sha256": "9a93afb3ad9123e59cb61606e77d431b38bbeb3063afc0e2974341109f23db02",
       "port_sha256": {
-        "packages/coding-agent/src/core/models-store.bend": "4eb1d115a3045c395ead8923aca02cb77e83f136370eef115e4e17bc9eacc51b"
+        "packages/coding-agent/src/core/models-store.bend": "8a50e2c3d8d6a23c81e55e88e87334a32dd73c7874e44bf8ea3a4751e02748ad"
       }
     },
     "packages/coding-agent/src/core/tools/edit-diff.ts": {
@@ -1653,7 +1653,7 @@
       "note": "Native ResourceLoader exposes skills, prompts, themes, context files, prompt content, extendResources and reload. It now receives extension resource paths and package-origin metadata from PackageManager.resolve, though arbitrary discovered Bend extension sources are not loaded. Injected compiled Bend extension factories work. Remaining: dynamic build/link, resources_discover, project-trust resolution, override hooks and broader lifecycle diagnostics. Native inline factories are reusable callback handles owned by the loader. Construction defers execution to the first reload; each reload creates fresh registrations, while extendResources preserves the current generation. tests/extension-factory-reload.bend checks execution count, replacement and ordered failures on native one/four.",
       "source_sha256": "60e8b49790ab7ab7997dcaa647bef5eaaabdb8273c317c72b1f9567d78e99620",
       "port_sha256": {
-        "packages/coding-agent/src/core/resource-loader.bend": "a5c0d7d3f611961b0da3b800cb36033e6bf2ee2b517e83070367d207e38ab412"
+        "packages/coding-agent/src/core/resource-loader.bend": "5345ce95ef26327bad17e4a13e6edb85d69b0671c0aab3ed6cdcb27dec149c4d"
       }
     },
     "packages/coding-agent/src/core/provider-composer.ts": {
@@ -1876,7 +1876,7 @@
       ],
       "source_sha256": "cdeed96fef83e03043bb25081ad4b7abd26e739dfa464a0e1763c6473330bac3",
       "port_sha256": {
-        "packages/coding-agent/src/core/pi-manifest.bend": "df1dea15a4021a581fe8b786c7468ab07e7260dfe2cb5e9a586f6ee2f138e0b1"
+        "packages/coding-agent/src/core/pi-manifest.bend": "3466ff926bddf5e2e34e2e7aa20fac3ce8cd55a6ce78078d12b7c2be7648db7d"
       }
     },
     "packages/coding-agent/src/cli/config-selector.ts": {
@@ -1909,6 +1909,14 @@
       "source_sha256": "f0fee97e4b10d337593736ff8d9370fe5ea2c713d357397dba88c69677f07ce6",
       "port_sha256": {
         "packages/coding-agent/src/core/slash-commands.bend": "d8923dd58249222535578901e26356881861ef60481a85ab070f8f5d9742720d"
+      }
+    },
+    "packages/coding-agent/src/utils/text.ts": {
+      "state": "ported",
+      "note": "splitBom returns typed immutable bom/text fields and separates exactly one leading U+FEFF; stripBom removes exactly one leading U+FEFF. Interior and repeated marks remain payload. Generic laws in laws/text.bend prove lossless reconstruction and preservation of arbitrary payload after a leading mark; the upstream BOM parsing case and native file/edit checks exercise the API and its consumers. UTF-8 byte decoding preserves marks before the shared helper handles metadata.",
+      "source_sha256": "bb323f9607c499115b532021f4f0163c6df04d834aee9c32c3c77b273bd2d7c6",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/text.bend": "39b9a7e7b634a0aca26efbc2459e08f40d99d08a235f2ca946b666eb51d0f7a7"
       }
     }
   }

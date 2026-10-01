@@ -21,6 +21,7 @@ import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/serial-resource.bend as Serial
 import ../../../runtime/src/utf8.bend as Utf8
+import ../utils/text.bend as TextUtils
 
 # upstream core/models-store.ts FileModelsStore: provider catalogs persisted
 # in models-store.json under auth.json's locking protocol. The file keeps
@@ -135,10 +136,6 @@ def decodeEntry(+providerId: String, value: V.Value) -> Maybe<&2, Store.ModelsSt
     case V.ObjectValue{+fields}: Some{Store.ModelsStoreEntry{modelsIn(providerId, R.get(V.Value, fields, "models")), numberOf(R.get(V.Value, fields, "lastModified")), numberOf(R.get(V.Value, fields, "checkedAt")), textOf(R.get(V.Value, fields, "etag"))}}
     case _: None{}
 
-def stripBom(text: String) -> String:
-  match text:
-    case SCon{'\u{feff}', rest}: rest
-    case other: other
 
 def parsedObject(result: Result<&2, &2, Json.ParseError, V.Value>) -> Result<&2, &2, String, StoredData()>:
   match result:
@@ -150,7 +147,7 @@ def parsedObject(result: Result<&2, &2, Json.ParseError, V.Value>) -> Result<&2,
 def parseStored(content: String) -> Result<&2, &2, String, StoredData()>:
   match content:
     case SNil{}: Done{R.new(V.Value)}
-    case text: parsedObject(Json.parse(stripBom(text)))
+    case text: parsedObject(Json.parse(TextUtils.stripBom(text)))
 
 # JSON.stringify(current, null, 2)
 def serialized(data: StoredData()) -> String: Maybe.default(&2, String, Render.stringifyPretty(SchemaJson.toJson(V.ObjectValue{data})), "{}")

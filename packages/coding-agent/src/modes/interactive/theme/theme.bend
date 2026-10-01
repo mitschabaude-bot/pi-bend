@@ -11,6 +11,7 @@ import ../../../../../runtime/src/stable-sort.bend as Sort
 import ../../../../../runtime/src/case-map.bend as Case
 import ../../../utils/syntax-highlight.bend as SyntaxHighlight
 import ../../../../../runtime/src/string.bend as Text
+import ../../../utils/text.bend as TextUtils
 
 # Theme documents are immutable data. Variables are resolved once when a theme
 # is loaded, so rendering never depends on JSON or mutable global state.
@@ -186,12 +187,8 @@ def parsed(result: Result<&2,&2,Json.ParseError,V.Value>,mode: C.Mode) -> Result
     case Fail{_}: Fail{InvalidJson{}}
     case Done{V.ObjectValue{fields}}: fromFields(fields,mode)
     case Done{_}: Fail{InvalidDocument{}}
-def stripBom(content: String) -> String:
-  match content:
-    case SCon{Chr{65279},rest}: rest
-    case other: other
 def parse(content: String,mode: C.Mode) -> Result<&2,&2,Error,Theme>:
-  parsed(Json.parse(stripBom(content)),mode)
+  parsed(Json.parse(TextUtils.stripBom(content)),mode)
 
 # An escape sequence is never empty, so "" marks a missing color.
 def wrapped(found: Map<&2,String> & String,key: String,text: String,reset: String) -> Result<&2,&2,Error,String>:
@@ -224,7 +221,7 @@ def decoded(result: Result<&2,&2,Utf8.Error,String>,mode: C.Mode) -> Result<&2,&
     case Fail{cause}: Fail{Decode{cause}}
 def read(result: Result<&2,&2,FS.Error,List<&2,U32>>,mode: C.Mode) -> Result<&2,&2,LoadError,Theme>:
   match result:
-    case Done{bytes}: decoded(Utf8.decodeStrict(bytes),mode)
+    case Done{bytes}: decoded(Utf8.decodeWith(Utf8.Preserve{},bytes),mode)
     case Fail{cause}: Fail{Read{cause}}
 def loadFromPath(path: String,mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>):
   do IO<Result<&2,&2,LoadError,Theme>>:
