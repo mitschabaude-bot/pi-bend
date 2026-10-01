@@ -312,6 +312,17 @@ type BeforeProviderRequestEvent is Data:
 type AfterProviderResponseEvent is Data:
   AfterProviderResponseEvent{status: F64, headers: Record.Record<String>}
 
+type ModelSelectSource is Data:
+  ModelSelectSet{}
+  ModelSelectCycle{}
+  ModelSelectRestore{}
+
+type ModelSelectEvent is Data:
+  ModelSelectEvent{model: Ai.Model<Ai.JsonValue>, previousModel: Maybe<&2, Ai.Model<Ai.JsonValue>>, source: ModelSelectSource}
+
+type ThinkingLevelSelectEvent is Data:
+  ThinkingLevelSelectEvent{level: Ai.ModelThinkingLevel, previousLevel: Ai.ModelThinkingLevel}
+
 # Native handlers return updated headers instead of mutating the event.
 type BeforeProviderHeadersEvent is Data:
   BeforeProviderHeadersEvent{headers: Ai.ProviderHeaders()}
@@ -346,6 +357,8 @@ type EventHandler is Data:
   OnTurnEnd{handler: ExtensionHandler(TurnEndEvent, BoundaryResult)}
   OnBeforeProviderRequest{handler: ExtensionHandler(BeforeProviderRequestEvent, Ai.JsonValue)}
   OnAfterProviderResponse{handler: ExtensionHandler(AfterProviderResponseEvent, Unit)}
+  OnModelSelect{handler: ExtensionHandler(ModelSelectEvent, Unit)}
+  OnThinkingLevelSelect{handler: ExtensionHandler(ThinkingLevelSelectEvent, Unit)}
   OnBeforeProviderHeaders{handler: ExtensionHandler(BeforeProviderHeadersEvent, Ai.ProviderHeaders())}
   OnContext{handler: ExtensionHandler(ContextEvent, ContextEventResult)}
   OnContextWithSystem{handler: ExtensionHandler(ContextWithSystemEvent, ContextEventResult)}
@@ -362,6 +375,8 @@ type EventHandler is Data:
 # have their own emitters in the runner.
 type ExtensionEvent is Data:
   AfterProviderResponse{event: AfterProviderResponseEvent}
+  ModelSelect{event: ModelSelectEvent}
+  ThinkingLevelSelect{event: ThinkingLevelSelectEvent}
   AgentStart{event: AgentStartEvent}
   AgentEnd{event: AgentEndEvent}
   AgentSettled{event: AgentSettledEvent}
@@ -399,6 +414,8 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnTurnEnd{_}: "turn_end"
     case OnBeforeProviderRequest{_}: "before_provider_request"
     case OnAfterProviderResponse{_}: "after_provider_response"
+    case OnModelSelect{_}: "model_select"
+    case OnThinkingLevelSelect{_}: "thinking_level_select"
     case OnBeforeProviderHeaders{_}: "before_provider_headers"
     case OnContext{_}: "context"
     case OnContextWithSystem{_}: "context_with_system"
@@ -414,6 +431,8 @@ def handlerEventType(handler: EventHandler) -> String:
 def eventType(event: ExtensionEvent) -> String:
   match event:
     case AfterProviderResponse{_}: "after_provider_response"
+    case ModelSelect{_}: "model_select"
+    case ThinkingLevelSelect{_}: "thinking_level_select"
     case AgentStart{_}: "agent_start"
     case AgentEnd{_}: "agent_end"
     case AgentSettled{_}: "agent_settled"

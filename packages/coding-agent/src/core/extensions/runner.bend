@@ -32,8 +32,11 @@ type ErrorListener is Data:
 type Listeners is Data:
   Listeners{next: Nat, listeners: List<&2, ErrorListener>}
 
+type DispatchLifetime is Data:
+  DispatchLifetime{pending: Nat, retiring: Bool}
+
 type ExtensionRunner is Data:
-  ExtensionRunner{runtime: T.ExtensionRuntime(), cwd: String, models: Models.ModelRuntime, bindings: R.Ref<Ctx.Bindings>, listeners: R.Ref<Listeners>, toolContext: C.Callback<Unit, Maybe<&2, ToolContext.ContextView>>, shortcutDiagnostics: R.Ref<List<&2,D.ResourceDiagnostic>>}
+  ExtensionRunner{runtime: T.ExtensionRuntime(), cwd: String, models: Models.ModelRuntime, bindings: R.Ref<Ctx.Bindings>, listeners: R.Ref<Listeners>, toolContext: C.Callback<Unit, Maybe<&2, ToolContext.ContextView>>, shortcutDiagnostics: R.Ref<List<&2,D.ResourceDiagnostic>>, dispatchLifetime: R.Ref<DispatchLifetime>}
 
 # The runner owns the extension runtime from here on.
 def create(+runtime: T.ExtensionRuntime(), +cwd: String, +models: Models.ModelRuntime) -> IO(ExtensionRunner):
@@ -43,20 +46,41 @@ def create(+runtime: T.ExtensionRuntime(), +cwd: String, +models: Models.ModelRu
     Loader.setCwd(runtime, cwd)
     toolContext : C.Callback<Unit, Maybe<&2, ToolContext.ContextView>> <- Ctx.createToolContext(Ctx.ExtensionContext{cwd, models, bindings})
     diagnostics : R.Ref<List<&2,D.ResourceDiagnostic>> <- R.new(List<&2,D.ResourceDiagnostic>,Nil{})
-    return ExtensionRunner{runtime, cwd, models, bindings, listeners, toolContext, diagnostics}
+    lifetime : R.Ref<DispatchLifetime> <- R.new(DispatchLifetime, DispatchLifetime{0n, False{}})
+    return ExtensionRunner{runtime, cwd, models, bindings, listeners, toolContext, diagnostics, lifetime}
 
 # The mode/session owns bound callbacks and listeners; the runner owns
 # its runtime and context reader.
-def dispose(runner: ExtensionRunner) -> IO(Unit):
+def retire(runner: ExtensionRunner) -> IO(Unit):
   match runner:
-    case ExtensionRunner{runtime, _, _, bindings, listeners, toolContext, diagnostics}:
+    case ExtensionRunner{runtime, _, _, bindings, listeners, toolContext, diagnostics, lifetime}:
       do IO<Unit>:
         C.dispose(Unit, Maybe<&2, ToolContext.ContextView>, toolContext)
         warnings : List<&2,D.ResourceDiagnostic> <- R.dispose(List<&2,D.ResourceDiagnostic>,diagnostics)
         state : T.ExtensionRuntimeState <- R.dispose(T.ExtensionRuntimeState, runtime)
         bound : Ctx.Bindings <- R.dispose(Ctx.Bindings, bindings)
         registered : Listeners <- R.dispose(Listeners, listeners)
+        dispatches : DispatchLifetime <- R.dispose(DispatchLifetime, lifetime)
         return Unit{}
+
+# Detached handlers borrow the runner until their dispatch completes. Disposal
+# unbinds immediately; the last borrower closes the owned channels without
+# making disposal wait for extension code.
+def dispatchLifetimeOf(runner: ExtensionRunner) -> R.Ref<DispatchLifetime>:
+  match runner:
+    case ExtensionRunner{_, _, _, _, _, _, _, lifetime}: lifetime
+
+def retiring(lifetime: DispatchLifetime) -> DispatchLifetime & Bool:
+  match lifetime:
+    case DispatchLifetime{+pending, _}: (DispatchLifetime{pending, True{}}, Nat.is_eq(pending, 0n))
+
+def dispose(+runner: ExtensionRunner) -> IO(Unit):
+  match runner:
+    case ExtensionRunner{_, _, _, bindings, _, _, _, lifetime}:
+      do IO<Unit>:
+        R.write(Ctx.Bindings, bindings, Ctx.unbound())
+        ready : Bool <- R.modify(DispatchLifetime, Bool, lifetime, value => retiring(value))
+        Bool.pick(Unit -> IO(Unit), ready, _ => retire(runner), _ => IO.pure(Unit, Unit{}))(Unit{})
 
 # Bindings belong to the mode/session; the runtime owns registrations.
 # Snapshot the borrowed bindings before retiring an extension generation.
@@ -64,17 +88,17 @@ type ReloadBinding is Data:
   ReloadBinding{bindings: Ctx.Bindings,listeners: Listeners,flags: List<&2,T.FlagSetting>}
 def captureReload(runner: ExtensionRunner) -> IO(ReloadBinding):
   match runner:
-    case ExtensionRunner{runtime,_,_,bindings,listeners,_,_}:
+    case ExtensionRunner{runtime,_,_,bindings,listeners,_,_, _}:
       do IO<ReloadBinding>:
         bound : Ctx.Bindings <- R.read(Ctx.Bindings,bindings)
         errors : Listeners <- R.read(Listeners,listeners)
         state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState,runtime)
         return ReloadBinding{bound,errors,Loader.flagValuesOf(state)}
 # Outstanding callbacks may retain the old context. Leave its channels live,
-# but remove actions and registrations; dropping handles then releases them.
+# but remove actions and registrations. Borrowed handles become unbound.
 def invalidate(runner: ExtensionRunner) -> IO(Unit):
   match runner:
-    case ExtensionRunner{runtime,_,_,bindings,listeners,_,diagnostics}:
+    case ExtensionRunner{runtime,_,_,bindings,listeners,_,diagnostics, _}:
       do IO<Unit>:
         R.write(Ctx.Bindings,bindings,Ctx.unbound())
         R.write(Listeners,listeners,Listeners{0n,Nil{}})
@@ -84,7 +108,7 @@ def restoredFlags(+state: T.ExtensionRuntimeState,flags: List<&2,T.FlagSetting>)
   Loader.withFlagValues(state,Loader.settingsCommitted(Loader.flagValuesOf(state),flags))
 def restoreReload(runner: ExtensionRunner,snapshot: ReloadBinding) -> IO(Unit):
   match runner snapshot:
-    case ExtensionRunner{runtime,_,_,bindings,listeners,_,_} ReloadBinding{bound,errors,flags}:
+    case ExtensionRunner{runtime,_,_,bindings,listeners,_,_, _} ReloadBinding{bound,errors,flags}:
       do IO<Unit>:
         R.write(Ctx.Bindings,bindings,bound)
         R.write(Listeners,listeners,errors)
@@ -92,25 +116,25 @@ def restoreReload(runner: ExtensionRunner,snapshot: ReloadBinding) -> IO(Unit):
 
 def runtimeOf(runner: ExtensionRunner) -> T.ExtensionRuntime():
   match runner:
-    case ExtensionRunner{runtime, _, _, _, _, _, _}: runtime
+    case ExtensionRunner{runtime, _, _, _, _, _, _, _}: runtime
 
 def modelsOf(runner: ExtensionRunner) -> Models.ModelRuntime:
   match runner:
-    case ExtensionRunner{_, _, models, _, _, _, _}: models
+    case ExtensionRunner{_, _, models, _, _, _, _, _}: models
 
 def bindingsRef(runner: ExtensionRunner) -> R.Ref<Ctx.Bindings>:
   match runner:
-    case ExtensionRunner{_, _, _, bindings, _, _, _}: bindings
+    case ExtensionRunner{_, _, _, bindings, _, _, _, _}: bindings
 
 # upstream createContext and createCommandContext.
 def createContext(runner: ExtensionRunner) -> Ctx.ExtensionContext:
   match runner:
-    case ExtensionRunner{_, cwd, models, bindings, _, _, _}: Ctx.ExtensionContext{cwd, models, bindings}
+    case ExtensionRunner{_, cwd, models, bindings, _, _, _, _}: Ctx.ExtensionContext{cwd, models, bindings}
 
 # The context reader of the runner's built-in tools (upstream's ctxFactory).
 def toolContext(runner: ExtensionRunner) -> ToolContext.ContextSource():
   match runner:
-    case ExtensionRunner{_, _, _, _, _, reader, _}: Some{reader}
+    case ExtensionRunner{_, _, _, _, _, reader, _, _}: Some{reader}
 
 def createCommandContext(runner: ExtensionRunner) -> Ctx.ExtensionCommandContext:
   Ctx.ExtensionCommandContext{createContext(runner)}
@@ -189,7 +213,7 @@ def withListener(listeners: Listeners, listener: C.Callback<T.ExtensionError, Un
 # the returned subscription before disposing it.
 def onError(runner: ExtensionRunner, listener: C.Callback<T.ExtensionError, Unit>) -> IO(ErrorSubscription):
   match runner:
-    case ExtensionRunner{_, _, _, _, listeners, _, _}:
+    case ExtensionRunner{_, _, _, _, listeners, _, _, _}:
       do IO<ErrorSubscription>:
         id : Nat <- R.modify(Listeners, Nat, listeners, current => withListener(current, listener))
         return ErrorSubscription{id}
@@ -211,7 +235,7 @@ def removedListener(listeners: Listeners, +id: Nat) -> Listeners:
 
 def offError(runner: ExtensionRunner, subscription: ErrorSubscription) -> IO(Unit):
   match runner subscription:
-    case ExtensionRunner{_, _, _, _, listeners, _, _} ErrorSubscription{+id}: R.modify(Listeners, Unit, listeners, current => (removedListener(current, id), Unit{}))
+    case ExtensionRunner{_, _, _, _, listeners, _, _, _} ErrorSubscription{+id}: R.modify(Listeners, Unit, listeners, current => (removedListener(current, id), Unit{}))
 
 def notifyListeners(listeners: List<&2, ErrorListener>, +error: T.ExtensionError) -> IO(Unit):
   match listeners:
@@ -227,7 +251,7 @@ def registeredListeners(listeners: Listeners) -> List<&2, ErrorListener>:
 
 def emitError(runner: ExtensionRunner, error: T.ExtensionError) -> IO(Unit):
   match runner:
-    case ExtensionRunner{_, _, _, _, listeners, _, _}:
+    case ExtensionRunner{_, _, _, _, listeners, _, _, _}:
       do IO<Unit>:
         current : Listeners <- R.read(Listeners, listeners)
         notifyListeners(registeredListeners(current), error)
@@ -397,6 +421,8 @@ def called(-E: Data, callback: T.ExtensionHandler(E, Unit), event: E, ctx: Ctx.E
 def handled(handler: T.EventHandler, event: T.ExtensionEvent, ctx: Ctx.ExtensionContext) -> IO(Result<&2, &2, String, Unit>):
   match handler event:
     case T.OnAfterProviderResponse{callback} T.AfterProviderResponse{value}: called(T.AfterProviderResponseEvent, callback, value, ctx)
+    case T.OnModelSelect{callback} T.ModelSelect{value}: called(T.ModelSelectEvent, callback, value, ctx)
+    case T.OnThinkingLevelSelect{callback} T.ThinkingLevelSelect{value}: called(T.ThinkingLevelSelectEvent, callback, value, ctx)
     case T.OnAgentStart{callback} T.AgentStart{value}: called(T.AgentStartEvent, callback, value, ctx)
     case T.OnAgentEnd{callback} T.AgentEnd{value}: called(T.AgentEndEvent, callback, value, ctx)
     case T.OnAgentSettled{callback} T.AgentSettled{value}: called(T.AgentSettledEvent, callback, value, ctx)
@@ -434,6 +460,30 @@ def emit(+runner: ExtensionRunner, +event: T.ExtensionEvent) -> IO(Unit):
   do IO<Unit>:
     loaded : List<&2, T.Extension> <- extensions(runner)
     dispatchAll(runner, snapshotEventHandlers(loaded, T.eventType(event)), event)
+
+def retainDispatch(lifetime: DispatchLifetime) -> DispatchLifetime & Bool:
+  match lifetime:
+    case DispatchLifetime{pending, True{}}: (DispatchLifetime{pending, True{}}, False{})
+    case DispatchLifetime{pending, False{}}: (DispatchLifetime{Nat.add(pending, 1n), False{}}, True{})
+
+def releaseDispatch(lifetime: DispatchLifetime) -> DispatchLifetime & Bool:
+  match lifetime:
+    case DispatchLifetime{+pending, +closing}: (DispatchLifetime{Nat.sub(pending, 1n), closing}, closing && Nat.is_eq(pending, 1n))
+
+def dispatched(+runner: ExtensionRunner, handlers: List<&2, Dispatch>, event: T.ExtensionEvent) -> IO(Unit):
+  do IO<Unit>:
+    dispatchAll(runner, handlers, event)
+    ready : Bool <- R.modify(DispatchLifetime, Bool, dispatchLifetimeOf(runner), value => releaseDispatch(value))
+    Bool.pick(Unit -> IO(Unit), ready, _ => retire(runner), _ => IO.pure(Unit, Unit{}))(Unit{})
+
+# Upstream thinking-level notifications do not await asynchronous handlers.
+# Snapshot before spawning, so a reload cannot replace this dispatch's handlers.
+def emitDetached(+runner: ExtensionRunner, +event: T.ExtensionEvent) -> IO(Unit):
+  do IO<Unit>:
+    retained : Bool <- R.modify(DispatchLifetime, Bool, dispatchLifetimeOf(runner), value => retainDispatch(value))
+    Bool.pick(Unit -> IO(Unit), retained, _ => do IO<Unit>:
+      loaded : List<&2, T.Extension> <- extensions(runner)
+      IO.spawn(Unit, dispatched(runner, snapshotEventHandlers(loaded, T.eventType(event)), event)), _ => IO.pure(Unit, Unit{}))(Unit{})
 
 def snapshot(runner: ExtensionRunner, +eventType: String) -> IO(List<&2, Dispatch>):
   do IO<List<&2, Dispatch>>:
@@ -1167,7 +1217,7 @@ def extensionShortcuts(loaded: List<&2,T.Extension>,+claims: Rec.Record<Shortcut
       match state: case ResolvedShortcuts{selected,warnings}: ResolvedShortcuts{selected,List.reverse(&2,D.ResourceDiagnostic,warnings)}
     case T.Extension{_,_,_,_,_,_,_,_,_,_,T.ExtensionExtras{_,shortcuts,_,_}} <> rest: extensionShortcuts(rest,claims,resolveShortcuts(shortcuts,claims,state))
 def diagnosticsRef(runner: ExtensionRunner) -> R.Ref<List<&2,D.ResourceDiagnostic>>:
-  match runner: case ExtensionRunner{_,_,_,_,_,_,diagnostics}: diagnostics
+  match runner: case ExtensionRunner{_,_,_,_,_,_,diagnostics, _}: diagnostics
 def getShortcutDiagnostics(runner: ExtensionRunner) -> IO(List<&2,D.ResourceDiagnostic>): R.read(List<&2,D.ResourceDiagnostic>,diagnosticsRef(runner))
 def warnShortcuts(warnings: List<&2,D.ResourceDiagnostic>) -> IO(Unit):
   match warnings:

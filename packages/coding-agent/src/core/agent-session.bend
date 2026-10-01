@@ -4379,10 +4379,17 @@ def clamped(value: AgentState(), +level: Ai.ModelThinkingLevel) -> Ai.ModelThink
 def sameLevel(left: Ai.ModelThinkingLevel, right: Ai.ModelThinkingLevel) -> Bool:
   U32.is_eq(Levels.rank(left), Levels.rank(right))
 
-def recordThinkingChange(+shared: R.Ref<Shared>, +level: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):
+def emitThinkingSelect(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, event: ExtensionTypes.ThinkingLevelSelectEvent) -> IO(Unit):
+  match runner:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{found}: ExtensionRunner.emitDetached(found, ExtensionTypes.ThinkingLevelSelect{event})
+
+def recordThinkingChange(+shared: R.Ref<Shared>, +level: Ai.ModelThinkingLevel, previous: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     result : Result<&2, &2, String, Unit> <- recorded(shared, target => recordThinking(target, level))
     emit(shared, ThinkingLevelChanged{level})
+    runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- sharedRunner(shared)
+    emitThinkingSelect(runner, ExtensionTypes.ThinkingLevelSelectEvent{level, previous})
     return result
 
 def persistThinking(settings: R.Ref<Settings.SettingsManager>, level: Ai.ModelThinkingLevel, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Unit>):
@@ -4399,7 +4406,7 @@ def applyThinking(+agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: R.Re
     +previous : Ai.ModelThinkingLevel = stateThinking(current)
     Agent.setThinkingLevel(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, effective)
     persisted : Result<&2, &2, String, Unit> <- persistThinking(settings, level, options)
-    changed : Result<&2, &2, String, Unit> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), sameLevel(effective, previous), _ => done(), _ => recordThinkingChange(shared, effective))(Unit{})
+    changed : Result<&2, &2, String, Unit> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), sameLevel(effective, previous), _ => done(), _ => recordThinkingChange(shared, effective, previous))(Unit{})
     return both(persisted, changed)
 
 def setThinkingLevel(session: AgentSession, level: Ai.ModelThinkingLevel, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Unit>):
@@ -4500,20 +4507,32 @@ def persistModel(+settings: R.Ref<Settings.SettingsManager>, scoped: R.Ref<List<
         scopedResult : Result<&2, &2, String, Unit> <- scopeDefault(settings, scoped, model)
         return both(saved, scopedResult)
 
+def sameModel(+left: Ai.Model<Ai.JsonValue>, +right: Ai.Model<Ai.JsonValue>) -> Bool:
+  String.eq(Models.modelProvider(left), Models.modelProvider(right)) && String.eq(Models.modelId(left), Models.modelId(right))
+
+def modelChanged(previous: Maybe<&2, Ai.Model<Ai.JsonValue>>, model: Ai.Model<Ai.JsonValue>) -> Bool:
+  match previous:
+    case None{}: True{}
+    case Some{old}: Bool.not(sameModel(old, model))
+
+def emitModelSelect(+shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, +previous: Maybe<&2, Ai.Model<Ai.JsonValue>>, source: ExtensionTypes.ModelSelectSource) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit), modelChanged(previous, model), _ => emitToExtensions(shared, ExtensionTypes.ModelSelect{ExtensionTypes.ModelSelectEvent{model, previous, source}}), _ => IO.pure(Unit, Unit{}))(Unit{})
+
 # The shared body of upstream setModel and the cycles: apply the model, record
-# the change, persist it on request, then apply its thinking level.
-def switchModel(session: AgentSession, +model: Ai.Model<Ai.JsonValue>, explicit: Maybe<&2, Ai.ModelThinkingLevel>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Unit>):
+# the change, persist it on request, then apply its thinking level and notify.
+def switchModel(session: AgentSession, +model: Ai.Model<Ai.JsonValue>, explicit: Maybe<&2, Ai.ModelThinkingLevel>, options: ModelMutationOptions, source: ExtensionTypes.ModelSelectSource) -> IO(Result<&2, &2, String, Unit>):
   match session:
     case AgentSession{+agent, +shared, _, +settings, _, _, _, scoped}:
       do IO<Result<&2, &2, String, Unit>>:
         manager : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
-        current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        +current : AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +level : Ai.ModelThinkingLevel = switchThinking(manager, model, explicit, stateThinking(current))
         Agent.setModel(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, model)
         R.modify(Shared, Unit, shared, value => (withContextWindow(value, Ai.modelContextWindow(model)), Unit{}))
         modelResult : Result<&2, &2, String, Unit> <- recorded(shared, target => recordModel(target, model))
         persisted : Result<&2, &2, String, Unit> <- persistModel(settings, scoped, model, options)
         thought : Result<&2, &2, String, Unit> <- applyThinking(agent, shared, settings, level, ModelMutationOptions{False{}})
+        emitModelSelect(shared, model, stateModel(current), source)
         return both(modelResult, both(persisted, thought))
 
 # upstream setModel: the provider must have configured auth.
@@ -4521,11 +4540,8 @@ def setModel(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>, options: Mo
   do IO<Result<&2, &2, String, Unit>>:
     authorized : Bool <- Models.hasConfiguredAuth(modelRuntime(session), Models.modelProvider(model))
     Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), authorized,
-      _ => switchModel(session, model, None{}, options),
+      _ => switchModel(session, model, None{}, options, ExtensionTypes.ModelSelectSet{}),
       _ => IO.pure(Result<&2, &2, String, Unit>, Fail{"No API key for " ++ Models.reference(model)}))(Unit{})
-
-def sameModel(+left: Ai.Model<Ai.JsonValue>, +right: Ai.Model<Ai.JsonValue>) -> Bool:
-  String.eq(Models.modelProvider(left), Models.modelProvider(right)) && String.eq(Models.modelId(left), Models.modelId(right))
 
 def modelIndex(models: List<&2, Ai.Model<Ai.JsonValue>>, +current: Ai.Model<Ai.JsonValue>, +index: Nat) -> Nat:
   match models:
@@ -4561,7 +4577,7 @@ def availableScope(items: List<&2, Models.ScopedModel>, +available: List<&2, Ai.
 
 def cycled(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>, explicit: Maybe<&2, Ai.ModelThinkingLevel>, scoped: Bool, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
   do IO<Result<&2, &2, String, Maybe<&2, ModelCycleResult>>>:
-    result : Result<&2, &2, String, Unit> <- switchModel(session, model, explicit, options)
+    result : Result<&2, &2, String, Unit> <- switchModel(session, model, explicit, options, ExtensionTypes.ModelSelectCycle{})
     current : AgentState() <- state(session)
     return Result.map(&2, &2, String, Unit, Maybe<&2, ModelCycleResult>, _ => Some{ModelCycleResult{model, stateThinking(current), scoped}}, result)
 

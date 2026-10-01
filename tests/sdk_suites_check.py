@@ -68,6 +68,19 @@ SUITES = {
         'response failure emits exactly one extension error',
         'SDK provider hooks follow the reloaded runner and dispose',
     ], True, set()),
+    'sdk-model-events': ([
+        'setThinkingLevel returns before a blocked thinking handler and exposes updated state',
+        'thinking selection isolates a failing handler',
+        'unchanged thinking level emits no selection event',
+        'setModel saves the model to the session and emits model_select',
+        'model switch clamps thinking and reports effective previous and current levels',
+        'model and thinking handler failures remain isolated',
+        'same provider and id with changed metadata does not notify',
+        'cycleModel reports cycle source and previous current model',
+        'auth failure emits no model selection',
+        'detached thinking handler can finish after SDK disposal',
+        'SDK model events disposed',
+    ], True, set()),
 }
 
 
