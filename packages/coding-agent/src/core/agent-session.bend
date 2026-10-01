@@ -1293,9 +1293,14 @@ def disposeExecutors(executors: List<&2, Tools.Execute()>) -> IO(Unit):
         C.dispose(Tools.Input(), Tools.Output(), execute)
         disposeExecutors(rest)
 
+def disposePromptOptions(callback: Maybe<&2, C.Callback<Unit, Prompt.BuildSystemPromptOptions>>) -> IO(Unit):
+  match callback:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{reader}: C.dispose(Unit, Prompt.BuildSystemPromptOptions, reader)
+
 def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
   match binding:
-    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager}, changed, sessionActions, handler, extensionTools, _}:
+    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager, promptOptions}, changed, sessionActions, handler, extensionTools, _}:
       do IO<Unit>:
         tools : ExtensionTools <- R.dispose(ExtensionTools, extensionTools)
         disposeExecutors(executorsOf(tools))
@@ -1306,6 +1311,7 @@ def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
         C.dispose(Unit, Maybe<&2, Ctx.ContextUsage>, usage)
         C.dispose(Ctx.CompactOptions, Unit, compactor)
         C.dispose(Unit, String, prompt)
+        disposePromptOptions(promptOptions)
         C.dispose(Unit, Ctx.ReadonlySessionManager(), manager)
         C.dispose(Unit, Unit, changed)
         bound : Maybe<&2, ExtensionTypes.ExtensionActions> <- R.dispose(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActions)
@@ -5317,7 +5323,27 @@ def contextSessionManager(env: ContextEnv, unit: Unit) -> IO(Ctx.ReadonlySession
         stored : Shared <- R.read(Shared, shared)
         return sharedSession(stored)
 
-def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
+type PromptOptionsSource is Data:
+  PromptOptionsSource{shared: R.Ref<Shared>, sdk: List<&2, ExtensionTypes.ToolDefinition>}
+
+def promptOptionsFrom(cwd: String, prompt: Maybe<&2, RunPrompt>) -> Prompt.BuildSystemPromptOptions:
+  match prompt:
+    case Some{RunPrompt{options, _}}: Prompt.toBuildSystemPromptOptions(options)
+    case None{}: Prompt.toBuildSystemPromptOptions(Prompt.normalizeBuildSystemPromptOptions(Prompt.defaults(cwd)))
+
+def contextPromptOptions(source: PromptOptionsSource, _: Unit) -> IO(Prompt.BuildSystemPromptOptions):
+  match source:
+    case PromptOptionsSource{shared, sdk}:
+      do IO<Prompt.BuildSystemPromptOptions>:
+        +stored : Shared <- R.read(Shared, shared)
+        +loadout : Runtime.Loadout <- R.read(Runtime.Loadout, extensionsOf(stored))
+        prompts : Runtime.ToolPrompts <- toolPromptsOf(loadout, sdk)
+        return promptOptionsFrom(Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value, sharedSession(stored)), basePrompt(loadout, prompts))
+
+def promptSource(env: ContextEnv, sdk: List<&2, ExtensionTypes.ToolDefinition>) -> PromptOptionsSource:
+  match env: case ContextEnv{_, shared, _, _, _}: PromptOptionsSource{shared, sdk}
+
+def createContextActions(+env: ContextEnv, sdk: List<&2, ExtensionTypes.ToolDefinition>) -> IO(Ctx.ExtensionContextActions):
   do IO<Ctx.ExtensionContextActions>:
     reader : C.Callback<Unit, Ctx.SessionState> <- C.create(~ContextEnv, ~Unit, ~Ctx.SessionState, ~sessionState, env)
     aborter : C.Callback<Unit, Unit> <- C.create(~ContextEnv, ~Unit, ~Unit, ~contextAbort, env)
@@ -5326,13 +5352,14 @@ def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
     compactor : C.Callback<Ctx.CompactOptions, Unit> <- C.create(~ContextEnv, ~Ctx.CompactOptions, ~Unit, ~contextCompact, env)
     prompt : C.Callback<Unit, String> <- C.create(~ContextEnv, ~Unit, ~String, ~contextSystemPrompt, env)
     manager : C.Callback<Unit, Ctx.ReadonlySessionManager()> <- C.create(~ContextEnv, ~Unit, ~Ctx.ReadonlySessionManager(), ~contextSessionManager, env)
-    return Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager}
+    options : C.Callback<Unit, Prompt.BuildSystemPromptOptions> <- C.create(~PromptOptionsSource, ~Unit, ~Prompt.BuildSystemPromptOptions, ~contextPromptOptions, promptSource(env, sdk))
+    return Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager, Some{options}}
 
-def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime, sdk: List<&2, ExtensionTypes.ToolDefinition>, base: List<&2,Tools.Tool()>, start: ExtensionTypes.SessionStartEvent) -> IO(ExtensionBinding):
+def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime, +sdk: List<&2, ExtensionTypes.ToolDefinition>, base: List<&2,Tools.Tool()>, start: ExtensionTypes.SessionStartEvent) -> IO(ExtensionBinding):
   match env:
     case ContextEnv{+agent, shared, scoped, settings, handler}:
       do IO<ExtensionBinding>:
-        actions : Ctx.ExtensionContextActions <- createContextActions(ContextEnv{agent, shared, scoped, settings, handler})
+        actions : Ctx.ExtensionContextActions <- createContextActions(ContextEnv{agent, shared, scoped, settings, handler}, sdk)
         changed : C.Callback<Unit, Unit> <- C.create(~ModelEnv, ~Unit, ~Unit, ~refreshCurrentModel, ModelEnv{agent, models})
         sessionActions : R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>> <- R.new(Maybe<&2, ExtensionTypes.ExtensionActions>, None{})
         extensionTools : R.Ref<ExtensionTools> <- R.new(ExtensionTools, ExtensionTools{Nil{}, Nil{}, sdk, base})

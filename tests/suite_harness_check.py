@@ -512,6 +512,37 @@ def context_checks(f):
     return checks
 
 
+def model_extension_checks(f):
+    # agent-session-model-extension.test.ts: callback replies echo actual provider tool results.
+    events = run(f, 'prompt', 'model_tool_block')
+    assert any(m['role'] == 'assistant' and text_of(m) == 'Blocked by test' for m in messages(events))
+    result = next(m for m in messages(events) if m['role'] == 'toolResult')
+    assert result['isError'] and text_of(result) == 'Blocked by test'
+    events = run(f, 'prompt', 'model_tool_result')
+    original = {'input': 1, 'output': 2, 'cacheRead': 3, 'cacheWrite': 4, 'totalTokens': 10,
+                'cost': {'input': .1, 'output': .2, 'cacheRead': .3, 'cacheWrite': .4, 'total': 1}}
+    patched = {'input': 5, 'output': 6, 'cacheRead': 7, 'cacheWrite': 8, 'totalTokens': 26,
+               'cost': {'input': .5, 'output': .6, 'cacheRead': .7, 'cacheWrite': .8, 'total': 2.6}}
+    assert last(events, 'observed_tool_usage')['usage'] == original
+    result = next(m for m in messages(events) if m['role'] == 'toolResult')
+    assert text_of(result) == 'patched result' and result['details']['patched'] is True and result['usage'] == patched
+    assert any(m['role'] == 'assistant' and text_of(m) == 'patched result' for m in messages(events))
+    incoming = next(m for m in of_type(events, 'request')[-1]['messages'] if m['role'] == 'toolResult')
+    assert incoming['content'] == result['content'] and incoming['usage'] == patched
+    events = run(f, 'prompt', 'model_context_rewrite')
+    incoming = next(m for m in of_type(events, 'request')[0]['messages'] if m['role'] == 'user')
+    stored = next(m for m in messages(events) if m['role'] == 'user')
+    assert text_of(incoming) == 'rewritten' and text_of(stored) == 'original'
+    assert incoming['timestamp'] == stored['timestamp']
+    events = run(f, 'prompt', 'live_prompt_options')
+    options = of_type(events, 'prompt_options')
+    assert len(options) == 3 and options[0] == options[1]
+    assert 'read' in options[0]['selectedTools'] and options[2]['selectedTools'] == ['read']
+    assert Path(options[0]['cwd']).is_dir() and options[2]['cwd'] == options[0]['cwd']
+    assert not requests(events)
+    return 4
+
+
 def fork_message_checks(f):
     # AgentSession.getUserMessagesForForking (upstream agent-session.ts): user entries with text, in order
     events = run(f, 'fork_messages')
@@ -838,7 +869,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = queue_checks(fixtures) + bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures) + extension_tool_checks(fixtures) + reload_settings_checks(fixtures) + compaction_extension_checks(fixtures) + branch_summary_extension_checks(fixtures) + trigger_compact_checks(fixtures)
+    checks = model_extension_checks(fixtures) + queue_checks(fixtures) + bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures) + extension_tool_checks(fixtures) + reload_settings_checks(fixtures) + compaction_extension_checks(fixtures) + branch_summary_extension_checks(fixtures) + trigger_compact_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

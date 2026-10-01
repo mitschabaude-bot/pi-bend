@@ -55,6 +55,7 @@ import ../packages/coding-agent/examples/extensions/trigger-compact.bend as Trig
 # runs (#8537's background task); Stub is never called.
 type ToolKind is Data:
   Echo{prefix: String}
+  UsageEcho{usage: Ai.Usage}
   Notify{}
   Throws{message: String}
   Records{}
@@ -99,6 +100,9 @@ def executeTool(env: ToolEnv, input: Tools.Input()) -> IO(Tools.Output()):
     case ToolEnv{_, Echo{prefix}} T.ToolExecutionInput{_, +params, _, _}:
       +text = textArgument(params)
       IO.pure(Tools.Output(), textResult(prefix ++ text, Json.object(Json.field("text", Json.text(text), Nil{}))))
+    case ToolEnv{_, UsageEcho{usage}} T.ToolExecutionInput{_, params, _, _}:
+      +text = textArgument(params)
+      IO.pure(Tools.Output(), Done{T.AgentToolResult{[Ai.TextImageText{Ai.TextContent{text, None{}}}], Some{Tools.RawDetails{Json.object(Json.field("text", Json.text(text), Nil{}))}}, Some{usage}, None{}}})
     case ToolEnv{session, Notify{}} _:
       do IO<Tools.Output()>:
         found : Maybe<&2, Session.AgentSession> <- R.read(Maybe<&2, Session.AgentSession>, session)
@@ -134,6 +138,7 @@ def valueSchema() -> V.Value:
 def schemaOf(kind: ToolKind) -> V.Value:
   match kind:
     case Echo{_}: textSchema()
+    case UsageEcho{_}: textSchema()
     case Throws{_}: textSchema()
     case Records{}: valueSchema()
     case Runs{_, _}: valueSchema()
@@ -2543,6 +2548,99 @@ def branchSummaryExtensionScenario(+dir: String, agentDir: String) -> IO(Unit):
     print("summary_entry", Json.field("sourceId", Maybe.default(&2, V.Value, Maybe.map(&2, String, V.Value, Json.text, source), V.Null{}), Json.field("entry", summaryEntryJson(result), Json.field("totals", totalsJson(stats), Nil{}))))
     cleanup(harness)
 
+# agent-session-model-extension: inspect live options, tool hooks and context.
+def printPromptOptions(options: Prompt.BuildSystemPromptOptions) -> IO(Unit):
+  match options:
+    case Prompt.BuildSystemPromptOptions{_, _, tools, _, _, _, _, _, cwd, _, _}:
+      print("prompt_options", Json.field("cwd", Json.text(cwd), Json.field("selectedTools", V.ArrayValue{textValues(Maybe.default(&2, List<&2, String>, tools, Nil{}))}, Nil{})))
+
+def inspectPromptOptions(_: Unit, call: Ext.CommandCall) -> IO(Result<&2, &2, String, Unit>):
+  match call:
+    case Ext.CommandCall{_, command}:
+      do IO<Result<&2, &2, String, Unit>>:
+        options : Prompt.BuildSystemPromptOptions <- Ctx.getSystemPromptOptions(Ctx.commandContext(command))
+        printPromptOptions(options)
+        return Done{Unit{}}
+
+def promptOptionsFactory(_: Unit, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.CommandHandler() <- C.create(~Unit, ~Ext.CommandCall, ~Result<&2, &2, String, Unit>, ~inspectPromptOptions, Unit{})
+    Loader.registerCommand(api, "inspect-options", Ext.CommandOptions{Some{"Inspect prompt options"}, None{}, handler})
+
+def livePromptOptions(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~promptOptionsFactory, Unit{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup(Nil{}), ref, [inline("inspect-options", factory)], noResources())
+    prompted(sessionOf(harness), "/inspect-options")
+    prompted(sessionOf(harness), "/inspect-options")
+    Session.setActiveToolsByName(sessionOf(harness), ["read"])
+    prompted(sessionOf(harness), "/inspect-options")
+    cleanup(harness)
+
+def denyTool(_: Unit, _: Ext.HandlerCall<Ext.ToolCallEvent>) -> IO(Handled(Ext.ToolCallEventResult)):
+  IO.pure(Handled(Ext.ToolCallEventResult), Done{Some{Ext.ToolCallEventResult{Some{True{}}, Some{"Blocked by test"}, None{}}}})
+
+def toolUsage(+start: U32, +total: U32) -> Ai.Usage:
+  Ai.Usage{F.fromU32(start), F.fromU32(U32.add(start, 1)), F.fromU32(U32.add(start, 2)), F.fromU32(U32.add(start, 3)), None{}, None{}, F.fromU32(total), Ai.UsageCost{F.divide(F.fromU32(start), F.fromU32(10)), F.divide(F.fromU32(U32.add(start, 1)), F.fromU32(10)), F.divide(F.fromU32(U32.add(start, 2)), F.fromU32(10)), F.divide(F.fromU32(U32.add(start, 3)), F.fromU32(10)), F.divide(F.fromU32(total), F.fromU32(10))}}
+
+def patchResult(_: Unit, call: Ext.HandlerCall<Ext.ToolResultEvent>) -> IO(Handled(Ext.ToolResultEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.ToolResultEvent{_, _, _, _, _, _, usage}, _}:
+      do IO<Handled(Ext.ToolResultEventResult)>:
+        print("observed_tool_usage", Json.field("usage", usageJson(usage), Nil{}))
+        return Done{Some{Ext.ToolResultEventResult{Some{[Ai.TextImageText{Ai.TextContent{"patched result", None{}}}]}, Some{Tools.RawDetails{Json.object(Json.field("patched", Json.boolean(True{}), Nil{}))}}, None{}, Some{toolUsage(5, 26)}}}}
+
+def rewrittenUsers(messages: List<&2, Session.Message()>) -> List<&2, Session.Message()>:
+  match messages:
+    case Nil{}: Nil{}
+    case T.LlmMessage{Ai.User{Ai.UserMessage{_, timestamp}}} <> rest: T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserBlocks{[Ai.TextImageText{Ai.TextContent{"rewritten", None{}}}]}, timestamp}}} <> rewrittenUsers(rest)
+    case message <> rest: message <> rewrittenUsers(rest)
+
+def rewriteContext(_: Unit, call: Ext.HandlerCall<Ext.ContextEvent>) -> IO(Handled(Ext.ContextEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.ContextEvent{messages}, _}: IO.pure(Handled(Ext.ContextEventResult), Done{Some{Ext.ContextEventResult{Some{rewrittenUsers(messages)}}}})
+
+type ModelHook is Data:
+  BlockTool{}
+  PatchToolResult{}
+  RewriteUserContext{}
+
+def modelHookFactory(kind: ModelHook, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match kind:
+    case BlockTool{}:
+      do IO<Result<&2, &2, String, Unit>>:
+        handler : Ext.ExtensionHandler(Ext.ToolCallEvent, Ext.ToolCallEventResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.ToolCallEvent>, ~Handled(Ext.ToolCallEventResult), ~denyTool, Unit{})
+        subscribe(api, Ext.OnToolCall{handler})
+    case PatchToolResult{}:
+      do IO<Result<&2, &2, String, Unit>>:
+        handler : Ext.ExtensionHandler(Ext.ToolResultEvent, Ext.ToolResultEventResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.ToolResultEvent>, ~Handled(Ext.ToolResultEventResult), ~patchResult, Unit{})
+        subscribe(api, Ext.OnToolResult{handler})
+    case RewriteUserContext{}:
+      do IO<Result<&2, &2, String, Unit>>:
+        handler : Ext.ExtensionHandler(Ext.ContextEvent, Ext.ContextEventResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.ContextEvent>, ~Handled(Ext.ContextEventResult), ~rewriteContext, Unit{})
+        subscribe(api, Ext.OnContext{handler})
+
+def hookTools(kind: ModelHook) -> Tooling:
+  match kind:
+    case BlockTool{}: Scripted{[ToolSpec{"echo", Throws{"tool should have been blocked"}}]}
+    case PatchToolResult{}: Scripted{[ToolSpec{"echo", UsageEcho{toolUsage(1, 10)}}]}
+    case RewriteUserContext{}: Builtins{}
+
+def hookReplies(kind: ModelHook) -> Reg.Setup:
+  match kind:
+    case RewriteUserContext{}: setup([Reg.Text{"done"}])
+    case _: setup([echoCall("call_echo", "hello"), Reg.LastToolResult{}])
+
+def modelHooks(+dir: String, agentDir: String, +kind: ModelHook) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +factory : Ext.ExtensionFactory() <- C.create(~ModelHook, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~modelHookFactory, kind)
+    +harness : Harness <- createHarnessWith(dir, agentDir, hookTools(kind), hookReplies(kind), ref, [inline("model-hooks", factory)])
+    prompted(sessionOf(harness), "original")
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
 def promptScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
   match name:
     case "tool_turn": promptToolTurn(dir, agentDir)
@@ -2558,6 +2656,10 @@ def promptScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
     case "input_idle": inputIdle(dir, agentDir)
     case "input_streaming": inputStreaming(dir, agentDir)
     case "input_transform": inputTransform(dir, agentDir)
+    case "live_prompt_options": livePromptOptions(dir, agentDir)
+    case "model_tool_block": modelHooks(dir, agentDir, BlockTool{})
+    case "model_tool_result": modelHooks(dir, agentDir, PatchToolResult{})
+    case "model_context_rewrite": modelHooks(dir, agentDir, RewriteUserContext{})
     case "before_start_inject": beforeStartInject(dir, agentDir)
     case "plan_section": planSectionScenario(dir, agentDir)
     case "switch_tools": switchScenario(dir, agentDir, "plain")

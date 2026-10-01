@@ -4102,18 +4102,19 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-model-extension.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/agent-session.bend",
         "tests/agent_session_check.py",
         "tests/suite-harness.bend",
         "tests/suite_harness_check.py",
         "packages/coding-agent/test/sdk-model-events.bend",
-        "tests/sdk_suites_check.py"
+        "tests/sdk_suites_check.py",
+        "packages/coding-agent/test/sdk-extension-reload.bend"
       ],
       "sha256": "0b1a86e5b1beb1824867a05029a7e6cfd3ad31b8173e6eb13b94bf09ce934a52",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; 'throws when setModel is called without configured auth' is set_unavailable in the models scenario of tests/agent_session_check.py. 'allows extension input handlers to transform or handle input' and 'allows before_agent_start handlers to inject custom messages and modify the system prompt' are the input_transform and before_start_inject prompt scenarios of tests/suite_harness_check.py (the forced prompt is the request's one leading system message). The SDK-backed sdk-model-events fixture additionally checks model_select source/previous/current values, exact appended model entry and unchanged defaults, cycle source, provider/id equality suppression, thinking_level_select clamping and nonblocking dispatch, exact handler error isolation and auth rejection. Its initial transcript includes the real SDK's startup entries; assertions compare the full saved baseline plus one change rather than the direct AgentSession harness's empty initial model list. Pending: per-model overrides, settings persistence, tool_call/tool_result/context handler cases, bindExtensions lifecycle events, and 'allows extension commands to inspect live system prompt options' (ctx.getSystemPromptOptions is not ported; upstream's case asserts object identity across calls). v0.87.1 diff reviewed (46c9de402..f07218c4d): the tool-result details check gained a JsonObject narrowing only. The same SDK fixture exercises native extension getThinkingLevel/setThinkingLevel: loading guards, live reads, recorded/eventful session-only changes, no-op suppression, model clamping, existing model actions and rejection after SDK disposal."
+      "notes": "All 18 contracts are covered. tests/agent_session_check.py covers saved model changes/clamping and unconfigured-auth rejection; sdk-model-events covers model_select, thinking_level_select, requested versus effective persisted defaults, session-only cycling, per-model overrides/global/current-session fallback, scoped thinking preservation and xhigh/max ordering through a real SDK session. suite_harness_check.py covers tool-call blocking, original and patched tool usage/content/details reaching the provider, context rewriting without changing stored user messages, input handlers, before_agent_start messages/system prompt, and live ctx.getSystemPromptOptions after active-tool changes. sdk-extension-reload covers bindExtensions startup and reload shutdown/start order. Adaptation: prompt options are immutable value snapshots; upstream's object identity and mutation through a retained getter result are excluded under the approved native value semantics. Consecutive reads agree and later reads reflect the live tool selection. The faux provider echoes actual tool-result input rather than a preselected expected response."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-prompt.test.ts",

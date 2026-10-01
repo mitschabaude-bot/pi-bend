@@ -324,9 +324,119 @@ def run(+directory: String) -> IO(Unit):
     Chan.close(Unit, completed)
     return Unit{}
 
+def maybeLevel(value: Maybe<&2, Ai.ModelThinkingLevel>) -> String:
+  match value:
+    case None{}: "none"
+    case Some{found}: level(found)
+
+def cycleLevel(value: Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>>) -> String:
+  match value:
+    case Fail{error}: error
+    case Done{found}: maybeLevel(found)
+
+def levelNames(values: List<&2, Ai.ModelThinkingLevel>) -> List<&2, String>:
+  match values:
+    case Nil{}: Nil{}
+    case value <> rest: level(value) <> levelNames(rest)
+
+def extendedModel(value: Ai.Model<Ai.JsonValue>) -> Ai.Model<Ai.JsonValue>:
+  match value:
+    case Ai.Model{id, name, api, provider, url, reasoning, _, input, limits, cost, cache, window, tokens, sampling, headers, compat}:
+      Ai.Model{id, name, api, provider, url, reasoning, Some{Ai.ThinkingLevelMap{[Ai.ThinkingLevelMapping{Ai.Thinking{Ai.XHigh{}}, Some{Ai.PresentValue{"xhigh"}}}, Ai.ThinkingLevelMapping{Ai.Thinking{Ai.Max{}}, Some{Ai.PresentValue{"max"}}}]}}, input, limits, cost, cache, window, tokens, sampling, headers, compat}
+
+# Run related contracts on one real SDK session, resetting the relevant
+# settings and scope at each boundary. No provider request is needed.
+def defaultsChecked(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, +a: Ai.Model<Ai.JsonValue>, +b: Ai.Model<Ai.JsonValue>, +c: Ai.Model<Ai.JsonValue>) -> IO(Unit):
+  match pair:
+    case (owner, +live):
+      do IO<Unit>:
+        initialHigh : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(live, Ai.Thinking{Ai.High{}}, Session.ModelMutationOptions{False{}})
+        fallback : Result<&2, &2, String, Unit> <- Session.setModel(live, c, Session.ModelMutationOptions{False{}})
+        high : Ai.ModelThinkingLevel <- Session.getThinkingLevel(live)
+        check(good(initialHigh) && good(fallback) && String.eq(level(high), "high"), "falls back to current session thinking level when no per-model or global default is configured")
+        lowOnly : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(live, Ai.Thinking{Ai.Low{}}, Session.ModelMutationOptions{False{}})
+        +unsaved : Settings.SettingsManager <- R.read(Settings.SettingsManager, Session.settingsOf(live))
+        saveModel : Result<&2, &2, String, Unit> <- Session.setModel(live, c, Session.ModelMutationOptions{True{}})
+        saveThinking : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(live, Ai.Thinking{Ai.High{}}, Session.ModelMutationOptions{True{}})
+        +saved : Settings.SettingsManager <- R.read(Settings.SettingsManager, Session.settingsOf(live))
+        check(good(lowOnly) && good(saveModel) && good(saveThinking) && Maybe.is_none(&2, String, Settings.getDefaultProvider(unsaved)) && Maybe.is_none(&2, String, Settings.getDefaultModel(unsaved)) && Maybe.is_none(&2, Ai.ModelThinkingLevel, Settings.getDefaultThinkingLevel(unsaved)) && String.eq(Maybe.default(&2, String, Settings.getDefaultProvider(saved), ""), "capture-provider") && String.eq(Maybe.default(&2, String, Settings.getDefaultModel(saved), ""), "three") && String.eq(maybeLevel(Settings.getDefaultThinkingLevel(saved)), "high"), "only persists model and thinking defaults when requested")
+        saveMax : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(live, Ai.Thinking{Ai.Max{}}, Session.ModelMutationOptions{True{}})
+        clamped : Ai.ModelThinkingLevel <- Session.getThinkingLevel(live)
+        maxSettings : Settings.SettingsManager <- R.read(Settings.SettingsManager, Session.settingsOf(live))
+        check(good(saveMax) && String.eq(level(clamped), "high") && String.eq(maybeLevel(Settings.getDefaultThinkingLevel(maxSettings)), "max"), "persists the requested default thinking level even when the current model clamps it")
+        configured : Result<&2, &2, String, Unit> <- Session.updateSettings(Session.settingsOf(live), current => Settings.setDefaultModelAndProvider("capture-provider", "one", current))
+        defaultLow : Result<&2, &2, String, Unit> <- Session.updateSettings(Session.settingsOf(live), current => Settings.setDefaultThinkingLevel(Ai.Thinking{Ai.Low{}}, current))
+        Session.setScopedModels(live, [Models.ScopedModel{a, None{}}, Models.ScopedModel{c, None{}}])
+        reset : Result<&2, &2, String, Unit> <- Session.setModel(live, a, Session.ModelMutationOptions{False{}})
+        next : Result<&2, &2, String, Maybe<&2, Session.ModelCycleResult>> <- Session.cycleModel(live, Session.Forward{}, Session.ModelMutationOptions{False{}})
+        +cycledState : Session.AgentState() <- Session.state(live)
+        off : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(live, Ai.Off{}, Session.ModelMutationOptions{False{}})
+        minimal : Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>> <- Session.cycleThinkingLevel(live, Session.ModelMutationOptions{False{}})
+        +cycleSettings : Settings.SettingsManager <- R.read(Settings.SettingsManager, Session.settingsOf(live))
+        check(good(configured) && good(defaultLow) && good(reset) && Result.is_done(&2, &2, String, Maybe<&2, Session.ModelCycleResult>, next) && String.eq(key(Session.stateModel(cycledState)), "capture-provider/three") && good(off) && String.eq(cycleLevel(minimal), "minimal") && String.eq(Maybe.default(&2, String, Settings.getDefaultModel(cycleSettings), ""), "one") && String.eq(maybeLevel(Settings.getDefaultThinkingLevel(cycleSettings)), "low"), "cycleModel and cycleThinkingLevel are session-only by default")
+        Session.setScopedModels(live, Nil{})
+        medium : Result<&2, &2, String, Unit> <- Session.updateSettings(Session.settingsOf(live), current => Settings.setDefaultThinkingLevel(Ai.Thinking{Ai.Medium{}}, current))
+        override : Result<&2, &2, String, Unit> <- Session.updateSettings(Session.settingsOf(live), current => Settings.setModelThinkingLevel("capture-provider", "three", Ai.Thinking{Ai.Low{}}, current))
+        priorModel : Result<&2, &2, String, Unit> <- Session.setModel(live, a, Session.ModelMutationOptions{False{}})
+        highAgain : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(live, Ai.Thinking{Ai.High{}}, Session.ModelMutationOptions{False{}})
+        perModel : Result<&2, &2, String, Unit> <- Session.setModel(live, c, Session.ModelMutationOptions{False{}})
+        selectedLow : Ai.ModelThinkingLevel <- Session.getThinkingLevel(live)
+        global : Result<&2, &2, String, Unit> <- Session.setModel(live, a, Session.ModelMutationOptions{False{}})
+        selectedMedium : Ai.ModelThinkingLevel <- Session.getThinkingLevel(live)
+        check(good(priorModel) && good(medium) && good(override) && good(highAgain) && good(perModel) && good(global) && String.eq(level(selectedLow), "low") && String.eq(level(selectedMedium), "medium"), "applies per-model thinking level override on model switch")
+        highDefault : Result<&2, &2, String, Unit> <- Session.updateSettings(Session.settingsOf(live), current => Settings.setDefaultThinkingLevel(Ai.Thinking{Ai.High{}}, current))
+        minimalOverride : Result<&2, &2, String, Unit> <- Session.updateSettings(Session.settingsOf(live), current => Settings.setModelThinkingLevel("capture-provider", "three", Ai.Thinking{Ai.Minimal{}}, current))
+        preferred : Result<&2, &2, String, Unit> <- Session.setModel(live, c, Session.ModelMutationOptions{False{}})
+        selectedMinimal : Ai.ModelThinkingLevel <- Session.getThinkingLevel(live)
+        check(good(highDefault) && good(minimalOverride) && good(preferred) && String.eq(level(selectedMinimal), "minimal"), "per-model override takes priority over global default during model switch")
+        Session.setScopedModels(live, [Models.ScopedModel{a, Some{Ai.Thinking{Ai.High{}}}}, Models.ScopedModel{b, None{}}])
+        scopeStart : Result<&2, &2, String, Unit> <- Session.setModel(live, a, Session.ModelMutationOptions{False{}})
+        scopeNext : Result<&2, &2, String, Maybe<&2, Session.ModelCycleResult>> <- Session.cycleModel(live, Session.Forward{}, Session.ModelMutationOptions{False{}})
+        +nonThinking : Session.AgentState() <- Session.state(live)
+        scopeBack : Result<&2, &2, String, Maybe<&2, Session.ModelCycleResult>> <- Session.cycleModel(live, Session.Forward{}, Session.ModelMutationOptions{False{}})
+        +thinking : Session.AgentState() <- Session.state(live)
+        check(good(scopeStart) && Result.is_done(&2, &2, String, Maybe<&2, Session.ModelCycleResult>, scopeNext) && Result.is_done(&2, &2, String, Maybe<&2, Session.ModelCycleResult>, scopeBack) && String.eq(key(Session.stateModel(nonThinking)), "capture-provider/two") && String.eq(level(Session.stateThinking(nonThinking)), "off") && String.eq(key(Session.stateModel(thinking)), "capture-provider/one") && String.eq(level(Session.stateThinking(thinking)), "high"), "cycles through scoped models and preserves the scoped thinking preference")
+        noReasoning : Result<&2, &2, String, Unit> <- Session.setModel(live, b, Session.ModelMutationOptions{False{}})
+        unsupported : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(live, Ai.Thinking{Ai.High{}}, Session.ModelMutationOptions{False{}})
+        stillOff : Ai.ModelThinkingLevel <- Session.getThinkingLevel(live)
+        noCycle : Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>> <- Session.cycleThinkingLevel(live, Session.ModelMutationOptions{False{}})
+        check(good(noReasoning) && good(unsupported) && String.eq(level(stillOff), "off") && String.eq(cycleLevel(noCycle), "none"), "clamps thinking levels to model capabilities and cycles available levels")
+        extended : Result<&2, &2, String, Unit> <- Session.setModel(live, extendedModel(a), Session.ModelMutationOptions{False{}})
+        available : List<&2, Ai.ModelThinkingLevel> <- Session.getAvailableThinkingLevels(live)
+        fromHigh : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(live, Ai.Thinking{Ai.High{}}, Session.ModelMutationOptions{False{}})
+        xhigh : Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>> <- Session.cycleThinkingLevel(live, Session.ModelMutationOptions{False{}})
+        max : Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>> <- Session.cycleThinkingLevel(live, Session.ModelMutationOptions{False{}})
+        wrap : Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>> <- Session.cycleThinkingLevel(live, Session.ModelMutationOptions{False{}})
+        check(good(extended) && good(fromHigh) && String.eq(String.join(levelNames(available), ","), "off,minimal,low,medium,high,xhigh,max") && String.eq(cycleLevel(xhigh), "xhigh") && String.eq(cycleLevel(max), "max") && String.eq(cycleLevel(wrap), "off"), "cycles xhigh before max when both are supported")
+        Sdk.dispose(owner)
+
+def defaultsFinished(result: Sdk.Outcome(), a: Ai.Model<Ai.JsonValue>, b: Ai.Model<Ai.JsonValue>, c: Ai.Model<Ai.JsonValue>) -> IO(Unit):
+  match result:
+    case Fail{message}: IO.die(Unit, 1, message)
+    case Done{owner}: defaultsChecked(Sdk.sessionOf(owner), a, b, c)
+
+def defaultContracts(+directory: String) -> IO(Unit):
+  do IO<Unit>:
+    +a : Ai.Model<Ai.JsonValue> = model("one", "One", "capture-provider", True{})
+    +b : Ai.Model<Ai.JsonValue> = model("two", "Two", "capture-provider", False{})
+    +c : Ai.Model<Ai.JsonValue> = model("three", "Three", "capture-provider", True{})
+    +store : Auth.CredentialStore <- Credentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- AuthContext.defaultProviderAuthContext()
+    +models : Models.ModelRuntime <- Models.fromProviders(Nil{}, store, context)
+    native : AiModels.Provider <- provider([a, b, c])
+    registered : Result<&2, &2, String, Unit> <- Models.registerNativeProviderStream(models, native, None{})
+    authorized : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(models, "capture-provider", "test-key", None{})
+    created : Sdk.Outcome() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{directory}, Some{directory}, Some{models}, Some{a}, Some{Ai.Off{}}, Nil{}, None{}, Some{Nil{}}, None{}, None{}, None{}, None{}, Nil{}, None{}})
+    defaultsFinished(created, a, b, c)
+    Models.dispose(models)
+    Auth.disposeStore(store)
+
 def runArgs(args: List<String>) -> IO(Unit):
   match args:
-    case directory <> Nil{}: run(directory)
+    case +directory <> Nil{}:
+      do IO<Unit>:
+        run(directory)
+        defaultContracts(directory)
     case _: IO.die(Unit, 1, "expected isolated directory")
 
 def main() -> IO(Unit):

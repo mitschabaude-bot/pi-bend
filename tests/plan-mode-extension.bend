@@ -170,7 +170,7 @@ def contextActions() -> IO(Ctx.ExtensionContextActions):
     compact : C.Callback<Ctx.CompactOptions, Unit> <- C.create(~Unit, ~Ctx.CompactOptions, ~Unit, ~ignoreCompact, Unit{})
     prompt : C.Callback<Unit, String> <- C.create(~Unit, ~Unit, ~String, ~noPrompt, Unit{})
     manager : C.Callback<Unit, Ctx.ReadonlySessionManager()> <- C.create(~Unit, ~Unit, ~Ctx.ReadonlySessionManager(), ~emptySession, Unit{})
-    return Ctx.ExtensionContextActions{state, abort, shutdown, usage, compact, prompt, manager}
+    return Ctx.ExtensionContextActions{state, abort, shutdown, usage, compact, prompt, manager, None{}}
 
 # UI
 # --

@@ -100,6 +100,16 @@ SUITES = {
         'detached thinking handler can finish after SDK disposal',
         'retired extension thinking actions reject before accessing disposed session callbacks',
         'SDK model events disposed',
+        'falls back to current session thinking level when no per-model or global default is configured',
+        'only persists model and thinking defaults when requested',
+        'persists the requested default thinking level even when the current model clamps it',
+        'cycleModel and cycleThinkingLevel are session-only by default',
+        'applies per-model thinking level override on model switch',
+        'per-model override takes priority over global default during model switch',
+        'cycles through scoped models and preserves the scoped thinking preference',
+        'clamps thinking levels to model capabilities and cycles available levels',
+        'cycles xhigh before max when both are supported',
+
     ], True, set()),
 }
 

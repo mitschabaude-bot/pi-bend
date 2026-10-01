@@ -51,6 +51,7 @@ import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
 def EventStream() -> Data: Stream.AssistantMessageEventStream(V.Value, V.Value)
 
 type Reply is Data:
+  LastToolResult{}
   Text{text: String}
   Plain{text: String}
   Costed{text: String}
@@ -421,8 +422,21 @@ def failedMessage(errorMessage: String, +now: Stamp) -> Ai.AssistantMessage<V.Va
 def doneReason(length: Bool, reason: Ai.DoneReason) -> Ai.DoneReason: Bool.pick(Ai.DoneReason, length, Ai.DoneLength{}, reason)
 def stopReasonFor(length: Bool, stop: Ai.StopReason) -> Ai.StopReason: Bool.pick(Ai.StopReason, length, Ai.Length{}, stop)
 
+def lastToolText(messages: List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>>, found: String) -> String:
+  match messages:
+    case Nil{}: found
+    case Ai.ToolResult{Ai.ToolResultMessage{_, _, content, _, _, _, _}} <> rest: lastToolText(rest, blockTexts(content))
+    case _ <> rest: lastToolText(rest, found)
+
+def resolvedReply(reply: Reply, +input: H.Input()) -> Reply:
+  match reply input:
+    case LastToolResult{} T.StreamInput{_, Ai.TranscriptContext{messages}, _}: Text{lastToolText(messages, "")}
+    case Stopped{inner} _: Stopped{resolvedReply(inner, input)}
+    case other _: other
+
 def answerStop(+stream: EventStream(), reply: Reply, +now: Stamp, +length: Bool) -> IO(Unit):
   match reply:
+    case LastToolResult{}: IO.die(Unit, 1, "unresolved faux tool-result reply")
     case Text{+text}:
       +usage = usageAt(now, estimate(text))
       do IO<Unit>:
@@ -519,7 +533,7 @@ def providing(faux: Faux, +input: H.Input()) -> IO(H.Output()):
         +now : F64 <- Date.now()
         +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~V.Value)
         R.modify(List<&2, EventStream()>, Unit, streams, old => (stream <> old, Unit{}))
-        Bool.pick(Unit -> IO(Unit), aborted, _ => abortedReply(stream, Stamp{model, now, usage}), _ => answerAsync(stream, reply, Stamp{model, now, usage}, signal))(Unit{})
+        Bool.pick(Unit -> IO(Unit), aborted, _ => abortedReply(stream, Stamp{model, now, usage}), _ => answerAsync(stream, resolvedReply(reply, input), Stamp{model, now, usage}, signal))(Unit{})
         return Done{T.borrowedStream(V.Value, Tools.ToolError, stream)}
 
 def provider(faux: Faux, input: H.Input()) -> IO(H.Output()): providing(faux, input)

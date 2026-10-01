@@ -16,7 +16,7 @@ RUNNERS = ['agent-session', 'regressions', 'settings-manager', 'settings-files',
 
 
 def command(runner, threads):
-    return ['bun', runner] if runner.endswith('.js') else [runner, '--threads', threads, '--']
+    return ['bun', runner] if runner.endswith('.js') else ['env', 'BEND_THREADS=' + threads, runner]
 
 
 class Fixtures:

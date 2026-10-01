@@ -29,14 +29,24 @@ def onStart(events: R.Ref<List<&2, String>>, call: Ext.HandlerCall<Ext.SessionSt
   match call:
     case Ext.HandlerCall{Ext.SessionStartEvent{Ext.ReloadStart{}, _}, _}:
       do IO<Result<&2, &2, String, Maybe<&2, Unit>>>:
-        recorded(events, "start")
+        recorded(events, "start:reload")
+        return Done{None{}}
+    case Ext.HandlerCall{Ext.SessionStartEvent{Ext.StartupStart{}, _}, _}:
+      do IO<Result<&2, &2, String, Maybe<&2, Unit>>>:
+        recorded(events, "start:startup")
         return Done{None{}}
     case _: IO.pure(Result<&2, &2, String, Maybe<&2, Unit>>, Done{None{}})
 
 def onShutdown(events: R.Ref<List<&2, String>>, call: Ext.HandlerCall<Ext.SessionShutdownEvent>) -> IO(Result<&2, &2, String, Maybe<&2, Unit>>):
-  do IO<Result<&2, &2, String, Maybe<&2, Unit>>>:
-    recorded(events, "shutdown")
-    return Done{None{}}
+  match call:
+    case Ext.HandlerCall{Ext.SessionShutdownEvent{Ext.ReloadShutdown{}, _}, _}:
+      do IO<Result<&2, &2, String, Maybe<&2, Unit>>>:
+        recorded(events, "shutdown:reload")
+        return Done{None{}}
+    case _:
+      do IO<Result<&2, &2, String, Maybe<&2, Unit>>>:
+        recorded(events, "shutdown:other")
+        return Done{None{}}
 
 def subscriptions(results: List<&2, Result<&2, &2, String, Loader.Unsubscribe>>) -> Result<&2, &2, String, Unit>:
   match results:
@@ -97,6 +107,7 @@ def checkedSession(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, lo
     case Tuple{owned, +live}:
       do IO<Unit>:
         Session.bindExtensions(live, Ext.SessionStartEvent{Ext.StartupStart{}, None{}})
+        startup : List<&2, String> <- R.read(List<&2, String>, events)
         oldFound : Maybe<&2, Runner.ExtensionRunner> <- Session.extensionRunner(live)
         +old : Runner.ExtensionRunner <- required(oldFound)
         Runner.setFlagValue(old, "live", Ext.FlagBoolean{True{}})
@@ -110,7 +121,7 @@ def checkedSession(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, lo
         check(completed(outcome), "SDK session reload succeeds")
         count : Nat <- R.read(Nat, calls)
         history : List<&2, String> <- R.read(List<&2, String>, events)
-        check(Nat.is_eq(count, 2n) && String.eq(String.join(history, ","), "shutdown,factory-2,before,start"), "reload lifecycle order and factory rerun")
+        check(Nat.is_eq(count, 2n) && String.eq(String.join(startup, ","), "factory-1,start:startup") && String.eq(String.join(history, ","), "shutdown:reload,factory-2,before,start:reload"), "reload lifecycle order and factory rerun")
         newFound : Maybe<&2, Runner.ExtensionRunner> <- Session.extensionRunner(live)
         +new : Runner.ExtensionRunner <- required(newFound)
         currentFlags : List<&2, Ext.FlagSetting> <- Runner.getFlagValues(new)

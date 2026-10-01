@@ -37,6 +37,12 @@ def normalizeBuildSystemPromptOptions(input: BuildSystemPromptOptions) -> Normal
         Maybe.default(&2,Record.Record<String>,sections,Record.new(String)),cwd,
         Maybe.default(&2,List<&2,ContextFile>,files,Nil{}),Maybe.default(&2,List<&2,Skills.Skill>,skills,Nil{})}
 
+# Expose normalized options through the public optional-field type.
+def toBuildSystemPromptOptions(options: NormalizedBuildSystemPromptOptions) -> BuildSystemPromptOptions:
+  match options:
+    case NormalizedBuildSystemPromptOptions{custom, forced, tools, snippets, rules, guidelines, append, sections, cwd, files, skills}:
+      BuildSystemPromptOptions{custom, forced, Some{tools}, Some{snippets}, Some{rules}, Some{guidelines}, Some{append}, Some{sections}, cwd, Some{files}, Some{skills}}
+
 def contains(values: List<&2,String>,+value: String) -> Bool:
   match values:
     case Nil{}: False{}
