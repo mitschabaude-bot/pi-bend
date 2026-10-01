@@ -403,6 +403,7 @@ def main():
     enabled = {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 1}
     # retries after a transient error and succeeds
     events = run_retry(runner, args.threads, work, enabled, '!overloaded_error;recovered')
+    assert only(events, 'remaining')['calls'] == 2
     assert retry_events(events) == ['start:1', 'end:true'], retry_events(events)
     assert [e['willRetry'] for e in events if e['type'] == 'agent_end'] == [True, False]
     assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 0 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
@@ -417,10 +418,12 @@ def main():
     checks += 8
     # retries multiple transient failures and succeeds on the final attempt
     events = run_retry(runner, args.threads, work, enabled, '!overloaded_error;!overloaded_error;success')
+    assert only(events, 'remaining')['calls'] == 3
     assert retry_events(events) == ['start:1', 'start:2', 'end:true'] and [e for e in events if e['type'] == 'remaining'][0]['count'] == 0
     checks += 1
     # exhausts max retries and emits a failure event
     events = run_retry(runner, args.threads, work, {'enabled': True, 'maxRetries': 2, 'baseDelayMs': 1}, '!overloaded_error;!overloaded_error;!overloaded_error')
+    assert only(events, 'remaining')['calls'] == 3
     assert retry_events(events) == ['start:1', 'start:2', 'end:false'], retry_events(events)
     assert [e['willRetry'] for e in events if e['type'] == 'agent_end'] == [True, True, False]
     assert [e for e in events if e['type'] == 'auto_retry_end'][0]['finalError'] == 'overloaded_error'
@@ -428,17 +431,21 @@ def main():
     checks += 4
     # does not retry when retry is disabled
     events = run_retry(runner, args.threads, work, {'enabled': False}, '!overloaded_error;unused')
+    assert only(events, 'remaining')['calls'] == 1
     assert retry_events(events) == [] and [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e['willRetry'] for e in events if e['type'] == 'agent_end'] == [False]
     checks += 1
     # does not retry non-retryable errors
     events = run_retry(runner, args.threads, work, enabled, '!invalid_api_key;unused')
+    assert only(events, 'remaining')['calls'] == 1
     assert retry_events(events) == [] and [e for e in events if e['type'] == 'remaining'][0]['count'] == 1
     # context overflow is left to compaction, not retried
     events = run_retry(runner, args.threads, work, enabled, '!prompt is too long: 213462 tokens > 200000 maximum;unused')
+    assert only(events, 'remaining')['calls'] == 1
     assert retry_events(events) == [] and [e for e in events if e['type'] == 'remaining'][0]['count'] == 1
     checks += 2
     # cancels retry sleep when abortRetry is called
     events = run_retry(runner, args.threads, work, {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 60000}, '!overloaded_error;unused', 'cancel')
+    assert only(events, 'remaining')['calls'] == 1
     assert retry_events(events) == ['start:1', 'end:false'], retry_events(events)
     assert [e for e in events if e['type'] == 'auto_retry_end'][0]['finalError'] == 'Retry cancelled'
     assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
@@ -446,12 +453,14 @@ def main():
     checks += 4
     # A user abort during backoff ends this turn without another request.
     events = run_retry(runner, args.threads, work, {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 60000}, '!overloaded_error;unused', 'abort')
+    assert only(events, 'remaining')['calls'] == 1
     assert retry_events(events) == ['start:1', 'end:false'], retry_events(events)
     assert [e for e in events if e['type'] == 'auto_retry_end'][0]['finalError'] == 'Retry cancelled'
     assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
     checks += 3
     # finalizes retry state when abort is requested after a retry attempt fails (#9340): abort() is requested, not awaited, from the second failure's message_end
     events = run_retry(runner, args.threads, work, {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 0}, '!overloaded_error;!overloaded_error', 'abort_second_error')
+    assert only(events, 'remaining')['calls'] == 2
     assert only(events, 'retry_attempt')['value'] == 0
     assert [e['willRetry'] for e in events if e['type'] == 'agent_end'][-1] is False
     assert {k: v for k, v in [e for e in events if e['type'] == 'auto_retry_end'][-1].items() if k != 'type'} == {'success': False, 'attempt': 1, 'finalError': 'Retry cancelled'}

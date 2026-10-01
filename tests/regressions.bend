@@ -52,6 +52,7 @@ def EventStream() -> Data: Stream.AssistantMessageEventStream(V.Value, V.Value)
 
 type Reply is Data:
   LastToolResult{}
+  Mixed{thinking: String, text: String, call: Ai.ToolCall<V.Value>}
   Text{text: String}
   Plain{text: String}
   Costed{text: String}
@@ -434,9 +435,30 @@ def resolvedReply(reply: Reply, +input: H.Input()) -> Reply:
     case Stopped{inner} _: Stopped{resolvedReply(inner, input)}
     case other _: other
 
+def mixedReply(+stream: EventStream(), +thinking: String, +text: String, call: Ai.ToolCall<V.Value>, +now: Stamp) -> IO(Unit):
+  match call:
+    case Ai.ToolCall{+id, +name, +arguments, _, _}:
+      do IO<Unit>:
+        +usage : Ai.Usage = usageAt(now, estimate(thinking ++ text))
+        +thought : Ai.AssistantContent<V.Value> = Ai.AssistantThinking{Ai.ThinkingContent{thinking, None{}, None{}}}
+        +written : List<&2, Ai.AssistantContent<V.Value>> = [thought, Ai.AssistantText{Ai.TextContent{text, None{}}}]
+        +called : List<&2, Ai.AssistantContent<V.Value>> = List.append(&2, Ai.AssistantContent<V.Value>, written, callBlock(id, name, arguments))
+        push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.ThinkingStart{zero(), replyMessage([Ai.AssistantThinking{Ai.ThinkingContent{"", None{}, None{}}}], Ai.Pending{}, usage, now)})
+        push(stream, Ai.ThinkingDelta{zero(), thinking, replyMessage([thought], Ai.Pending{}, usage, now)})
+        push(stream, Ai.ThinkingEnd{zero(), thinking, replyMessage([thought], Ai.Pending{}, usage, now)})
+        push(stream, Ai.TextStart{U32.to_f64(1), replyMessage([thought, Ai.AssistantText{Ai.TextContent{"", None{}}}], Ai.Pending{}, usage, now)})
+        push(stream, Ai.TextDelta{U32.to_f64(1), text, replyMessage(written, Ai.Pending{}, usage, now)})
+        push(stream, Ai.TextEnd{U32.to_f64(1), text, replyMessage(written, Ai.Pending{}, usage, now)})
+        push(stream, Ai.ToolcallStart{U32.to_f64(2), replyMessage(List.append(&2, Ai.AssistantContent<V.Value>, written, callBlock(id, name, Json.object(Nil{}))), Ai.Pending{}, usage, now)})
+        push(stream, Ai.ToolcallDelta{U32.to_f64(2), H.line(arguments), replyMessage(called, Ai.Pending{}, usage, now)})
+        push(stream, Ai.ToolcallEnd{U32.to_f64(2), Ai.ToolCall{id, name, arguments, None{}, None{}}, replyMessage(called, Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamDone{Ai.DoneToolUse{}, replyMessage(called, Ai.ToolUse{}, usage, now)})
+
 def answerStop(+stream: EventStream(), reply: Reply, +now: Stamp, +length: Bool) -> IO(Unit):
   match reply:
     case LastToolResult{}: IO.die(Unit, 1, "unresolved faux tool-result reply")
+    case Mixed{thinking, text, call}: mixedReply(stream, thinking, text, call, now)
     case Text{+text}:
       +usage = usageAt(now, estimate(text))
       do IO<Unit>:

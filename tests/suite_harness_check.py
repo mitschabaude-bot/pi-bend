@@ -512,6 +512,91 @@ def context_checks(f):
     return checks
 
 
+
+def event_order(events):
+    # Ignore only fixture reports; unexpected public session events must fail the exact sequence.
+    reports = {'request', 'session_update_message', 'extension_event', 'prompt_done', 'messages',
+               'persisted', 'entries', 'streaming', 'retrying', 'recovered', 'tool_run'}
+    result = []
+    for event in events:
+        label = event['type']
+        if label in reports:
+            continue
+        if label in ('message_start', 'message_end'):
+            label += ':' + event['message']['role']
+        elif label in ('tool_execution_start', 'tool_execution_end'):
+            label += ':' + event['toolName']
+        if label != 'message_update' or not result or result[-1] != label:
+            result.append(label)
+    return result
+
+
+def retry_event_checks(f):
+    # agent-session-retry-events.test.ts; the seven basic retry cases are in agent_session_check.py.
+    settings = {'retry': {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 1}}
+    # prompt waits for retry completion even when assistant message_end handling is delayed
+    events = run(f, 'retry_events', 'delayed', settings=settings)
+    assert len(of_type(events, 'request')) == 2
+    assert last(events, 'retrying')['value'] is False
+    assert text_of(messages(events)[-1]) == 'recovered'
+    assert last(events, 'auto_retry_end')['success'] is True
+    assert [e['type'] for e in events].index('prompt_done') > max(i for i, e in enumerate(events) if e['type'] == 'agent_settled')
+    # waits for the full loop when retry recovery produces tool calls
+    events = run(f, 'retry_events', 'tools', settings=settings)
+    boundary = next(i for i, e in enumerate(events) if e['type'] == 'recovered')
+    before = events[:boundary]
+    assert len(of_type(before, 'request')) == 3 and len(of_type(events, 'request')) == 4
+    assert last(before, 'streaming')['value'] is False
+    assert last(before, 'message_end')['message']['role'] == 'assistant'
+    assert text_of(last(before, 'message_end')['message']) == 'final answer'
+    results = [m for m in messages(events) if m['role'] == 'toolResult']
+    assert [e['run'] for e in of_type(events, 'tool_run')] == ['hello']
+    assert len(results) == 1 and text_of(results[0]) == 'echo:hello'
+    assert text_of(messages(events)[-1]) == 'follow-up answer'
+    # emits extension events before public event subscribers
+    events = run(f, 'retry_events', 'observe')
+    order = []
+    for event in events:
+        if event['type'] == 'extension_event':
+            order.append('extension:' + event['event'] + ':' + event['role'])
+        elif event['type'] in ('message_start', 'message_end'):
+            order.append('public:' + event['type'] + ':' + event['message']['role'])
+    assert order == [side + ':' + kind + ':' + role for role in ('system', 'user', 'assistant')
+                     for kind in ('message_start', 'message_end') for side in ('extension', 'public')], order
+    single = ['agent_start', 'turn_start', 'message_start:system', 'message_end:system',
+              'message_start:user', 'message_end:user', 'message_start:assistant', 'message_update',
+              'message_end:assistant', 'turn_end', 'agent_end', 'agent_settled']
+    # emits the expected event order for a single prompt
+    assert event_order(events) == single, event_order(events)
+    # emits the expected event order for a tool call turn
+    events = run(f, 'prompt', 'tool_turn')
+    tool = single[:-3] + ['tool_execution_start:echo', 'tool_execution_end:echo',
+                         'message_start:toolResult', 'message_end:toolResult', 'turn_end',
+                         'turn_start', 'message_start:assistant', 'message_update',
+                         'message_end:assistant', 'turn_end', 'agent_end', 'agent_settled']
+    assert [e['run'] for e in of_type(events, 'tool_run')] == ['hello']
+    assert event_order(events) == tool, event_order(events)
+    # emits streaming deltas for text, thinking, and tool calls in message_update events
+    events = run(f, 'retry_events', 'deltas')
+    deltas = [e['assistantMessageEvent'] for e in of_type(events, 'message_update')]
+    assert {'thinking_delta', 'text_delta', 'toolcall_delta'} <= {e['type'] for e in deltas}
+    assert any(e['type'] == 'thinking_delta' and e['delta'] == 'plan' and e['contentIndex'] == 0 for e in deltas)
+    assert any(e['type'] == 'text_delta' and e['delta'] == 'answer' and e['contentIndex'] == 1 for e in deltas)
+    assert any(e['type'] == 'toolcall_delta' and json.loads(e['delta']) == {'text': 'hello'} and e['contentIndex'] == 2 for e in deltas)
+    assistant = next(m for m in messages(events) if m['role'] == 'assistant')
+    assert [b['type'] for b in assistant['content']] == ['thinking', 'text', 'toolCall']
+    assert assistant['content'][0]['thinking'] == 'plan' and assistant['content'][1]['text'] == 'answer'
+    # emits agent_end for error responses
+    events = run(f, 'retry_events', 'error')
+    assert len(of_type(events, 'agent_end')) == 1 and event_order(events)[-1] == 'agent_settled'
+    # emits agent_end for aborted runs and persists the aborted assistant message
+    events = run(f, 'aborted_assistant')
+    assert of_type(events, 'message_update')
+    assert len(of_type(events, 'agent_end')) == 1 and event_order(events)[-1] == 'agent_settled'
+    assert last(events, 'persisted')['messages'][-1]['stopReason'] == 'aborted'
+    return 8
+
+
 def model_extension_checks(f):
     # agent-session-model-extension.test.ts: callback replies echo actual provider tool results.
     events = run(f, 'prompt', 'model_tool_block')
@@ -869,7 +954,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = model_extension_checks(fixtures) + queue_checks(fixtures) + bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures) + extension_tool_checks(fixtures) + reload_settings_checks(fixtures) + compaction_extension_checks(fixtures) + branch_summary_extension_checks(fixtures) + trigger_compact_checks(fixtures)
+    checks = retry_event_checks(fixtures) + model_extension_checks(fixtures) + queue_checks(fixtures) + bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures) + extension_tool_checks(fixtures) + reload_settings_checks(fixtures) + compaction_extension_checks(fixtures) + branch_summary_extension_checks(fixtures) + trigger_compact_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

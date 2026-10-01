@@ -496,19 +496,18 @@ def cancelOnRetry(+session: Session.AgentSession, started: Chan(Unit),abortRun: 
     seen : Maybe<&1, Unit> <- Chan.recv(Unit, started)
     Bool.pick(Unit -> IO(Unit),abortRun,_ => Session.abort(session),_ => Session.abortRetry(session))(Unit{})
 
-def responsesOf(value: Fixture) -> R.Ref<List<&2, String>>:
-  match value:
-    case Fixture{_, _, _, _, _, _, Faux{responses, _, _, _}}: responses
-
 def reportRetrying(session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     retrying : Bool <- Session.isRetrying(session)
     IO.print("{\"type\":\"retrying\",\"value\":" ++ Bool.pick(String, retrying, "true", "false") ++ "}")
 
-def reportRemaining(responses: R.Ref<List<&2, String>>) -> IO(Unit):
-  do IO<Unit>:
-    remaining : List<&2, String> <- R.read(List<&2, String>, responses)
-    IO.print("{\"type\":\"remaining\",\"count\":" ++ Nat.show(List.length(&2, String, remaining)) ++ "}")
+def reportRemaining(value: Fixture) -> IO(Unit):
+  match value:
+    case Fixture{_, _, _, _, _, _, Faux{responses, streams, _, _}}:
+      do IO<Unit>:
+        remaining : List<&2, String> <- R.read(List<&2, String>, responses)
+        created : List<&2, EventStream()> <- R.read(List<&2, EventStream()>, streams)
+        IO.print("{\"type\":\"remaining\",\"count\":" ++ Nat.show(List.length(&2, String, remaining)) ++ ",\"calls\":" ++ Nat.show(List.length(&2, EventStream(), created)) ++ "}")
 
 # suite/agent-session-prompt.test.ts: "throws when prompting without a
 # model" (no model selected) and "throws when prompting without configured
@@ -528,7 +527,7 @@ def preflightScenario(+dir: String, agentDir: String, +kind: String) -> IO(Unit)
     +value : Fixture <- preflightFixture(stored, dir, agentDir, kind)
     result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "hi", Nil{}, None{})
     reportOutcome("prompt", result)
-    reportRemaining(responsesOf(value))
+    reportRemaining(value)
     reportSession(sessionOf(value))
     teardown(value)
 
@@ -572,7 +571,7 @@ def abortedRetryScenario(+dir: String, agentDir: String, responses: String) -> I
     result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "test", Nil{}, None{})
     reportPrompt(result)
     reportRetryAttempt(sessionOf(value))
-    reportRemaining(responsesOf(value))
+    reportRemaining(value)
     Session.unsubscribe(sessionOf(value), aborter)
     C.dispose(Session.AgentSessionEvent, Unit, aborter)
     teardown(value)
@@ -589,7 +588,7 @@ def retryScenario(+dir: String, agentDir: String, responses: String, +cancel: St
     result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "test", Nil{}, None{})
     reportPrompt(result)
     reportRetrying(sessionOf(value))
-    reportRemaining(responsesOf(value))
+    reportRemaining(value)
     reportSession(sessionOf(value))
     Session.unsubscribe(sessionOf(value), canceller)
     C.dispose(Session.AgentSessionEvent, Unit, canceller)
@@ -789,7 +788,7 @@ def compactScenario(+dir: String, +agentDir: String, prompts: String, responses:
     promptAll(sessionOf(value), promptsOf(prompts))
     compactAction(sessionOf(value), chosen)
     released(sessionOf(value), listener)
-    reportRemaining(responsesOf(value))
+    reportRemaining(value)
     reportMessages(sessionOf(value))
     reportEntries(sessionOf(value))
     reportSession(sessionOf(value))

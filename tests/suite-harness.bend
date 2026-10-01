@@ -99,7 +99,9 @@ def executeTool(env: ToolEnv, input: Tools.Input()) -> IO(Tools.Output()):
   match env input:
     case ToolEnv{_, Echo{prefix}} T.ToolExecutionInput{_, +params, _, _}:
       +text = textArgument(params)
-      IO.pure(Tools.Output(), textResult(prefix ++ text, Json.object(Json.field("text", Json.text(text), Nil{}))))
+      do IO<Tools.Output()>:
+        IO.print("{\"type\":\"tool_run\",\"run\":" ++ Decode.quote(text) ++ "}")
+        return textResult(prefix ++ text, Json.object(Json.field("text", Json.text(text), Nil{})))
     case ToolEnv{_, UsageEcho{usage}} T.ToolExecutionInput{_, params, _, _}:
       +text = textArgument(params)
       IO.pure(Tools.Output(), Done{T.AgentToolResult{[Ai.TextImageText{Ai.TextContent{text, None{}}}], Some{Tools.RawDetails{Json.object(Json.field("text", Json.text(text), Nil{}))}}, Some{usage}, None{}}})
@@ -2802,8 +2804,83 @@ def nextTurnCustom(+dir: String, agentDir: String) -> IO(Unit):
     H.reportMessages(sessionOf(harness))
     cleanup(harness)
 
+# agent-session-retry-events: the existing public observer prints each event
+# after extension dispatch, so interleaving these markers captures both paths.
+def extensionObserved(+kind: String, message: Session.Message()) -> IO(Unit):
+  print("extension_event", Json.field("event", Json.text(kind), Json.field("role", Json.text(roleOf(message)), Nil{})))
+
+def observedStart(_: Unit, call: Ext.HandlerCall<Ext.MessageStartEvent>) -> IO(Handled(Unit)):
+  match call:
+    case Ext.HandlerCall{Ext.MessageStartEvent{message}, _}:
+      do IO<Handled(Unit)>:
+        extensionObserved("message_start", message)
+        return Done{None{}}
+
+def observedEnd(_: Unit, call: Ext.HandlerCall<Ext.MessageEndEvent>) -> IO(Handled(Ext.MessageEndEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.MessageEndEvent{message}, _}:
+      do IO<Handled(Ext.MessageEndEventResult)>:
+        extensionObserved("message_end", message)
+        return Done{None{}}
+
+def observedFactory(+api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    start : Ext.ExtensionHandler(Ext.MessageStartEvent, Unit) <- C.create(~Unit, ~Ext.HandlerCall<Ext.MessageStartEvent>, ~Handled(Unit), ~observedStart, Unit{})
+    finish : Ext.ExtensionHandler(Ext.MessageEndEvent, Ext.MessageEndEventResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.MessageEndEvent>, ~Handled(Ext.MessageEndEventResult), ~observedEnd, Unit{})
+    started : Result<&2, &2, String, Unit> <- subscribe(api, Ext.OnMessageStart{start})
+    subscribe(api, Ext.OnMessageEnd{finish})
+
+def retryDelayed(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => slowEndFactory(api)), Unit{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Failed{"overloaded_error"}, Reg.Text{"recovered"}]), ref, [inline("slow-retry", factory)])
+    prompted(sessionOf(harness), "test")
+    H.reportRetrying(sessionOf(harness))
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
+def retryTools(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +harness : Harness <- createHarness(dir, agentDir, Scripted{[ToolSpec{"echo", Echo{"echo:"}}]}, setup([Reg.Failed{"overloaded_error"}, echoCall("call_echo", "hello"), Reg.Text{"final answer"}, Reg.Text{"follow-up answer"}]))
+    prompted(sessionOf(harness), "test")
+    H.reportStreaming(sessionOf(harness))
+    print("recovered", Nil{})
+    prompted(sessionOf(harness), "follow-up")
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
+def observedPrompt(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => observedFactory(api)), Unit{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"hello"}]), ref, [inline("observe", factory)])
+    prompted(sessionOf(harness), "hi")
+    cleanup(harness)
+
+def mixedDeltas(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +harness : Harness <- createHarness(dir, agentDir, Scripted{[ToolSpec{"echo", Echo{"echo:"}}]}, setup([Reg.Mixed{"plan", "answer", Ai.ToolCall{"call_echo", "echo", Json.object(Json.field("text", Json.text("hello"), Nil{})), None{}, None{}}}, Reg.Text{"done"}]))
+    prompted(sessionOf(harness), "hi")
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
+def retryEvents(+dir: String, agentDir: String, kind: String) -> IO(Unit):
+  match kind:
+    case "delayed": retryDelayed(dir, agentDir)
+    case "tools": retryTools(dir, agentDir)
+    case "observe": observedPrompt(dir, agentDir)
+    case "deltas": mixedDeltas(dir, agentDir)
+    case "error":
+      do IO<Unit>:
+        +harness : Harness <- createHarness(dir, agentDir, Builtins{}, setup([Reg.Failed{"broken"}]))
+        prompted(sessionOf(harness), "hi")
+        cleanup(harness)
+    case _: IO.die(Unit, 1, "unknown retry/event scenario")
+
 def run(args: List<String>) -> IO(Unit):
   match args:
+    case "retry_events" <> dir <> agentDir <> kind <> Nil{}: retryEvents(dir, agentDir, kind)
     case "queue" <> dir <> agentDir <> name <> Nil{}: queueScenario(dir, agentDir, name)
     case "next_turn_custom" <> dir <> agentDir <> Nil{}: nextTurnCustom(dir, agentDir)
     case "custom_order" <> dir <> agentDir <> Nil{}: customOrder(dir, agentDir)
