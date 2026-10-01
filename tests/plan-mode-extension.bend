@@ -112,6 +112,9 @@ def setActive(env: Env, names: List<&2, String>) -> IO(Unit):
 
 def noRefresh(env: Env, unit: Unit) -> IO(Unit): IO.pure(Unit, Unit{})
 
+def noThinking(_: Unit, _: Unit) -> IO(Ai.ModelThinkingLevel): IO.pure(Ai.ModelThinkingLevel, Ai.Off{})
+def ignoreThinking(_: Unit, _: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>): IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+
 def actions(+env: Env) -> IO(T.ExtensionActions):
   do IO<T.ExtensionActions>:
     send : C.Callback<T.SendMessage, Unit> <- C.create(~Env, ~T.SendMessage, ~Unit, ~recordSend, env)
@@ -122,7 +125,9 @@ def actions(+env: Env) -> IO(T.ExtensionActions):
     set : C.Callback<List<&2, String>, Unit> <- C.create(~Env, ~List<&2, String>, ~Unit, ~setActive, env)
     refresh : C.Callback<Unit, Unit> <- C.create(~Env, ~Unit, ~Unit, ~noRefresh, env)
     append : C.Callback<T.AppendEntry, Unit> <- C.create(~Env, ~T.AppendEntry, ~Unit, ~recordAppend, env)
-    return T.ExtensionActions{send, sendUser, model, T.ToolActions{active, all, set, refresh}, append}
+    thinking : C.Callback<Unit, Ai.ModelThinkingLevel> <- C.create(~Unit, ~Unit, ~Ai.ModelThinkingLevel, ~noThinking, Unit{})
+    setThinking : C.Callback<Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>> <- C.create(~Unit, ~Ai.ModelThinkingLevel, ~Result<&2, &2, String, Unit>, ~ignoreThinking, Unit{})
+    return T.ExtensionActions{send, sendUser, model, T.ToolActions{active, all, set, refresh}, append, thinking, setThinking}
 
 # Context (upstream: isIdle false, no pending messages, empty entries)
 # ------------------------------------------------------------------

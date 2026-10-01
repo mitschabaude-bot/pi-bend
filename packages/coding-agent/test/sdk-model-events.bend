@@ -70,7 +70,7 @@ def add(items: R.Ref<List<&2, String>>, value: String) -> IO(Unit):
   R.modify(List<&2, String>, Unit, items, prior => (appended(value, prior), Unit{}))
 
 type Trace is Data:
-  Trace{items: R.Ref<List<&2, String>>, started: Chan(Unit), release: Chan(Unit), completed: Chan(Unit), blocked: R.Ref<Bool>}
+  Trace{items: R.Ref<List<&2, String>>, started: Chan(Unit), release: Chan(Unit), completed: Chan(Unit), blocked: R.Ref<Bool>, api: R.Ref<Maybe<&2, Ext.ExtensionAPI>>}
 
 def failedModel(_: Unit, _: Ext.HandlerCall<Ext.ModelSelectEvent>) -> IO(Result<&2, &2, String, Maybe<&2, Unit>>):
   IO.pure(Result<&2, &2, String, Maybe<&2, Unit>>, Fail{"model handler boom"})
@@ -88,7 +88,7 @@ def seenModel(items: R.Ref<List<&2, String>>, call: Ext.HandlerCall<Ext.ModelSel
 
 def seenThinking(trace: Trace, call: Ext.HandlerCall<Ext.ThinkingLevelSelectEvent>) -> IO(Result<&2, &2, String, Maybe<&2, Unit>>):
   match trace call:
-    case Trace{items, started, release, completed, blocked} Ext.HandlerCall{Ext.ThinkingLevelSelectEvent{selected, previous}, +ctx}:
+    case Trace{items, started, release, completed, blocked, _} Ext.HandlerCall{Ext.ThinkingLevelSelectEvent{selected, previous}, +ctx}:
       do IO<Result<&2, &2, String, Maybe<&2, Unit>>>:
         waiting : Bool <- R.read(Bool, blocked)
         Bool.pick(Unit -> IO(Unit), waiting, _ => do IO<Unit>:
@@ -109,8 +109,12 @@ def registrations(items: List<&2, Result<&2, &2, String, Loader.Unsubscribe>>) -
 
 def factoryWith(+trace: Trace, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
   match trace:
-    case Trace{+items, _, _, _, _}:
+    case Trace{+items, _, _, _, _, apiSlot}:
       do IO<Result<&2, &2, String, Unit>>:
+        getter : Result<&2, &2, String, Ai.ModelThinkingLevel> <- Loader.getThinkingLevel(api)
+        setter : Result<&2, &2, String, Unit> <- Loader.setThinkingLevel(api, Ai.Thinking{Ai.High{}})
+        check(Result.is_fail(&2, &2, String, Ai.ModelThinkingLevel, getter) && Result.is_fail(&2, &2, String, Unit, setter), "extension thinking actions reject calls during loading")
+        R.write(Maybe<&2, Ext.ExtensionAPI>, apiSlot, Some{api})
         modelBad : Ext.ExtensionHandler(Ext.ModelSelectEvent, Unit) <- C.create(~Unit, ~Ext.HandlerCall<Ext.ModelSelectEvent>, ~Result<&2, &2, String, Maybe<&2, Unit>>, ~failedModel, Unit{})
         modelGood : Ext.ExtensionHandler(Ext.ModelSelectEvent, Unit) <- C.create(~R.Ref<List<&2, String>>, ~Ext.HandlerCall<Ext.ModelSelectEvent>, ~Result<&2, &2, String, Maybe<&2, Unit>>, ~seenModel, items)
         thinkingBad : Ext.ExtensionHandler(Ext.ThinkingLevelSelectEvent, Unit) <- C.create(~Unit, ~Ext.HandlerCall<Ext.ThinkingLevelSelectEvent>, ~Result<&2, &2, String, Maybe<&2, Unit>>, ~failedThinking, Unit{})
@@ -178,9 +182,47 @@ def good(result: Result<&2, &2, String, Unit>) -> Bool:
     case Done{_}: True{}
     case _: False{}
 
+def requiredApi(found: Maybe<&2, Ext.ExtensionAPI>) -> IO(Ext.ExtensionAPI):
+  match found:
+    case Some{api}: IO.pure(Ext.ExtensionAPI, api)
+    case None{}: IO.die(Ext.ExtensionAPI, 1, "missing extension API")
+def levelResult(value: Result<&2, &2, String, Ai.ModelThinkingLevel>) -> String:
+  match value:
+    case Done{selected}: level(selected)
+    case Fail{_}: "error"
+def entries(live: Session.AgentSession) -> IO(Nat):
+  do IO<Nat>:
+    stored : Session.Session() <- Session.sessionOf(live)
+    return List.length(&2, Manager.SessionEntry<V.Value, Tools.ToolDetails, V.Value>, Manager.getEntries(V.Value, Tools.ToolDetails, V.Value, Persistence.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))
+def thinkingActions(+api: Ext.ExtensionAPI, +live: Session.AgentSession, +a: Ai.Model<Ai.JsonValue>, +b: Ai.Model<Ai.JsonValue>, +items: R.Ref<List<&2, String>>, +completed: Chan(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    start : Result<&2, &2, String, Ai.ModelThinkingLevel> <- Loader.getThinkingLevel(api)
+    check(String.eq(levelResult(start), "off"), "extension getter reads the bound session thinking level")
+    beforeEntries : Nat <- entries(live)
+    changed : Result<&2, &2, String, Unit> <- Loader.setThinkingLevel(api, Ai.Thinking{Ai.High{}})
+    event : Maybe<&1, Unit> <- Chan.recv(Unit, completed)
+    read : Result<&2, &2, String, Ai.ModelThinkingLevel> <- Loader.getThinkingLevel(api)
+    +afterEntries : Nat <- entries(live)
+    +priorEvents : List<&2, String> <- R.read(List<&2, String>, items)
+    defaults : Settings.SettingsManager <- R.read(Settings.SettingsManager, Session.settingsOf(live))
+    check(good(changed) && String.eq(levelResult(read), "high") && Nat.is_eq(afterEntries, beforeEntries + 1n) && has(priorEvents, "thinking:off->high:high:capture-provider/one") && Maybe.is_none(&2, Ai.ModelThinkingLevel, Settings.getDefaultThinkingLevel(defaults)), "extension setter records and announces the session level without changing defaults")
+    same : Result<&2, &2, String, Unit> <- Loader.setThinkingLevel(api, Ai.Thinking{Ai.High{}})
+    afterSame : Nat <- entries(live)
+    currentEvents : List<&2, String> <- R.read(List<&2, String>, items)
+    check(good(same) && Nat.is_eq(afterSame, afterEntries) && Nat.is_eq(List.length(&2, String, currentEvents), List.length(&2, String, priorEvents)), "extension no-op thinking change records and emits nothing")
+    switched : Result<&2, &2, String, Bool> <- Loader.setModel(api, b)
+    switchEvent : Maybe<&1, Unit> <- Chan.recv(Unit, completed)
+    +beforeClamp : Nat <- entries(live)
+    clamped : Result<&2, &2, String, Unit> <- Loader.setThinkingLevel(api, Ai.Thinking{Ai.High{}})
+    off : Result<&2, &2, String, Ai.ModelThinkingLevel> <- Loader.getThinkingLevel(api)
+    afterClamp : Nat <- entries(live)
+    check(good(clamped) && String.eq(levelResult(off), "off") && Nat.is_eq(beforeClamp, afterClamp), "extension thinking setter clamps to current model capabilities")
+    restored : Result<&2, &2, String, Bool> <- Loader.setModel(api, a)
+    check(Result.is_done(&2, &2, String, Bool, restored), "extension model actions remain bound after thinking changes")
+
 def checked(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, models: Models.ModelRuntime, +a: Ai.Model<Ai.JsonValue>, +b: Ai.Model<Ai.JsonValue>, +trace: Trace, +errors: R.Ref<List<&2, Ext.ExtensionError>>, loader: Resources.DefaultResourceLoader) -> IO(Unit):
   match pair trace:
-    case Tuple{owner, +live} Trace{+items, started, release, +completed, +blocked}:
+    case Tuple{owner, +live} Trace{+items, started, release, +completed, +blocked, +apiSlot}:
       do IO<Unit>:
         found : Maybe<&2, Runner.ExtensionRunner> <- Session.extensionRunner(live)
         +runner : Runner.ExtensionRunner <- requiredRunner(found)
@@ -223,6 +265,8 @@ def checked(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, models: M
         failed : Result<&2, &2, String, Unit> <- Session.setModel(live, model("unknown", "Unknown", "unconfigured-provider", True{}), Session.ModelMutationOptions{False{}})
         afterReject : List<&2, String> <- R.read(List<&2, String>, items)
         check(rejected(failed) && Nat.is_eq(List.length(&2, String, beforeReject), List.length(&2, String, afterReject)), "auth failure emits no model selection")
+        +api : Ext.ExtensionAPI <- IO.bind(Maybe<&2, Ext.ExtensionAPI>, Ext.ExtensionAPI, R.read(Maybe<&2, Ext.ExtensionAPI>, apiSlot), requiredApi)
+        thinkingActions(api, live, a, b, items, completed)
         Runner.offError(runner, subscription)
         C.dispose(Ext.ExtensionError, Unit, listener)
         R.write(Bool, blocked, True{})
@@ -233,6 +277,9 @@ def checked(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, models: M
         shutdownCompleted : Maybe<&1, Unit> <- Chan.recv(Unit, completed)
         afterShutdown : List<&2, String> <- R.read(List<&2, String>, items)
         check(good(shutdownChange) && has(afterShutdown, "thinking:off->high:off:none"), "detached thinking handler can finish after SDK disposal")
+        staleGet : Result<&2, &2, String, Ai.ModelThinkingLevel> <- Loader.getThinkingLevel(api)
+        staleSet : Result<&2, &2, String, Unit> <- Loader.setThinkingLevel(api, Ai.Thinking{Ai.Low{}})
+        check(Result.is_fail(&2, &2, String, Ai.ModelThinkingLevel, staleGet) && Result.is_fail(&2, &2, String, Unit, staleSet), "retired extension thinking actions reject before accessing disposed session callbacks")
         Resources.disposeDefaultResourceLoader(loader)
         IO.print("ok SDK model events disposed")
 
@@ -249,7 +296,8 @@ def run(+directory: String) -> IO(Unit):
     +started : Chan(Unit) <- Chan.new(Unit, 4)
     +release : Chan(Unit) <- Chan.new(Unit, 4)
     +completed : Chan(Unit) <- Chan.new(Unit, 4)
-    +trace : Trace = Trace{items, started, release, completed, blocked}
+    +apiSlot : R.Ref<Maybe<&2, Ext.ExtensionAPI>> <- R.new(Maybe<&2, Ext.ExtensionAPI>, None{})
+    +trace : Trace = Trace{items, started, release, completed, blocked, apiSlot}
     factoryHandle : Ext.ExtensionFactory() <- C.create(~Trace, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~factory, trace)
     +a : Ai.Model<Ai.JsonValue> = model("one", "One", "capture-provider", True{})
     +b : Ai.Model<Ai.JsonValue> = model("two", "Two", "capture-provider", False{})
@@ -269,6 +317,7 @@ def run(+directory: String) -> IO(Unit):
     Auth.disposeStore(store)
     prior : List<&2, String> <- R.dispose(List<&2, String>, items)
     priorErrors : List<&2, Ext.ExtensionError> <- R.dispose(List<&2, Ext.ExtensionError>, errors)
+    retiredApi : Maybe<&2, Ext.ExtensionAPI> <- R.dispose(Maybe<&2, Ext.ExtensionAPI>, apiSlot)
     wasBlocked : Bool <- R.dispose(Bool, blocked)
     Chan.close(Unit, started)
     Chan.close(Unit, release)

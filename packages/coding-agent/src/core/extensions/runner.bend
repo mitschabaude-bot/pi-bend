@@ -139,10 +139,12 @@ def toolContext(runner: ExtensionRunner) -> ToolContext.ContextSource():
 def createCommandContext(runner: ExtensionRunner) -> Ctx.ExtensionCommandContext:
   Ctx.ExtensionCommandContext{createContext(runner)}
 
+def activeSnapshot(state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & List<&2, T.Extension>:
+  match state:
+    case T.ExtensionRuntimeState{+loaded, pending, providers, next, actions, cwd, flags}:
+      (T.ExtensionRuntimeState{loaded, pending, providers, next, actions, cwd, flags}, Loader.activeExtensions(loaded))
 def extensions(runner: ExtensionRunner) -> IO(List<&2, T.Extension>):
-  do IO<List<&2, T.Extension>>:
-    state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtimeOf(runner))
-    return Loader.activeExtensions(Loader.extensionsOf(state))
+  R.modify(T.ExtensionRuntimeState, List<&2, T.Extension>, runtimeOf(runner), activeSnapshot)
 
 def registeredIn(+source: Skills.SourceInfo, definitions: List<&2, T.ToolDefinition>) -> List<&2, T.RegisteredTool>:
   match definitions:

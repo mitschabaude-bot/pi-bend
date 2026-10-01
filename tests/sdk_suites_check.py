@@ -69,6 +69,7 @@ SUITES = {
         'SDK provider hooks follow the reloaded runner and dispose',
     ], True, set()),
     'sdk-model-events': ([
+        'extension thinking actions reject calls during loading',
         'setThinkingLevel returns before a blocked thinking handler and exposes updated state',
         'thinking selection isolates a failing handler',
         'unchanged thinking level emits no selection event',
@@ -78,7 +79,13 @@ SUITES = {
         'same provider and id with changed metadata does not notify',
         'cycleModel reports cycle source and previous current model',
         'auth failure emits no model selection',
+        'extension getter reads the bound session thinking level',
+        'extension setter records and announces the session level without changing defaults',
+        'extension no-op thinking change records and emits nothing',
+        'extension thinking setter clamps to current model capabilities',
+        'extension model actions remain bound after thinking changes',
         'detached thinking handler can finish after SDK disposal',
+        'retired extension thinking actions reject before accessing disposed session callbacks',
         'SDK model events disposed',
     ], True, set()),
 }

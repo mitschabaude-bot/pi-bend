@@ -1539,6 +1539,9 @@ def ignoreNames(unit: Unit, names: List<&2, String>) -> IO(Unit): IO.pure(Unit, 
 def ignoreUnit(unit: Unit, request: Unit) -> IO(Unit): IO.pure(Unit, Unit{})
 def ignoreEntry(unit: Unit, request: Ext.AppendEntry) -> IO(Unit): IO.pure(Unit, Unit{})
 
+def noThinking(_: Unit, _: Unit) -> IO(Ai.ModelThinkingLevel): IO.pure(Ai.ModelThinkingLevel, Ai.Off{})
+def ignoreThinking(_: Unit, _: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>): IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+
 def recordingActions() -> IO(Ext.ExtensionActions):
   do IO<Ext.ExtensionActions>:
     send : C.Callback<Ext.SendMessage, Unit> <- C.create(~Unit, ~Ext.SendMessage, ~Unit, ~ignoreMessage, Unit{})
@@ -1549,7 +1552,9 @@ def recordingActions() -> IO(Ext.ExtensionActions):
     set : C.Callback<List<&2, String>, Unit> <- C.create(~Unit, ~List<&2, String>, ~Unit, ~ignoreNames, Unit{})
     refresh : C.Callback<Unit, Unit> <- C.create(~Unit, ~Unit, ~Unit, ~ignoreUnit, Unit{})
     appender : C.Callback<Ext.AppendEntry, Unit> <- C.create(~Unit, ~Ext.AppendEntry, ~Unit, ~ignoreEntry, Unit{})
-    return Ext.ExtensionActions{send, user, model, Ext.ToolActions{active, all, set, refresh}, appender}
+    thinking : C.Callback<Unit, Ai.ModelThinkingLevel> <- C.create(~Unit, ~Unit, ~Ai.ModelThinkingLevel, ~noThinking, Unit{})
+    setThinking : C.Callback<Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>> <- C.create(~Unit, ~Ai.ModelThinkingLevel, ~Result<&2, &2, String, Unit>, ~ignoreThinking, Unit{})
+    return Ext.ExtensionActions{send, user, model, Ext.ToolActions{active, all, set, refresh}, appender, thinking, setThinking}
 
 def gitMergeScenario(+cwd: String) -> IO(Unit):
   do IO<Unit>:

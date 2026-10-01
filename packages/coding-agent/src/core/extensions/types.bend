@@ -582,7 +582,7 @@ type AppendEntry is Data:
   AppendEntry{customType: String, data: Maybe<&2, V.Value>}
 
 type ExtensionActions is Data:
-  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>, setModel: C.Callback<Ai.Model<Ai.JsonValue>, Bool>, tools: ToolActions, appendEntry: C.Callback<AppendEntry, Unit>}
+  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>, setModel: C.Callback<Ai.Model<Ai.JsonValue>, Bool>, tools: ToolActions, appendEntry: C.Callback<AppendEntry, Unit>, getThinkingLevel: C.Callback<Unit, Ai.ModelThinkingLevel>, setThinkingLevel: C.Callback<Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>>}
 
 
 # `actions` are the session's, once bound; before that the action methods

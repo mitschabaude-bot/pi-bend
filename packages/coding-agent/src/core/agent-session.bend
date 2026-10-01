@@ -1263,7 +1263,7 @@ def refreshCurrentModel(env: ModelEnv, unit: Unit) -> IO(Unit):
 def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -> IO(Unit):
   match actions:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, ExtensionTypes.ToolActions{active, all, set, refresh}, appender}}:
+    case Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, ExtensionTypes.ToolActions{active, all, set, refresh}, appender, thinking, setThinking}}:
       do IO<Unit>:
         C.dispose(ExtensionTypes.SendMessage, Unit, send)
         C.dispose(ExtensionTypes.SendUserMessage, Unit, sendUser)
@@ -1273,6 +1273,8 @@ def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -
         C.dispose(List<&2, String>, Unit, set)
         C.dispose(Unit, Unit, refresh)
         C.dispose(ExtensionTypes.AppendEntry, Unit, appender)
+        C.dispose(Unit, Ai.ModelThinkingLevel, thinking)
+        C.dispose(Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>, setThinking)
 
 def executorsOf(tools: ExtensionTools) -> List<&2, Tools.Execute()>:
   match tools:
@@ -4413,6 +4415,11 @@ def setThinkingLevel(session: AgentSession, level: Ai.ModelThinkingLevel, option
   match session:
     case AgentSession{agent, shared, _, settings, _, _, _, _}: applyThinking(agent, shared, settings, level, options)
 
+def getThinkingLevel(session: AgentSession) -> IO(Ai.ModelThinkingLevel):
+  do IO<Ai.ModelThinkingLevel>:
+    current : AgentState() <- state(session)
+    return stateThinking(current)
+
 def getAvailableThinkingLevels(session: AgentSession) -> IO(List<&2, Ai.ModelThinkingLevel>):
   do IO<List<&2, Ai.ModelThinkingLevel>>:
     current : AgentState() <- state(session)
@@ -5107,6 +5114,10 @@ def setModelAction(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>) -> IO
 
 def setModelCallback(session: AgentSession, model: Ai.Model<Ai.JsonValue>) -> IO(Bool): setModelAction(session, model)
 
+def thinkingLevelCallback(session: AgentSession, _: Unit) -> IO(Ai.ModelThinkingLevel): getThinkingLevel(session)
+def setThinkingLevelCallback(session: AgentSession, level: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):
+  setThinkingLevel(session, level, ModelMutationOptions{False{}})
+
 # upstream bindCore's appendEntry: sessionManager.appendCustomEntry.
 def appendEntryAction(+session: AgentSession, request: ExtensionTypes.AppendEntry) -> IO(Unit):
   match request:
@@ -5125,9 +5136,11 @@ def bindSessionActions(+session: AgentSession) -> IO(Unit):
     +switcher : C.Callback<Ai.Model<Ai.JsonValue>, Bool> <- C.create(~AgentSession, ~Ai.Model<Ai.JsonValue>, ~Bool, ~setModelCallback, session)
     +tools : ExtensionTypes.ToolActions <- createToolActions(session)
     +appender : C.Callback<ExtensionTypes.AppendEntry, Unit> <- C.create(~AgentSession, ~ExtensionTypes.AppendEntry, ~Unit, ~appendEntryCallback, session)
-    R.write(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActionsOf(session), Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools, appender}})
+    +thinking : C.Callback<Unit, Ai.ModelThinkingLevel> <- C.create(~AgentSession, ~Unit, ~Ai.ModelThinkingLevel, ~thinkingLevelCallback, session)
+    +setThinking : C.Callback<Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>> <- C.create(~AgentSession, ~Ai.ModelThinkingLevel, ~Result<&2, &2, String, Unit>, ~setThinkingLevelCallback, session)
+    R.write(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActionsOf(session), Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools, appender, thinking, setThinking}})
     loadout : Runtime.Loadout <- loadoutOf(session)
-    bindActionsTo(runnerIn(loadout), ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools, appender})
+    bindActionsTo(runnerIn(loadout), ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools, appender, thinking, setThinking})
 
 # upstream bindCore's getContextUsage, compact and getSystemPrompt.
 def contextUsageOf(result: Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>) -> Maybe<&2, Ctx.ContextUsage>:
