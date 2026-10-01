@@ -148,19 +148,15 @@ def launched(handle: Handle,prompt: Callback.Callback<Submission,Result<&2,&2,St
         child : Chan(Unit) <- IO.fork(Unit,runPromptTask(handle,prompt,observer,running,request))
         Ref.write(Maybe<&2,Chan(Unit)>,task,Some{child})
         return Done{Unit{}}
-def queuedWith(session: Session.AgentSession,text: String,images: List<&2,Ai.ImageContent>,behavior: Maybe<&2,Session.StreamingBehavior>) -> IO(Unit):
-  match behavior:
-    case Some{Session.FollowUp{}}: Session.followUp(session,text,images)
-    case _: Session.steer(session,text,images)
-def queuedPrompt(session: Session.AgentSession,request: Submission) -> IO(Result<&2,&2,String,Unit>):
+# Reuse the prompt path for streaming submissions: it dispatches extension
+# commands before queuing ordinary input with the selected delivery mode.
+def queuedPrompt(prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,request: Submission) -> IO(Result<&2,&2,String,Unit>):
   match request:
     case Submission{text,images,behavior}:
-      do IO<Result<&2,&2,String,Unit>>:
-        queuedWith(session,text,images,behavior)
-        return Done{Unit{}}
+      Callback.call(Submission,Result<&2,&2,String,Unit>,prompt,Submission{text,images,Some{Maybe.default(&2,Session.StreamingBehavior,behavior,Session.Steer{})}})
 def dispatchActive(handle: Handle,prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,session: Session.AgentSession,observer: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,run: PromptRun,request: Submission,active: Bool) -> IO(Result<&2,&2,String,Unit>):
   match active:
-    case True{}: queuedPrompt(session,request)
+    case True{}: queuedPrompt(prompt,request)
     case False{}: launched(handle,prompt,observer,run,request)
 def dispatchPrompt(handle: Handle,prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,session: Maybe<&2,Session.AgentSession>,observer: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,+run: PromptRun,request: Submission) -> IO(Result<&2,&2,String,Unit>):
   match session:

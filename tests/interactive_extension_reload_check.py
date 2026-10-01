@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Compare native factory replacement through /reload with pinned pi.
+"""Compare factory reload and immediate streaming-command dispatch with pinned pi.
 
 Build the candidate with tests/fixtures/reload-extension.bend linked, then
 set PI_BEND_EXTENSION_RELOAD_CLI to its path. --pi-only runs the oracle.
 """
 import argparse
+import json
 import os
 import shutil
 from pathlib import Path
@@ -45,11 +46,34 @@ def scenario(native):
     }
 
 
-def checked(label, argv, native):
-    result = run_side(label, argv, scenario(native), False)
+def streaming_scenario(native, follow_up=False):
+    value = scenario(native)
+    # Suppress unrelated startup resource listings in both implementations.
+    value["files"]["home/.pi/agent/settings.json"] = '{"quietStartup": true}'
+    value["name"] = "extension-command-during-streaming" + ("-follow-up" if follow_up else "")
+    value["turns"] = [{"text": "STREAM-BEGIN " + "Still answering. " * 30 + "STREAM-END", "chunks": 40, "delay_ms": 100}, {"text": "AFTER-COMMAND"}]
+    value["steps"] = [
+        ("wait", READY, "startup"), ("wait", "factory-one", "initial-start"),
+        ("keys", "start"), ("key", "Enter"), ("wait", "STREAM-BEGIN", "stream-start"),
+        ("keys", "/reload-probe"), ("key", "M-Enter" if follow_up else "Enter"), ("wait", "command-one", "stream-command"),
+        ("keys", "next"), ("key", "Enter"),
+        ("wait", "STREAM-END", "stream-end"), ("wait", "AFTER-COMMAND", "next-answer"),
+        ("settle", .3), ("snap", "next-answer"),
+    ]
+    return value
+
+
+def checked(label, argv, native, streaming=False, follow_up=False):
+    result = run_side(label, argv, streaming_scenario(native, follow_up) if streaming else scenario(native), False)
     missing = [name for name, value in result["timings"].items() if value is None]
-    assert not missing, (label, missing, result)
-    print(f"{label}: initial factory and two reloads replace event and command registrations", flush=True)
+    assert not missing, (label, missing)
+    if streaming:
+        assert len(json.loads(result["requests"])) == 2, (label, "extension command consumed a provider response")
+        assert result["timings"]["stream-command"] < 1, (label, result["timings"])
+        print(f"{label}: extension command runs during streaming without a provider request; next prompt succeeds", flush=True)
+    else:
+        print(f"{label}: initial factory and two reloads replace event and command registrations", flush=True)
+    return result
 
 
 def main():
@@ -57,10 +81,15 @@ def main():
     parser.add_argument("--pi-only", action="store_true")
     args = parser.parse_args()
     checked("pi", [shutil.which("pi") or "pi"], False)
+    expected = [checked("pi", [shutil.which("pi") or "pi"], False, streaming=True, follow_up=mode) for mode in (False, True)]
     if not args.pi_only:
         for threads in (1, 4):
             os.environ["BEND_THREADS"] = str(threads)
             checked("bend", [str(BINARY.resolve())], True)
+            for mode, oracle in zip((False, True), expected):
+                actual = checked("bend", [str(BINARY.resolve())], True, streaming=True, follow_up=mode)
+                assert actual["requests"] == oracle["requests"], (threads, mode, "provider requests")
+                assert actual["snaps"] == oracle["snaps"], (threads, mode, "terminal frames")
 
 
 if __name__ == "__main__":
