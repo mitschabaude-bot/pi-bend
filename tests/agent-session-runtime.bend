@@ -1,4 +1,7 @@
 import Base
+import ../packages/ai/src/utils/thinking-levels.bend as Levels
+import ../packages/coding-agent/src/core/sdk.bend as Sdk
+import ../packages/coding-agent/src/core/session-json.bend as SessionJson
 import ./agent-session.bend as Fx
 import ../packages/agent/src/agent.bend as Agent
 import ../packages/agent/src/agent-loop.bend as Loop
@@ -53,8 +56,9 @@ def factory(agentDir: String, request: Host.Request) -> IO(Result<&1, &1, String
   match request:
     case Host.Request{+cwd, +stored, start}:
       do IO<Result<&1, &1, String, Host.Created<Services()>>>:
-        IO.print("{\"type\":\"factory\",\"cwd\":" ++ Decode.quote(cwd) ++ ",\"sessionFile\":" ++ quotedOr(Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)) ++ ",\"start\":" ++ startText(start) ++ "}")
+        IO.print("{\"type\":\"factory\",\"cwd\":" ++ Decode.quote(cwd) ++ ",\"sessionFile\":" ++ quotedOr(Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, stored)) ++ ",\"start\":" ++ startText(start) ++ "}")
         +fixture : Fx.Fixture <- Fx.fixture(stored, cwd, agentDir, "answer" <> "again" <> Nil{}, Nil{})
+        Session.refreshSessionContext(Fx.sessionOf(fixture))
         return created(fixture)
 
 def factoryNoModel(agentDir: String, request: Host.Request) -> IO(Result<&1, &1, String, Host.Created<Services()>>):
@@ -70,8 +74,8 @@ def release(env: Unit, fixture: Services()) -> IO(Unit):
     case Fx.Fixture{+session, listener, stream, validator, converter, registry, Fx.Faux{responses, streams, gates, _}}:
       do IO<Unit>:
         C.dispose(Session.AgentSessionEvent, Unit, listener)
-        Agent.dispose(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, Session.agentOf(session))
-        StreamFn.dispose(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError, registry)
+        Agent.dispose(V.Value, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, Session.agentOf(session))
+        StreamFn.dispose(V.Value, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError, registry)
         Loop.disposeValidation(Tools.ToolError, validator)
         Runtime.disposeConverter(converter)
         C.dispose(Fx.Input(), Fx.Output(), stream)
@@ -84,13 +88,13 @@ def release(env: Unit, fixture: Services()) -> IO(Unit):
 def rebind(env: Unit, session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     stored : Session.Session() <- Session.sessionOf(session)
-    IO.print("{\"type\":\"rebind\",\"sessionId\":" ++ Decode.quote(Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored)) ++ "}")
+    IO.print("{\"type\":\"rebind\",\"sessionId\":" ++ Decode.quote(Sessions.getSessionId(V.Value, Tools.ToolDetails, V.Value, stored)) ++ "}")
 
 def parentOf(header: S.SessionHeader) -> Maybe<&2, String>:
   match header:
     case S.SessionHeader{_, _, _, _, parent}: parent
 
-def headerParent(stored: Session.Session()) -> Maybe<&2, String>: parentOf(S.getHeader(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))
+def headerParent(stored: Session.Session()) -> Maybe<&2, String>: parentOf(S.getHeader(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))
 
 def reportLive(+label: String, live: Maybe<&2, Session.AgentSession>) -> IO(Unit):
   match live:
@@ -98,7 +102,7 @@ def reportLive(+label: String, live: Maybe<&2, Session.AgentSession>) -> IO(Unit
     case Some{+session}:
       do IO<Unit>:
         +stored : Session.Session() <- Session.sessionOf(session)
-        IO.print("{\"type\":\"current\",\"label\":" ++ Decode.quote(label) ++ ",\"sessionId\":" ++ Decode.quote(Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored)) ++ ",\"sessionFile\":" ++ quotedOr(Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)) ++ ",\"cwd\":" ++ Decode.quote(Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, stored)) ++ ",\"parentSession\":" ++ quotedOr(headerParent(stored)) ++ ",\"entries\":" ++ Nat.show(List.length(&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>, S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))) ++ "}")
+        IO.print("{\"type\":\"current\",\"label\":" ++ Decode.quote(label) ++ ",\"sessionId\":" ++ Decode.quote(Sessions.getSessionId(V.Value, Tools.ToolDetails, V.Value, stored)) ++ ",\"sessionFile\":" ++ quotedOr(Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, stored)) ++ ",\"cwd\":" ++ Decode.quote(Sessions.getCwd(V.Value, Tools.ToolDetails, V.Value, stored)) ++ ",\"parentSession\":" ++ quotedOr(headerParent(stored)) ++ ",\"entries\":" ++ Nat.show(List.length(&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>, S.getEntries(V.Value, Tools.ToolDetails, V.Value, Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, stored)))) ++ "}")
 
 def reportCurrent(+label: String, runtime: Runtime()) -> IO(Unit):
   do IO<Unit>:
@@ -129,7 +133,7 @@ def fileOf(live: Maybe<&2, Session.AgentSession>) -> IO(Maybe<&2, String>):
     case Some{session}:
       do IO<Maybe<&2, String>>:
         stored : Session.Session() <- Session.sessionOf(session)
-        return Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)
+        return Sessions.getSessionFile(V.Value, Tools.ToolDetails, V.Value, stored)
 
 def currentFile(runtime: Runtime()) -> IO(Maybe<&2, String>):
   do IO<Maybe<&2, String>>:
@@ -145,7 +149,7 @@ def switchTo(+runtime: Runtime(), +label: String, file: Maybe<&2, String>) -> IO
         reportResult(label, result)
         reportCurrent(label, runtime)
 
-def firstEntryId(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> String:
+def firstEntryId(entries: List<&2, S.SessionEntry<V.Value, Tools.ToolDetails, V.Value>>) -> String:
   match entries:
     case S.SessionMessageEntry{S.SessionEntryBase{id, _, _}, _} <> _: id
     case _: "missing"
@@ -162,8 +166,8 @@ def idsOf(stored: Maybe<&2, Session.Session()>) -> String & String:
   match stored:
     case None{}: ("missing", "missing")
     case Some{session}:
-      +state = Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, session)
-      (firstEntryId(S.getEntries(Unit, Tools.ToolDetails, V.Value, state)), Maybe.default(&2, String, S.getLeafId(Unit, Tools.ToolDetails, V.Value, state), "missing"))
+      +state = Sessions.stateOf(V.Value, Tools.ToolDetails, V.Value, session)
+      (firstEntryId(S.getEntries(V.Value, Tools.ToolDetails, V.Value, state)), Maybe.default(&2, String, S.getLeafId(V.Value, Tools.ToolDetails, V.Value, state), "missing"))
 
 def currentIds(runtime: Runtime()) -> IO(String & String):
   do IO<String & String>:
@@ -176,15 +180,50 @@ def reportFork(+label: String, result: Result<&2, &2, String, Maybe<&2, String>>
     case Done{text}: IO.print("{\"type\":\"result\",\"label\":" ++ Decode.quote(label) ++ ",\"ok\":true,\"selectedText\":" ++ quotedOr(text) ++ "}")
     case Fail{error}: IO.print("{\"type\":\"result\",\"label\":" ++ Decode.quote(label) ++ ",\"ok\":false,\"error\":" ++ Decode.quote(error) ++ "}")
 
+def forkValues(messages: List<&2, Session.ForkMessage>) -> List<&2, String>:
+  match messages:
+    case Nil{}: Nil{}
+    case Session.ForkMessage{entryId, text} <> rest: ("{\"entryId\":" ++ Decode.quote(entryId) ++ ",\"text\":" ++ Decode.quote(text) ++ "}") <> forkValues(rest)
+
+def roleNames(messages: List<&2, Session.Message()>) -> List<&2, String>:
+  match messages:
+    case Nil{}: Nil{}
+    case T.LlmMessage{Ai.System{_}} <> rest: "\"system\"" <> roleNames(rest)
+    case T.LlmMessage{Ai.User{_}} <> rest: "\"user\"" <> roleNames(rest)
+    case T.LlmMessage{Ai.Assistant{_}} <> rest: "\"assistant\"" <> roleNames(rest)
+    case T.LlmMessage{Ai.ToolResult{_}} <> rest: "\"toolResult\"" <> roleNames(rest)
+    case _ <> rest: "\"other\"" <> roleNames(rest)
+
+def messageValues(messages: List<&2, Session.Message()>) -> List<&2, String>:
+  match messages:
+    case Nil{}: Nil{}
+    case message <> rest: Fx.line(SessionJson.agentMessage(~V.Value, ~Tools.ToolDetails, ~V.Value, ~Session.rawValue, ~Tools.detailsValue, ~Session.rawValue, message)) <> messageValues(rest)
+
+def reportBranchState(+label: String, live: Maybe<&2, Session.AgentSession>) -> IO(Unit):
+  match live:
+    case None{}: IO.print("{\"type\":\"branch_state\",\"label\":" ++ Decode.quote(label) ++ ",\"session\":null}")
+    case Some{+session}:
+      do IO<Unit>:
+        forking : List<&2, Session.ForkMessage> <- Session.getUserMessagesForForking(session)
+        +current : List<&2, Session.Message()> <- Session.messages(session)
+        IO.print("{\"type\":\"branch_state\",\"label\":" ++ Decode.quote(label) ++ ",\"forking\":[" ++ String.join(forkValues(forking), ",") ++ "],\"roles\":[" ++ String.join(roleNames(current), ",") ++ "],\"messages\":[" ++ String.join(messageValues(current), ",") ++ "]}")
+
+def branchState(+label: String, runtime: Runtime()) -> IO(Unit):
+  do IO<Unit>:
+    live : Maybe<&2, Session.AgentSession> <- Host.session(Services(), runtime)
+    reportBranchState(label, live)
+
 def forkAll(+runtime: Runtime(), +prefix: String, ids: String & String) -> IO(Unit):
   match ids:
     case (first, leaf):
       do IO<Unit>:
+        branchState(prefix ++ "clone_source", runtime)
         invalid : Result<&2, &2, String, Maybe<&2, String>> <- Host.fork(Services(), runtime, "nope", Host.ForkBefore{})
         reportFork(prefix ++ "fork_invalid", invalid)
         cloned : Result<&2, &2, String, Maybe<&2, String>> <- Host.fork(Services(), runtime, leaf, Host.ForkAt{})
         reportFork(prefix ++ "clone", cloned)
         reportCurrent(prefix ++ "clone", runtime)
+        branchState(prefix ++ "clone", runtime)
         before : Result<&2, &2, String, Maybe<&2, String>> <- Host.fork(Services(), runtime, first, Host.ForkBefore{})
         reportFork(prefix ++ "fork_before", before)
         reportCurrent(prefix ++ "fork_before", runtime)
@@ -273,34 +312,6 @@ def branchFactory(agentDir: String, request: Host.Request) -> IO(Result<&1, &1, 
         +fixture : Fx.Fixture <- Fx.fixture(stored, cwd, agentDir, "one" <> "two" <> "three" <> Nil{}, Nil{})
         Session.refreshSessionContext(Fx.sessionOf(fixture))
         return created(fixture)
-
-def forkValues(messages: List<&2, Session.ForkMessage>) -> List<&2, String>:
-  match messages:
-    case Nil{}: Nil{}
-    case Session.ForkMessage{entryId, text} <> rest: ("{\"entryId\":" ++ Decode.quote(entryId) ++ ",\"text\":" ++ Decode.quote(text) ++ "}") <> forkValues(rest)
-
-def roleNames(messages: List<&2, Session.Message()>) -> List<&2, String>:
-  match messages:
-    case Nil{}: Nil{}
-    case T.LlmMessage{Ai.System{_}} <> rest: "\"system\"" <> roleNames(rest)
-    case T.LlmMessage{Ai.User{_}} <> rest: "\"user\"" <> roleNames(rest)
-    case T.LlmMessage{Ai.Assistant{_}} <> rest: "\"assistant\"" <> roleNames(rest)
-    case T.LlmMessage{Ai.ToolResult{_}} <> rest: "\"toolResult\"" <> roleNames(rest)
-    case _ <> rest: "\"other\"" <> roleNames(rest)
-
-def reportBranchState(+label: String, live: Maybe<&2, Session.AgentSession>) -> IO(Unit):
-  match live:
-    case None{}: IO.print("{\"type\":\"branch_state\",\"label\":" ++ Decode.quote(label) ++ ",\"session\":null}")
-    case Some{+session}:
-      do IO<Unit>:
-        forking : List<&2, Session.ForkMessage> <- Session.getUserMessagesForForking(session)
-        current : List<&2, Session.Message()> <- Session.messages(session)
-        IO.print("{\"type\":\"branch_state\",\"label\":" ++ Decode.quote(label) ++ ",\"forking\":[" ++ String.join(forkValues(forking), ",") ++ "],\"roles\":[" ++ String.join(roleNames(current), ",") ++ "]}")
-
-def branchState(+label: String, runtime: Runtime()) -> IO(Unit):
-  do IO<Unit>:
-    live : Maybe<&2, Session.AgentSession> <- Host.session(Services(), runtime)
-    reportBranchState(label, live)
 
 def promptAll(+runtime: Runtime(), texts: List<&2, String>) -> IO(Unit):
   match texts:
@@ -609,7 +620,7 @@ def blockTool(execute: C.Callback<Tools.Input(), Tools.Output()>) -> Tools.Tool(
   T.AgentTool{"block", "Wait until aborted", V.ObjectValue{Rec.Record{Rec.Property{"type", V.Text{"object"}} <> Nil{}}}, None{}, "Block", None{}, execute, None{}, None{}}
 
 type BlockEnv is Data:
-  BlockEnv{agentDir: String, execute: C.Callback<Tools.Input(), Tools.Output()>}
+  BlockEnv{agentDir: String, execute: C.Callback<Tools.Input(), Tools.Output()>, switching: Bool}
 
 def blockLoadout(first: Bool, +execute: C.Callback<Tools.Input(), Tools.Output()>) -> Runtime.Loadout:
   match first:
@@ -623,10 +634,10 @@ def blockReplies(first: Bool) -> List<&2, String>:
 
 def blockFactory(env: BlockEnv, request: Host.Request) -> IO(Result<&1, &1, String, Host.Created<Services()>>):
   match env request:
-    case BlockEnv{agentDir, execute} Host.Request{+cwd, +stored, start}:
-      +first = Maybe.is_none(&2, Ext.SessionStartEvent, start)
+    case BlockEnv{agentDir, execute, +switching} Host.Request{+cwd, +stored, start}:
+      +first = switching || Maybe.is_none(&2, Ext.SessionStartEvent, start)
       do IO<Result<&1, &1, String, Host.Created<Services()>>>:
-        +fixture : Fx.Fixture <- Fx.fixtureWithModel(stored, cwd, agentDir, blockReplies(first), Nil{}, blockLoadout(first, execute), Some{Fx.fauxModel()}, Fx.fauxSources())
+        +fixture : Fx.Fixture <- Fx.fixtureWithModel(stored, cwd, agentDir, Bool.pick(List<&2, String>, switching, ["@block"], blockReplies(first)), Nil{}, blockLoadout(first, execute), Some{Fx.fauxModel()}, Fx.fauxSources())
         Session.refreshSessionContext(Fx.sessionOf(fixture))
         return created(fixture)
 
@@ -657,6 +668,38 @@ def forkStarted(+started: Chan(Unit), +done: Chan(Unit), result: Result<&2, &2, 
     case Fail{error}: IO.die(Unit, 1, error)
     case Done{runtime}: forkDuringTool(runtime, started, done)
 
+def switchDuringTool(+runtime: Runtime(), +started: Chan(Unit), +done: Chan(Unit), +target: String) -> IO(Unit):
+  do IO<Unit>:
+    IO.spawn(Unit, promptInto(runtime, "start blocking tool", done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    reportCurrent("outgoing", runtime)
+    switched : Result<&2, &2, String, Unit> <- Host.switchSession(Services(), runtime, target, None{})
+    reportResult("switch", switched)
+    finished : Maybe<&1, Unit> <- Chan.recv(Unit, done)
+    reportCurrent("switched", runtime)
+    Host.dispose(Services(), runtime)
+
+def switchStarted(+started: Chan(Unit), +done: Chan(Unit), target: String, result: Result<&2, &2, String, Runtime()>) -> IO(Unit):
+  match result:
+    case Fail{error}: IO.die(Unit, 1, error)
+    case Done{runtime}: switchDuringTool(runtime, started, done, target)
+
+def persistedSwitchDuringTool(+dir: String, +agentDir: String, target: String) -> IO(Unit):
+  do IO<Unit>:
+    uuids : Uuid.Generator <- Uuid.generator()
+    opened : Sessions.Outcome(Session.Session()) <- Session.createSession(uuids, dir, Some{dir}, agentDir, Sessions.noOptions())
+    stored : Session.Session() <- Fx.requireSession(opened)
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Unit) <- Chan.new(Unit, 1)
+    +execute : C.Callback<Tools.Input(), Tools.Output()> <- C.create(~Chan(Unit), ~Tools.Input(), ~Tools.Output(), ~blockExecute, started)
+    +make : Host.Factory(Services()) <- C.create(~BlockEnv, ~Host.Request, ~Result<&1, &1, String, Host.Created<Services()>>, ~blockFactory, BlockEnv{agentDir, execute, True{}})
+    +free : C.Callback<Services(), Unit> <- C.create(~Unit, ~Services(), ~Unit, ~release, Unit{})
+    result : Result<&2, &2, String, Runtime()> <- Host.create(Services(), make, free, agentDir, dir, stored)
+    switchStarted(started, done, target, result)
+    C.dispose(Host.Request, Result<&1, &1, String, Host.Created<Services()>>, make)
+    C.dispose(Services(), Unit, free)
+    C.dispose(Tools.Input(), Tools.Output(), execute)
+
 def inMemoryForkDuringTool(+dir: String, +agentDir: String) -> IO(Unit):
   do IO<Unit>:
     uuids : Uuid.Generator <- Uuid.generator()
@@ -665,7 +708,7 @@ def inMemoryForkDuringTool(+dir: String, +agentDir: String) -> IO(Unit):
     +started : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Unit) <- Chan.new(Unit, 1)
     +execute : C.Callback<Tools.Input(), Tools.Output()> <- C.create(~Chan(Unit), ~Tools.Input(), ~Tools.Output(), ~blockExecute, started)
-    +make : Host.Factory(Services()) <- C.create(~BlockEnv, ~Host.Request, ~Result<&1, &1, String, Host.Created<Services()>>, ~blockFactory, BlockEnv{agentDir, execute})
+    +make : Host.Factory(Services()) <- C.create(~BlockEnv, ~Host.Request, ~Result<&1, &1, String, Host.Created<Services()>>, ~blockFactory, BlockEnv{agentDir, execute, False{}})
     +free : C.Callback<Services(), Unit> <- C.create(~Unit, ~Services(), ~Unit, ~release, Unit{})
     result : Result<&2, &2, String, Runtime()> <- Host.create(Services(), make, free, agentDir, dir, stored)
     forkStarted(started, done, result)
@@ -673,8 +716,128 @@ def inMemoryForkDuringTool(+dir: String, +agentDir: String) -> IO(Unit):
     C.dispose(Services(), Unit, free)
     C.dispose(Tools.Input(), Tools.Output(), execute)
 
+# Remaining runtime contracts use the same fixture and the production SDK.
+# A metadata append creates a genuine unflushed leaf before the first response.
+def leafOf(ids: String & String) -> String:
+  match ids: case (_, leaf): leaf
+
+def unflushedFork(+runtime: Runtime(), live: Maybe<&2, Session.AgentSession>) -> IO(Unit):
+  match live:
+    case None{}: IO.die(Unit, 1, "missing session")
+    case Some{+session}:
+      do IO<Unit>:
+        appended : Result<&2, &2, String, String> <- Session.appendSessionEntry(session, stored => Sessions.appendThinkingLevelChange(~V.Value, ~Tools.ToolDetails, ~V.Value, ~Session.rawValue, ~Tools.detailsValue, ~Session.rawValue, stored, "off"))
+        ids : String & String <- currentIds(runtime)
+        result : Result<&2, &2, String, Maybe<&2, String>> <- Host.fork(Services(), runtime, leafOf(ids), Host.ForkAt{})
+        reportFork("unflushed", result)
+        reportCurrent("unflushed", runtime)
+
+def reportImport(result: Host.ImportOutcome) -> IO(Unit):
+  match result:
+    case Host.Imported{path}: IO.print("{\"type\":\"import\",\"ok\":true,\"path\":" ++ Decode.quote(path) ++ "}")
+    case Host.ImportFailed{message}: reportResult("import", Fail{message})
+    case Host.ImportNeedsCwd{_}: reportResult("import", Fail{"missing cwd"})
+
+def extraScenario(+runtime: Runtime(), +source: String, target: String) -> IO(Unit):
+  do IO<Unit>:
+    live : Maybe<&2, Session.AgentSession> <- Host.session(Services(), runtime)
+    unflushedFork(runtime, live)
+    promptCurrent("flush", runtime, "hello")
+    imported : Host.ImportOutcome <- Host.importFromJsonl(Services(), runtime, source, None{})
+    reportImport(imported)
+    reportCurrent("imported", runtime)
+    switchTo(runtime, "cross_cwd", Some{target})
+    current : Maybe<&2, String> <- Host.cwd(Services(), runtime)
+    IO.print("{\"type\":\"runtime_cwd\",\"cwd\":" ++ quotedOr(current) ++ "}")
+    Host.dispose(Services(), runtime)
+
+def extraStarted(source: String, target: String, result: Result<&2, &2, String, Runtime()>) -> IO(Unit):
+  match result:
+    case Fail{message}: IO.die(Unit, 1, message)
+    case Done{runtime}: extraScenario(runtime, source, target)
+
+def extraRuntime(+dir: String, +agentDir: String, source: String, target: String) -> IO(Unit):
+  do IO<Unit>:
+    uuids : Uuid.Generator <- Uuid.generator()
+    opened : Sessions.Outcome(Session.Session()) <- Session.createSession(uuids, dir, Some{dir}, agentDir, Sessions.noOptions())
+    stored : Session.Session() <- Fx.requireSession(opened)
+    +make : Host.Factory(Services()) <- C.create(~String, ~Host.Request, ~Result<&1, &1, String, Host.Created<Services()>>, ~factory, agentDir)
+    +free : C.Callback<Services(), Unit> <- C.create(~Unit, ~Services(), ~Unit, ~release, Unit{})
+    result : Result<&2, &2, String, Runtime()> <- Host.create(Services(), make, free, agentDir, dir, stored)
+    extraStarted(source, target, result)
+    C.dispose(Host.Request, Result<&1, &1, String, Host.Created<Services()>>, make)
+    C.dispose(Services(), Unit, free)
+
+type SdkEnvironment is Data:
+  SdkEnvironment{agentDir: String, models: Models.ModelRuntime}
+
+def sdkPair(pair: Sdk.CreateAgentSessionResult & Session.AgentSession) -> Result<&1, &1, String, Host.Created<Sdk.CreateAgentSessionResult>>:
+  match pair: case (owner, session): Done{Host.Created{owner, session}}
+
+def sdkCreated(result: Sdk.Outcome()) -> Result<&1, &1, String, Host.Created<Sdk.CreateAgentSessionResult>>:
+  match result:
+    case Fail{message}: Fail{message}
+    case Done{owner}: sdkPair(Sdk.sessionOf(owner))
+
+def sdkFactory(environment: SdkEnvironment, request: Host.Request) -> IO(Result<&1, &1, String, Host.Created<Sdk.CreateAgentSessionResult>>):
+  match environment request:
+    case SdkEnvironment{agentDir, models} Host.Request{cwd, stored, start}:
+      do IO<Result<&1, &1, String, Host.Created<Sdk.CreateAgentSessionResult>>>:
+        result : Sdk.Outcome() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{cwd}, Some{agentDir}, Some{models}, None{}, None{}, Nil{}, None{}, Some{Nil{}}, None{}, None{}, Some{stored}, None{}, Nil{}, start})
+        return sdkCreated(result)
+
+# Host owns the session teardown; the SDK result owns its remaining services.
+def sdkRelease(_: Unit, owner: Sdk.CreateAgentSessionResult) -> IO(Unit):
+  match owner:
+    case Sdk.CreateAgentSessionResult{session, _, _, services}:
+      do IO<Unit>:
+        Agent.dispose(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(session))
+        Sdk.disposeServices(services)
+
+def reportSelection(+label: String, live: Maybe<&2, Session.AgentSession>) -> IO(Unit):
+  match live:
+    case None{}: IO.die(Unit, 1, "missing SDK session")
+    case Some{+session}:
+      do IO<Unit>:
+        state : Session.AgentState() <- Session.state(session)
+        thinking : Ai.ModelThinkingLevel <- Session.getThinkingLevel(session)
+        IO.print("{\"type\":\"selection\",\"label\":" ++ Decode.quote(label) ++ ",\"model\":" ++ quotedOr(Maybe.map(&2, Ai.Model<Ai.JsonValue>, String, value => Models.reference(value), Session.stateModel(state))) ++ ",\"off\":" ++ Bool.pick(String, String.eq(Levels.name(thinking), "off"), "true", "false") ++ "}")
+
+def sdkRestored(+target: String, result: Result<&2, &2, String, Host.AgentSessionRuntime<Sdk.CreateAgentSessionResult>>) -> IO(Unit):
+  match result:
+    case Fail{message}: IO.die(Unit, 1, message)
+    case Done{+runtime}:
+      do IO<Unit>:
+        initial : Maybe<&2, Session.AgentSession> <- Host.session(Sdk.CreateAgentSessionResult, runtime)
+        reportSelection("initial", initial)
+        switched : Result<&2, &2, String, Unit> <- Host.switchSession(Sdk.CreateAgentSessionResult, runtime, target, None{})
+        reportResult("restore", switched)
+        +live : Maybe<&2, Session.AgentSession> <- Host.session(Sdk.CreateAgentSessionResult, runtime)
+        reportSelection("restored", live)
+        reportLive("restored", live)
+        cwd : Maybe<&2, String> <- Host.cwd(Sdk.CreateAgentSessionResult, runtime)
+        IO.print("{\"type\":\"runtime_cwd\",\"cwd\":" ++ quotedOr(cwd) ++ "}")
+        Host.dispose(Sdk.CreateAgentSessionResult, runtime)
+
+def sdkRestoration(+dir: String, +agentDir: String, target: String) -> IO(Unit):
+  do IO<Unit>:
+    uuids : Uuid.Generator <- Uuid.generator()
+    opened : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
+    stored : Session.Session() <- Fx.requireSession(opened)
+    +models : Models.ModelRuntime <- ModelFixture.create([ModelFixture.Source{"faux", "PI_FAUX_API_KEY", [Fx.modelNamed("faux-model", "faux", True{}), Fx.modelNamed("faux-2", "faux", False{})]}])
+    +make : Host.Factory(Sdk.CreateAgentSessionResult) <- C.create(~SdkEnvironment, ~Host.Request, ~Result<&1, &1, String, Host.Created<Sdk.CreateAgentSessionResult>>, ~sdkFactory, SdkEnvironment{agentDir, models})
+    +free : C.Callback<Sdk.CreateAgentSessionResult, Unit> <- C.create(~Unit, ~Sdk.CreateAgentSessionResult, ~Unit, ~sdkRelease, Unit{})
+    result : Result<&2, &2, String, Host.AgentSessionRuntime<Sdk.CreateAgentSessionResult>> <- Host.create(Sdk.CreateAgentSessionResult, make, free, agentDir, dir, stored)
+    sdkRestored(target, result)
+    C.dispose(Host.Request, Result<&1, &1, String, Host.Created<Sdk.CreateAgentSessionResult>>, make)
+    C.dispose(Sdk.CreateAgentSessionResult, Unit, free)
+    Models.dispose(models)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
+    case "extra" <> dir <> agentDir <> source <> target <> Nil{}: extraRuntime(dir, agentDir, source, target)
+    case "sdk_restore" <> dir <> agentDir <> target <> Nil{}: sdkRestoration(dir, agentDir, target)
+    case "switch_during_tool" <> dir <> agentDir <> target <> Nil{}: persistedSwitchDuringTool(dir, agentDir, target)
     case "persisted" <> dir <> agentDir <> missing <> Nil{}: persisted(dir, agentDir, missing)
     case "memory" <> dir <> agentDir <> Nil{}: inMemory(dir, agentDir)
     case "branching" <> dir <> agentDir <> kind <> Nil{}: branching(dir, agentDir, kind)

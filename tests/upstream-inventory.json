@@ -4155,15 +4155,17 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-runtime.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
-        "tests/agent-session.bend",
-        "tests/agent_session_check.py",
-        "tests/print_cli_check.py"
+        "tests/agent-session-runtime.bend",
+        "tests/agent_session_runtime_check.py",
+        "tests/agent-session-runtime.md",
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
       ],
       "sha256": "2b940dfac449b6e7dea886ab202051c41520a4580b67de8d3642e849da842561",
-      "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'persists message_end assistant replacements to the session manager' is covered by the persist scenario of tests/agent_session_check.py (faux provider) and end to end by the live stored-session check (assistant entry equals the final message_end message). Session switching, forking and runtime replacement remain pending with the AgentSessionRuntime port."
+      "implementation": "packages/coding-agent/src/core/agent-session-runtime.bend",
+      "notes": "All twelve upstream contracts: persisted message_end replacements (the existing message_end_cost scenario), active-tool settlement before replacement, collision-safe import, new/resume/fork lifecycle and cancellation, unsaved and invalid-ID fork errors, complete persisted/in-memory clone message snapshots, cross-cwd replacement, and destination model/thinking restoration through the actual SDK with no explicit overrides. Native one/four threads. Split SDK construction is adapted to createAgentSession; its missing public split APIs remain a source-coverage gap. Immutable values replace JS identity assertions."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-tool-result-images.test.ts",

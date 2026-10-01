@@ -1,11 +1,8 @@
-"""AgentSessionRuntime session replacement over the faux-provider fixture.
+"""Upstream AgentSessionRuntime and branching contracts over the faux fixture.
 
-Ports agent-session-runtime.ts newSession/switchSession/dispose (pi-mono v0.87.1):
-teardown before creation, the factory request (cwd, session, session_start
-reason and previousSessionFile), rebind after replacement, persisted vs
-in-memory new sessions, parentSession, and the missing-cwd refusal that
-leaves the current session in place; fork before a user message and clone at
-an entry, persisted and in memory.
+Checks replacement and persisted settlement, lifecycle/cancellation, imports,
+forks, cross-cwd state and actual SDK model/thinking restoration. Native lanes
+use BEND_THREADS; the harness owns its command line.
 """
 import argparse, json, os, subprocess, tempfile
 from pathlib import Path
@@ -20,11 +17,11 @@ def run(command, *arguments, cwd):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--runner', default='build/agent-session-runtime.js')
+    parser.add_argument('--runner', default='build/agent-session-runtime-native')
     parser.add_argument('--threads', default='1')
     args = parser.parse_args()
     runner = str(Path(args.runner).resolve())
-    command = ['bun', runner] if runner.endswith('.js') else [runner, '--threads', args.threads, '--']
+    command = ['bun', runner] if runner.endswith('.js') else ['env', 'BEND_THREADS=' + args.threads, runner]
     work = Path(tempfile.mkdtemp(prefix='pi-session-runtime-'))
     project = work / 'project'; project.mkdir()
     agent = work / 'agent'; agent.mkdir()
@@ -35,6 +32,8 @@ def main():
     factories = [e for e in kept if e['type'] == 'factory']
     current = {e['label']: e for e in kept if e['type'] == 'current'}
     results = {e['label']: e for e in kept if e['type'] == 'result'}
+    branch = {e['label']: e for e in events if e['type'] == 'branch_state'}
+    assert branch['clone_source']['messages'] == branch['clone']['messages']
     first, second, third = current['initial'], current['new'], current['new_parented']
     checks = 0
     # the initial runtime is created without a session_start event
@@ -73,6 +72,8 @@ def main():
     events = run(command, 'memory', str(project), str(agent), cwd=project)
     current = {e['label']: e for e in events if e['type'] == 'current'}
     factories = [e for e in events if e['type'] == 'factory']
+    branch = {e['label']: e for e in events if e['type'] == 'branch_state'}
+    assert branch['memory_clone_source']['messages'] == branch['memory_clone']['messages']
     assert current['memory_new']['sessionFile'] is None and current['memory_new']['sessionId'] != current['memory_initial']['sessionId']
     assert factories[1]['start'] == {'reason': 'new', 'previousSessionFile': None}
     results = {e['label']: e for e in events if e['type'] == 'result'}
@@ -163,6 +164,7 @@ def main():
     forked_file, previous = current['forked']['sessionFile'], current['prompted']['sessionFile']
     fork_events = ext(between(events, ('current', 'prompted'), ('current', 'forked')), ('session_before_fork',) + switch_names)
     entry_id = fork_events[0]['entryId']
+    assert Path(forked_file).stem.endswith('_' + current['forked']['sessionId'])
     assert changes['fork']['cancelled'] is False and changes['fork']['selectedText'] == 'hello'
     assert fork_events == [
         {'event': 'session_before_fork', 'entryId': entry_id, 'position': 'before'},
@@ -181,6 +183,61 @@ def main():
     assert fork['cancelled'] is False and fork['selectedText'] == 'first prompt', fork
     assert states['forked']['roles'] == ['system'] and forked['entries'] == 1 and forked['sessionFile'] is None, (states, forked)
     assert states['next']['roles'] == ['system', 'system', 'user', 'assistant'], states['next']
+    checks += 1
+    # The outgoing persisted turn settles before the host replaces it.
+    directory = work / 'switch-during-tool'; directory.mkdir()
+    events = run(command, 'switch_during_tool', str(directory), str(agent), first['sessionFile'], cwd=directory)
+    current = {e['label']: e for e in events if e['type'] == 'current'}
+    results = {e['label']: e for e in events if e['type'] == 'result'}
+    assert results['switch']['ok'] and current['switched']['sessionFile'] == first['sessionFile']
+    outgoing = [json.loads(line) for line in Path(current['outgoing']['sessionFile']).read_text().splitlines()]
+    assert [e['message']['role'] for e in outgoing if e['type'] == 'message'] == ['system', 'user', 'assistant', 'toolResult', 'assistant'], outgoing
+    checks += 1
+    # Collision protection, an unflushed leaf, and cross-cwd replacement.
+    directory = work / 'runtime-contracts'; directory.mkdir()
+    import_dir = work / 'imports'; import_dir.mkdir()
+    other = work / 'other-project'; other.mkdir()
+    def header(identity, cwd):
+        return {'type': 'session', 'version': 3, 'id': identity, 'timestamp': '2026-09-23T00:00:00.000Z', 'cwd': str(cwd)}
+    def jsonl(entries):
+        return ''.join(json.dumps(entry) + '\n' for entry in entries)
+    stored_path = directory / 'collision.jsonl'
+    stored_bytes = jsonl([header('stored', directory)]); stored_path.write_text(stored_bytes)
+    source = import_dir / 'collision.jsonl'; source.write_text(jsonl([header('imported', directory)]))
+    target = other / 'destination.jsonl'
+    # Reuse messages produced by the native fixture rather than another provider emulator.
+    entries = [json.loads(line) for line in Path(first['sessionFile']).read_text().splitlines()][1:]
+    entries[0]['parentId'] = 'thinking'
+    for entry in entries:
+        if entry['type'] == 'message' and entry['message']['role'] == 'assistant':
+            entry['message']['model'] = 'faux-2'
+    timestamp = '2026-09-23T00:00:00.000Z'
+    target.write_text(jsonl([header('destination', other),
+        {'type': 'model_change', 'id': 'model', 'parentId': None, 'timestamp': timestamp, 'provider': 'faux', 'modelId': 'faux-2'},
+        {'type': 'thinking_level_change', 'id': 'thinking', 'parentId': 'model', 'timestamp': timestamp, 'thinkingLevel': 'off'}, *entries]))
+    events = run(command, 'extra', str(directory), str(agent), str(source), str(target), cwd=directory)
+    current = {e['label']: e for e in events if e['type'] == 'current'}
+    results = {e['label']: e for e in events if e['type'] == 'result'}
+    assert results['unflushed']['error'] == 'This session has not been saved yet. Wait for the first assistant response before cloning or forking it.'
+    assert current['unflushed']['entries'] == 1
+    imported = next(e for e in events if e['type'] == 'import')
+    assert imported['ok'] and Path(imported['path']) != stored_path
+    assert stored_path.read_text() == stored_bytes
+    assert current['imported']['sessionId'] == 'imported'
+    assert json.loads(Path(imported['path']).read_text().splitlines()[0])['id'] == 'imported'
+    assert results['cross_cwd']['ok'] and Path(current['cross_cwd']['cwd']).resolve() == other.resolve()
+    assert next(e for e in events if e['type'] == 'runtime_cwd')['cwd'] == str(other)
+    checks += 3
+    # Restoration must run the real SDK with no explicit model/thinking override.
+    directory = work / 'sdk-restore'; directory.mkdir()
+    (agent / 'settings.json').write_text(json.dumps({'defaultProvider': 'faux', 'defaultModel': 'faux-model', 'defaultThinkingLevel': 'high'}))
+    events = run(command, 'sdk_restore', str(directory), str(agent), str(target), cwd=directory)
+    selections = {e['label']: e for e in events if e['type'] == 'selection'}
+    assert selections['initial']['model'] == 'faux/faux-model' and not selections['initial']['off']
+    assert selections['restored']['model'] == 'faux/faux-2' and selections['restored']['off']
+    assert next(e for e in events if e['type'] == 'result' and e['label'] == 'restore')['ok']
+    assert next(e for e in events if e['type'] == 'current' and e['label'] == 'restored')['cwd'] == str(other)
+    assert next(e for e in events if e['type'] == 'runtime_cwd')['cwd'] == str(other)
     checks += 1
     print('agent-session-runtime: %d checks passed' % checks)
 
