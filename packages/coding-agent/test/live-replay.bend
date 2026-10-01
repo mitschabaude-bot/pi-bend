@@ -1,4 +1,6 @@
 import Base
+import ../src/core/agent-runtime.bend as Runtime
+import ../../ai/src/api/openai-codex-sessions.bend as CodexSessions
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/api/openai-responses.bend as Responses
 import ../../ai/src/api/azure-openai-responses.bend as Azure
@@ -653,31 +655,22 @@ def bedrockHandler(config: Responses.Config) -> Bedrock.Handler:
   match config:
     case Responses.Config{_, _, files, options, security, _, _}: Bedrock.Handler{files, options, security}
 
-# upstream bedrock-converse-stream stream() with the case's options.
-def bedrockStream(+fetch: Fetch.Fetch(Unit), handler: Bedrock.Handler, +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
-  StreamProviders.lease(events => inner => Bedrock.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~render, ~StreamProviders.jsonDetails, events, fetch, TestClient.urlContext(), handler, inner, model, context, bedrockOptions(options, signal, fetch)), Some{signal})
-
-# upstream stream(): the provider's own options.
-def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
+# Decode the existing replay's raw option records, then use SDK transport
+# dispatch rather than a second implementation in the fixture.
+def rawOptions(api: Ai.ModelApi, +options: V.Value, +signal: Abort.AbortSignal<Unit>, +fetch: Fetch.Fetch(Unit)) -> Composer.ApiStreamOptions:
   match api:
-    case Ai.MistralConversationsApi{}: StreamProviders.mistralSelected(fetch, TestClient.urlContext(), model, context, Some{signal}, Done{Mistral.MistralOptions{baseOptions(options, signal, Some{fetch}), None{}, None{}, text(field(options, "reasoningEffort"))}})
-    case Ai.BedrockConverseStreamApi{}: bedrockStream(fetch, bedrockHandler(configFor(agent)), model, context, options, signal)
-    case Ai.GoogleVertexApi{}: StreamProviders.vertexSelected(fetch, TestClient.urlContext(), model, context, Some{signal}, Done{vertexOptions(options, signal)})
-    case Ai.AnthropicMessagesApi{}: Anthropic.openStream(fetch, TestClient.urlContext(), model, context, Messages.AnthropicOptions{baseOptions(options, signal, Some{fetch}), flag(field(options, "thinkingEnabled")), number(field(options, "thinkingBudgetTokens")), text(field(options, "effort")), None{}, None{}, None{}, None{}})
-    case Ai.GoogleGenerativeAiApi{}: Google.openStream(fetch, TestClient.urlContext(), counter, model, context, Gemini.GoogleOptions{baseOptions(options, signal, Some{fetch}), None{}, googleThinking(field(options, "thinking"))})
-    case Ai.OpenAICompletionsApi{}: Completions.openStream(fetch, TestClient.urlContext(), model, context, Chat.OpenAICompletionsOptions{baseOptions(options, signal, Some{fetch}), None{}, levelOf(text(field(options, "reasoningEffort"))), None{}})
-    case Ai.AzureOpenAIResponsesApi{}:
-      do IO<Output()>:
-        owner : Responses.Run<Unit, V.Value, Error()> <- Azure.stream(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, configFor(agent), model, context, Azure.AzureOpenAIResponsesOptions{baseOptions(options, signal, Some{fetch}), levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}, None{}, None{}, None{}})
-        return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), owner))
-    case Ai.OpenAICodexResponsesApi{}:
-      do IO<Output()>:
-        owner : Responses.Run<Unit, V.Value, Error()> <- Codex.stream(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, configFor(agent), model, context, codexOptions(options, signal, fetch))
-        return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), owner))
-    case _:
-      do IO<Output()>:
-        owner : Responses.Run<Unit, V.Value, Error()> <- Responses.stream(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, configFor(agent), model, context, responsesOptions(options, signal, fetch))
-        return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), owner))
+    case Ai.MistralConversationsApi{}: Composer.MistralOptions{Mistral.MistralOptions{baseOptions(options, signal, Some{fetch}), None{}, None{}, text(field(options, "reasoningEffort"))}}
+    case Ai.BedrockConverseStreamApi{}: Composer.BedrockOptions{bedrockOptions(options, signal, fetch)}
+    case Ai.GoogleVertexApi{}: Composer.VertexOptions{vertexOptions(options, signal)}
+    case Ai.AnthropicMessagesApi{}: Composer.AnthropicOptions{Messages.AnthropicOptions{baseOptions(options, signal, Some{fetch}), flag(field(options, "thinkingEnabled")), number(field(options, "thinkingBudgetTokens")), text(field(options, "effort")), None{}, None{}, None{}, None{}}}
+    case Ai.GoogleGenerativeAiApi{}: Composer.GoogleOptions{Gemini.GoogleOptions{baseOptions(options, signal, Some{fetch}), None{}, googleThinking(field(options, "thinking"))}}
+    case Ai.OpenAICompletionsApi{}: Composer.CompletionsOptions{Chat.OpenAICompletionsOptions{baseOptions(options, signal, Some{fetch}), None{}, levelOf(text(field(options, "reasoningEffort"))), None{}}}
+    case Ai.AzureOpenAIResponsesApi{}: Composer.AzureOptions{Azure.AzureOpenAIResponsesOptions{baseOptions(options, signal, Some{fetch}), levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}, None{}, None{}, None{}}}
+    case Ai.OpenAICodexResponsesApi{}: Composer.CodexOptions{codexOptions(options, signal, fetch)}
+    case _: Composer.ResponsesOptions{responsesOptions(options, signal, fetch)}
+
+def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, sessions: CodexSessions.Pool<Unit>, +model: Model(), context: Context(), options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
+  Runtime.openApi(Runtime.ApiTransport{configFor(agent), fetch, counter, sessions}, Agent.StreamInput{model, context, Some{Composer.RawOptions{rawOptions(apiOf(model), options, signal, fetch)}}})
 
 # upstream streamSimple(), as the agent runtime dispatches it.
 def openedSimple(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
@@ -690,10 +683,10 @@ def openedSimple(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat
     case Ai.OpenAICompletionsApi{}: Completions.open(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, Some{fetch})})
     case _: Providers.openResponses(~Simple(), ~Unit, ~V.Value, ~Details(), ~Error(), ~selected(Simple()), ~render, ~failure, configFor(agent), Agent.StreamInput{model, context, Some{simpleOptions(options, signal, Some{fetch})}})
 
-def entered(+agent: String, +entry: String, fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
+def entered(+agent: String, +entry: String, fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, sessions: CodexSessions.Pool<Unit>, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match entry:
     case "simple": openedSimple(agent, fetch, counter, apiOf(model), model, context, options, signal)
-    case _: opened(agent, fetch, counter, apiOf(model), model, context, options, signal)
+    case _: opened(agent, fetch, counter, sessions, model, context, options, signal)
 
 # Draining
 # --------
@@ -779,8 +772,10 @@ def runWith(+agent: String, fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, +va
       do IO<Unit>:
         +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
         abortFirst(Maybe.default(&2, Bool, flag(field(value, "abortBefore")), False{}), controller)
-        result : Output() <- entered(agent, Maybe.default(&2, String, text(field(value, "entry")), "stream"), fetch, counter, model, items, Maybe.default(&2, V.Value, field(value, "options"), V.ObjectValue{R.new(V.Value)}), Abort.signal(Unit, controller))
+        +sessions : CodexSessions.Pool<Unit> <- CodexSessions.create(Unit, CodexSessions.defaults())
+        result : Output() <- entered(agent, Maybe.default(&2, String, text(field(value, "entry")), "stream"), fetch, counter, sessions, model, items, Maybe.default(&2, V.Value, field(value, "options"), V.ObjectValue{R.new(V.Value)}), Abort.signal(Unit, controller))
         observed(result, controller, Maybe.map(&2, F64, Nat, natOf, number(field(value, "abortAfterChars"))), Maybe.default(&2, Bool, flag(field(value, "overflow")), False{}), windowOf(model))
+        CodexSessions.dispose(Unit, sessions)
         Abort.dispose(Unit, controller)
 
 # Case `modelOverride`: {provider?, compat? (replaces the catalog compat, as

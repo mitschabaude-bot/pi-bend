@@ -1503,7 +1503,7 @@
         "tests/openai_codex_reuse_check.py"
       ],
       "sha256": "03e3277a307c6a02f21ee7238b51e4f38d74b7730e882c82547b178f050a827a",
-      "notes": "24 of 36 original test instances plus 3 native SSE error cases pass through the real loopback provider on Bun/native1/native4. Assertions compare request bodies, headers, event order and final messages with pinned pi; item events supply output_index, real timeout/backoff checks replace fake timers. Supplemental WebSocket checks cover 22 scenarios including connection-limit and missing-response retry budgets, recovery after partial output with one start, and no retry/fallback for an API error after start. Consecutive-turn checks cover 15 scenarios: socket reuse, cache disabling/session isolation, cached-context deltas and invalidation, three-turn continuations, missing previous-response recovery using the full request, and remembered per-session SSE fallback before/after output. Complete messages compare where diagnostics match; transport/protocol diagnostic detail remains pending and is explicitly excluded in those scenarios. Dedicated cache-helper differential and seven owned-pool socket fixtures also pass. Original WebSocket instances remain partial until their active expiry/liveness, generated request IDs and debug/cleanup assertions are ported. Optional zstd compression and transport diagnostics remain absent. Approved adaptations use structural object equality and immutable event snapshots. Raw public entrypoints now use the Codex-specific options type; 14 additional request-option scenarios cover text verbosity, all summary values/null, explicit none and requested-level mapping behavior. All 41 SSE cases pass native one/four; existing WebSocket and consecutive-turn coverage is rerun with the same freshly built fixture. This does not close the original WebSocket diagnostic/expiry/debug gaps."
+      "notes": "24 of 36 original test instances plus 3 native SSE error cases pass through the real loopback provider on Bun/native1/native4. Assertions compare request bodies, headers, event order and final messages with pinned pi; item events supply output_index, real timeout/backoff checks replace fake timers. Supplemental WebSocket checks cover 22 scenarios including connection-limit and missing-response retry budgets, recovery after partial output with one start, and no retry/fallback for an API error after start. Consecutive-turn checks cover 15 scenarios: socket reuse, cache disabling/session isolation, cached-context deltas and invalidation, three-turn continuations, missing previous-response recovery using the full request, and remembered per-session SSE fallback before/after output. Complete messages compare where diagnostics match; transport/protocol diagnostic detail remains pending and is explicitly excluded in those scenarios. Dedicated cache-helper differential and seven owned-pool socket fixtures also pass. Original WebSocket instances remain partial until their active expiry/liveness, generated request IDs and debug/cleanup assertions are ported. Optional zstd compression and transport diagnostics remain absent. Approved adaptations use structural object equality and immutable event snapshots. Raw public entrypoints now use the Codex-specific options type; 14 additional request-option scenarios cover text verbosity, all summary values/null, explicit none and requested-level mapping behavior. The inherited samplingParams noninterference case uses the actual raw/simple option decoders and compares the complete request with pinned pi. Existing SSE, WebSocket and consecutive-turn scenarios exercise the same native fixture. This does not close the original WebSocket diagnostic/expiry/debug gaps."
     },
     {
       "source": "packages/ai/test/openai-completions-cache-control-format.test.ts",
@@ -3353,7 +3353,7 @@
         "tests/models_json_reference.ts"
       ],
       "sha256": "2b8c24d61e5684264c087c7fd064e3fbe1d93369943cd9936833f474276963fd",
-      "notes": "models.json loading, schema errors and provider composition (built-in overrides, custom providers, model overrides, configured auth) are compared against the pinned model-config/provider-composer source: 23 runnable fixtures on Bun (the !command key fixture runs natively). The named registry test cases themselves are not ported; request-time header merging is not yet wired."
+      "notes": "models.json loading, schema errors and provider composition (built-in overrides, custom providers, model overrides, configured auth) are compared against the pinned model-config/provider-composer source: 23 runnable fixtures on Bun (the !command key fixture runs natively). The named registry test cases, including request-time header precedence assertions, remain unported."
     },
     {
       "source": "packages/coding-agent/test/model-resolver.test.ts",
@@ -4875,13 +4875,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8964-extension-provider-streaming.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/coding-agent/test/sdk-stream-options.bend",
         "tests/sdk_suites_check.py"
       ],
       "sha256": "c379190d9631400232636251edb9457ee95c7667d29297ac576acabc9deba92a",
-      "notes": "The streamSimple contract runs two distinct native extension factories: registerProvider config with a custom API/key, registerCommand, then AgentSession.prompt dispatches /stream-custom through its bound context registry. Checks resolved API key, accumulated text_delta content, final stop/content and isolation from an unrelated ModelRuntime. Remaining: raw stream method and provider-specific ApiStreamOptions dispatch; complete currently aliases completeSimple. JavaScript global compatibility registry inspection is replaced by native runtime-local registration."
+      "notes": "Both parameterized upstream contracts (stream and streamSimple) use separate native extension factories for config-provider registration and command registration, then AgentSession.prompt dispatches /stream-custom through the bound context registry. Assertions check the raw/simple request variant, resolved extension API key, accumulated text_delta content, final stop/content and isolation from an unrelated ModelRuntime. The JS global compatibility registry assertion becomes native runtime-local isolation. Command: python3 tests/sdk_suites_check.py --prefix build/ --lanes native-1,native-4 sdk-stream-options."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8989-fork-compaction-label-boundary.test.ts",

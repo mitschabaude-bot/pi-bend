@@ -135,22 +135,22 @@ type Seen is Data:
 def usage() -> Ai.Usage:
   Ai.Usage{F.fromU32(1), F.fromU32(2), F.fromU32(0), F.fromU32(0), None{}, None{}, F.fromU32(3), Ai.UsageCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0)}}
 
-def summaryReply(+model: Ai.Model<Ai.JsonValue>) -> Ai.AssistantMessage<V.Value, Unit>:
+def summaryReply(+model: Ai.Model<Ai.JsonValue>) -> Ai.AssistantMessage<V.Value, V.Value>:
   Ai.AssistantMessage{[Ai.AssistantText{Ai.TextContent{"custom provider summary", None{}}}], ModelApi.name(ModelApi.modelApi(Ai.JsonValue, model)), Ai.modelProvider(model), Ai.modelId(model), None{}, None{}, None{}, None{}, usage(), Ai.Stop{}, None{}, None{}, None{}, None{}, F.fromU32(0)}
 
-def seenOf(+model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, Unit, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>) -> Seen:
+def seenOf(+model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.BaseOptions()>) -> Seen:
   match context options:
-    case Ai.TranscriptContext{messages} Some{Ai.SimpleStreamOptions{_, _, apiKey, _, _, _, _, _, _, _, _, _, _, maxTokens, _, _, _, _, _, _, _, _, _}}: Seen{Ai.modelProvider(model), Ai.modelId(model), List.length(&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>, messages), maxTokens, apiKey}
-    case Ai.TranscriptContext{messages} None{}: Seen{Ai.modelProvider(model), Ai.modelId(model), List.length(&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>, messages), None{}, None{}}
+    case Ai.TranscriptContext{messages} Some{Ai.StreamOptions{_, _, apiKey, _, _, _, _, _, _, _, _, _, _, maxTokens, _, _, _, _, _}}: Seen{Ai.modelProvider(model), Ai.modelId(model), List.length(&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>, messages), maxTokens, apiKey}
+    case Ai.TranscriptContext{messages} None{}: Seen{Ai.modelProvider(model), Ai.modelId(model), List.length(&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>, messages), None{}, None{}}
 
 def capture(seen: R.Ref<List<&2, Seen>>, request: Composer.StreamRequest()) -> IO(Composer.StreamOutput()):
   match request:
     case Agent.StreamInput{+model, context, options}:
       do IO<Composer.StreamOutput()>:
-        R.modify(List<&2, Seen>, Unit, seen, earlier => (List.append(&2, Seen, earlier, [seenOf(model, context, options)]), Unit{}))
-        +events : Stream.AssistantMessageEventStream(V.Value, Unit) <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
-        Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, events, Ai.StreamDone{Ai.DoneStop{}, summaryReply(model)})
-        return Done{Agent.borrowedStream(Unit, Tools.ToolError, events)}
+        R.modify(List<&2, Seen>, Unit, seen, earlier => (List.append(&2, Seen, earlier, [seenOf(model, context, Maybe.map(&2, Composer.RequestOptions, Composer.BaseOptions(), Composer.requestBase, options))]), Unit{}))
+        +events : Stream.AssistantMessageEventStream(V.Value, V.Value) <- Stream.createAssistantMessageEventStream(~V.Value, ~V.Value)
+        Stream.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.StreamDone{Ai.DoneStop{}, summaryReply(model)})
+        return Done{Agent.borrowedStream(V.Value, Tools.ToolError, events)}
 
 def geminiFlash() -> Ai.Model<Ai.JsonValue>:
   Ai.Model{"gemini-2.5-flash", "Gemini 2.5 Flash", Ai.GoogleGenerativeAiApi{}, "google", "https://generativelanguage.googleapis.com/v1beta", True{}, None{}, [Ai.InputText{}], None{}, Ai.ModelCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), None{}}, None{}, F.fromU32(1000000), F.fromU32(65536), None{}, None{}, None{}}
@@ -158,7 +158,7 @@ def geminiFlash() -> Ai.Model<Ai.JsonValue>:
 def userMessage(text: String) -> T.AgentMessage():
   Agent.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserBlocks{[Ai.TextImageText{Ai.TextContent{text, None{}}}]}, F.fromU32(0)}}}
 
-def preparation() -> Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>:
+def preparation() -> Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>:
   Compaction.CompactionPreparation{"entry-1", [userMessage("please remember this")], Nil{}, False{}, F.fromU32(42), None{}, CompactionUtils.createFileOps(), Compaction.DEFAULT_COMPACTION_SETTINGS()}
 
 def shownMaybe(value: Maybe<&2, String>) -> String:

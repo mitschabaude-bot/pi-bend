@@ -246,11 +246,18 @@ def rawVerbosity(value: Maybe<&2, String>) -> Maybe<&2, Codex.TextVerbosity>:
     case Some{"high"}: Some{Codex.VerbosityHigh{}}
     case _: None{}
 
+def jsonObjectFields(value: T.JsonValue) -> R.Record<T.JsonValue>:
+  match value:
+    case T.JsonObject{properties}: properties
+    case _: R.new(T.JsonValue)
+
+def jsonProperties(value: V.Value) -> R.Record<T.JsonValue>: jsonObjectFields(Convert.toJson(value))
+
 def streamOptions(+value: V.Value, signal: Abort.AbortSignal<Unit>) -> Codex.OpenAICodexResponsesOptions<Unit, Unit, String>:
-  Codex.OpenAICodexResponsesOptions{T.StreamOptions{Some{signal}, None{}, text(field(value, "apiKey")), None{}, providerEnv(field(value, "env")), None{}, None{}, headers(field(value, "headers")), number(field(value, "timeoutMs")), number(field(value, "maxRetries")), number(field(value, "maxRetryDelayMs")), number(field(value, "temperature")), None{}, None{}, transport(text(field(value, "transport"))), retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), number(field(value, "websocketConnectTimeoutMs")), None{}}, rawEffort(text(field(value, "reasoningEffort"))), rawSummary(field(value, "reasoningSummary")), tier(text(field(value, "serviceTier"))), rawVerbosity(text(field(value, "textVerbosity"))), Codex.choiceFromJson(jsonChoice(field(value, "toolChoice")))}
+  Codex.OpenAICodexResponsesOptions{T.StreamOptions{Some{signal}, None{}, text(field(value, "apiKey")), None{}, providerEnv(field(value, "env")), None{}, None{}, headers(field(value, "headers")), number(field(value, "timeoutMs")), number(field(value, "maxRetries")), number(field(value, "maxRetryDelayMs")), number(field(value, "temperature")), Maybe.map(&2, V.Value, R.Record<T.JsonValue>, jsonProperties, field(value, "samplingParams")), None{}, transport(text(field(value, "transport"))), retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), number(field(value, "websocketConnectTimeoutMs")), None{}}, rawEffort(text(field(value, "reasoningEffort"))), rawSummary(field(value, "reasoningSummary")), tier(text(field(value, "serviceTier"))), rawVerbosity(text(field(value, "textVerbosity"))), Codex.choiceFromJson(jsonChoice(field(value, "toolChoice")))}
 
 def simpleOptions(+value: V.Value, signal: Abort.AbortSignal<Unit>) -> Responses.SimpleStreamOptions(Unit, Unit, String):
-  T.SimpleStreamOptions{Some{signal}, None{}, text(field(value, "apiKey")), None{}, providerEnv(field(value, "env")), None{}, None{}, headers(field(value, "headers")), number(field(value, "timeoutMs")), number(field(value, "maxRetries")), number(field(value, "maxRetryDelayMs")), number(field(value, "temperature")), None{}, None{}, transport(text(field(value, "transport"))), retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), number(field(value, "websocketConnectTimeoutMs")), None{}, simpleChoice(text(field(value, "toolChoice"))), thinking(text(field(value, "reasoning"))), None{}, None{}}
+  T.SimpleStreamOptions{Some{signal}, None{}, text(field(value, "apiKey")), None{}, providerEnv(field(value, "env")), None{}, None{}, headers(field(value, "headers")), number(field(value, "timeoutMs")), number(field(value, "maxRetries")), number(field(value, "maxRetryDelayMs")), number(field(value, "temperature")), Maybe.map(&2, V.Value, R.Record<T.JsonValue>, jsonProperties, field(value, "samplingParams")), None{}, transport(text(field(value, "transport"))), retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), number(field(value, "websocketConnectTimeoutMs")), None{}, simpleChoice(text(field(value, "toolChoice"))), thinking(text(field(value, "reasoning"))), None{}, None{}}
 
 def rendered(error: String) -> String: error
 

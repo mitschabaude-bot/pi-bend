@@ -1,4 +1,15 @@
 import Base
+import ../../../ai/src/api/openai-responses.bend as Responses
+import ../../../ai/src/api/openai-codex-responses.bend as Codex
+import ../../../ai/src/api/azure-openai-responses.bend as Azure
+import ../../../ai/src/api/anthropic-messages.bend as Anthropic
+import ../../../ai/src/api/anthropic-messages-client.bend as AnthropicClient
+import ../../../ai/src/api/google-generative-ai.bend as Google
+import ../../../ai/src/api/google-vertex.bend as Vertex
+import ../../../ai/src/api/openai-completions.bend as Completions
+import ../../../ai/src/api/mistral-conversations.bend as Mistral
+import ../../../ai/src/api/bedrock-converse-stream.bend as Bedrock
+import ../../../ai/src/api/pi-messages.bend as Pi
 import ./model-config.bend as Config
 import ./resolve-config-value.bend as ConfigValue
 import ../../../ai/src/types.bend as T
@@ -881,15 +892,109 @@ def composedOAuth(providerId: String, base: Maybe<&2, Auth.OAuthAuth>, headerCon
 # Extension providers (upstream ProviderConfigInput)
 # --------------------------------------------------
 
-# A provider's streamSimple (upstream Provider.streamSimple and
-# ProviderConfigInput.streamSimple): the model, transcript and provider
-# options of one request, answered with the event stream the agent loop
-# consumes. Built-in providers stream by api through the runtime's
-# transport instead.
+# Requests retain their raw API options or their simple reasoning configuration.
+# Auth preparation changes only the common fields. Extension callbacks handle
+# both variants; upstream also invokes config.streamSimple for raw requests.
 def StreamOptions() -> Data: T.SimpleStreamOptions<T.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError>
-def StreamRequest() -> Data: Agent.StreamInput<V.Value, Tools.ToolDetails, StreamOptions()>
+def BaseOptions() -> Data: T.StreamOptions<T.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError>
+
+type ApiStreamOptions is Data:
+  CommonOptions{base: BaseOptions()}
+  ResponsesOptions{options: Responses.OpenAIResponsesOptions<Unit, Unit, Tools.ToolError>}
+  CodexOptions{options: Codex.OpenAICodexResponsesOptions<Unit, Unit, Tools.ToolError>}
+  AzureOptions{options: Azure.AzureOpenAIResponsesOptions<Unit, Unit, Tools.ToolError>}
+  AnthropicOptions{options: AnthropicClient.Options(Unit, Unit, Tools.ToolError)}
+  GoogleOptions{options: Google.GoogleOptions<Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError>}
+  VertexOptions{options: Vertex.Options(Unit, Unit, Tools.ToolError)}
+  CompletionsOptions{options: Completions.Options(Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError)}
+  MistralOptions{options: Mistral.Options(Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError)}
+  BedrockOptions{options: Bedrock.Options(Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError)}
+  PiOptions{options: Pi.Options(Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError)}
+
+type RequestOptions is Data:
+  SimpleOptions{options: StreamOptions()}
+  RawOptions{options: ApiStreamOptions}
+
+def SimpleStreamRequest() -> Data: Agent.StreamInput<V.Value, Tools.ToolDetails, StreamOptions()>
+def RawStreamRequest() -> Data: Agent.StreamInput<V.Value, Tools.ToolDetails, ApiStreamOptions>
+def StreamRequest() -> Data: Agent.StreamInput<V.Value, Tools.ToolDetails, RequestOptions>
 def StreamOutput() -> Type: Result<&2, &1, Tools.ToolError, Agent.StreamLease<V.Value, Tools.ToolError>>
 def ProviderStream() -> Data: C.Callback<StreamRequest(), StreamOutput()>
+
+def emptyBase() -> BaseOptions(): T.toStreamOptions(T.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError, T.emptySimpleStreamOptions(T.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError))
+
+def rawBase(options: ApiStreamOptions) -> BaseOptions():
+  match options:
+    case CommonOptions{base}: base
+    case ResponsesOptions{value}: Responses.toStreamOptions(Unit, Unit, Tools.ToolError, value)
+    case CodexOptions{Codex.OpenAICodexResponsesOptions{base, _, _, _, _, _}}: base
+    case AzureOptions{Azure.AzureOpenAIResponsesOptions{base, _, _, _, _, _, _, _}}: base
+    case AnthropicOptions{Anthropic.AnthropicOptions{base, _, _, _, _, _, _, _}}: base
+    case GoogleOptions{Google.GoogleOptions{base, _, _}}: base
+    case VertexOptions{Vertex.GoogleVertexOptions{Google.GoogleOptions{base, _, _}, _, _}}: base
+    case CompletionsOptions{Completions.OpenAICompletionsOptions{base, _, _, _}}: base
+    case MistralOptions{Mistral.MistralOptions{base, _, _, _}}: base
+    case BedrockOptions{Bedrock.BedrockOptions{base, _, _, _, _, _, _, _, _, _}}: base
+    case PiOptions{Pi.PiMessagesOptions{base, _, _, _}}: base
+
+def withRawBase(options: ApiStreamOptions, base: BaseOptions()) -> ApiStreamOptions:
+  match options:
+    case CommonOptions{_}: CommonOptions{base}
+    case ResponsesOptions{value}: ResponsesOptions{Responses.fromStreamOptions(Unit, Unit, Tools.ToolError, base, Responses.settings(Unit, Unit, Tools.ToolError, value))}
+    case CodexOptions{Codex.OpenAICodexResponsesOptions{_, effort, summary, tier, verbosity, choice}}: CodexOptions{Codex.OpenAICodexResponsesOptions{base, effort, summary, tier, verbosity, choice}}
+    case AzureOptions{Azure.AzureOpenAIResponsesOptions{_, effort, choice, summary, version, resource, url, deployment}}: AzureOptions{Azure.AzureOpenAIResponsesOptions{base, effort, choice, summary, version, resource, url, deployment}}
+    case AnthropicOptions{Anthropic.AnthropicOptions{_, thinking, budget, effort, display, interleaved, choice, client}}: AnthropicOptions{Anthropic.AnthropicOptions{base, thinking, budget, effort, display, interleaved, choice, client}}
+    case GoogleOptions{Google.GoogleOptions{_, choice, thinking}}: GoogleOptions{Google.GoogleOptions{base, choice, thinking}}
+    case VertexOptions{Vertex.GoogleVertexOptions{Google.GoogleOptions{_, choice, thinking}, project, location}}: VertexOptions{Vertex.GoogleVertexOptions{Google.GoogleOptions{base, choice, thinking}, project, location}}
+    case CompletionsOptions{Completions.OpenAICompletionsOptions{_, choice, effort, budgets}}: CompletionsOptions{Completions.OpenAICompletionsOptions{base, choice, effort, budgets}}
+    case MistralOptions{Mistral.MistralOptions{_, choice, mode, effort}}: MistralOptions{Mistral.MistralOptions{base, choice, mode, effort}}
+    case BedrockOptions{Bedrock.BedrockOptions{_, region, profile, choice, effort, budgets, interleaved, display, metadata, bearer}}: BedrockOptions{Bedrock.BedrockOptions{base, region, profile, choice, effort, budgets, interleaved, display, metadata, bearer}}
+    case PiOptions{Pi.PiMessagesOptions{_, effort, choice, debug}}: PiOptions{Pi.PiMessagesOptions{base, effort, choice, debug}}
+
+# Built-in raw options have API-specific defaults, independent of simple
+# reasoning conversion. A typed option record for another API is rejected.
+def optionsForApi(api: T.ModelApi, options: ApiStreamOptions) -> Result<&2, &2, String, ApiStreamOptions>:
+  match api options:
+    case T.OpenAIResponsesApi{} CommonOptions{base}: Done{ResponsesOptions{Responses.fromStreamOptions(Unit, Unit, Tools.ToolError, base, Responses.ResponsesSettings{None{}, None{}, None{}, None{}})}}
+    case T.OpenAICodexResponsesApi{} CommonOptions{base}: Done{CodexOptions{Codex.OpenAICodexResponsesOptions{base, None{}, None{}, None{}, None{}, None{}}}}
+    case T.AzureOpenAIResponsesApi{} CommonOptions{base}: Done{AzureOptions{Azure.AzureOpenAIResponsesOptions{base, None{}, None{}, None{}, None{}, None{}, None{}, None{}}}}
+    case T.AnthropicMessagesApi{} CommonOptions{base}: Done{AnthropicOptions{Anthropic.AnthropicOptions{base, None{}, None{}, None{}, None{}, None{}, None{}, None{}}}}
+    case T.GoogleGenerativeAiApi{} CommonOptions{base}: Done{GoogleOptions{Google.GoogleOptions{base, None{}, None{}}}}
+    case T.GoogleVertexApi{} CommonOptions{base}: Done{VertexOptions{Vertex.GoogleVertexOptions{Google.GoogleOptions{base, None{}, None{}}, None{}, None{}}}}
+    case T.OpenAICompletionsApi{} CommonOptions{base}: Done{CompletionsOptions{Completions.OpenAICompletionsOptions{base, None{}, None{}, None{}}}}
+    case T.MistralConversationsApi{} CommonOptions{base}: Done{MistralOptions{Mistral.MistralOptions{base, None{}, None{}, None{}}}}
+    case T.BedrockConverseStreamApi{} CommonOptions{base}: Done{BedrockOptions{Bedrock.BedrockOptions{base, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}}}
+    case T.PiMessagesApi{} CommonOptions{base}: Done{PiOptions{Pi.PiMessagesOptions{base, None{}, None{}, None{}}}}
+    case T.OpenAIResponsesApi{} ResponsesOptions{value}: Done{ResponsesOptions{value}}
+    case T.OpenAICodexResponsesApi{} CodexOptions{value}: Done{CodexOptions{value}}
+    case T.AzureOpenAIResponsesApi{} AzureOptions{value}: Done{AzureOptions{value}}
+    case T.AnthropicMessagesApi{} AnthropicOptions{value}: Done{AnthropicOptions{value}}
+    case T.GoogleGenerativeAiApi{} GoogleOptions{value}: Done{GoogleOptions{value}}
+    case T.GoogleVertexApi{} VertexOptions{value}: Done{VertexOptions{value}}
+    case T.OpenAICompletionsApi{} CompletionsOptions{value}: Done{CompletionsOptions{value}}
+    case T.MistralConversationsApi{} MistralOptions{value}: Done{MistralOptions{value}}
+    case T.BedrockConverseStreamApi{} BedrockOptions{value}: Done{BedrockOptions{value}}
+    case T.PiMessagesApi{} PiOptions{value}: Done{PiOptions{value}}
+    case T.CustomModelApi{_} CommonOptions{base}: Done{CommonOptions{base}}
+    case _ _: Fail{"Raw stream options do not match the model API"}
+
+def requestBase(options: RequestOptions) -> BaseOptions():
+  match options:
+    case SimpleOptions{value}: T.toStreamOptions(T.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError, value)
+    case RawOptions{value}: rawBase(value)
+
+def withRequestBase(options: RequestOptions, base: BaseOptions()) -> RequestOptions:
+  match options base:
+    case RawOptions{value} base: RawOptions{withRawBase(value, base)}
+    case SimpleOptions{T.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, choice, reasoning, deferred, budgets}} T.StreamOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, tokens, transport, retention, session, connect, metadata}:
+      SimpleOptions{T.SimpleStreamOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, tokens, transport, retention, session, connect, metadata, choice, reasoning, deferred, budgets}}
+
+# Simple-only consumers explicitly select the simple variant; no raw options
+# are projected through the simple reasoning conversion.
+def simpleOptions(options: Maybe<&2, RequestOptions>) -> Maybe<&2, StreamOptions()>:
+  match options:
+    case Some{SimpleOptions{value}}: Some{value}
+    case _: None{}
 
 # One of ProviderConfigInput.models; `api` and `baseUrl` fall back to the
 # provider config, then to the defaults model.

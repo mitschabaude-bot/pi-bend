@@ -2039,10 +2039,14 @@ def setApiStreams(runtime: ModelRuntime, streams: Maybe<&2, Composer.ProviderStr
 
 def failed(+message: String) -> Composer.StreamOutput(): Fail{Tools.Failure{message}}
 
-def requestOverrides(options: Maybe<&2, Composer.StreamOptions()>) -> Resolve.AuthResolutionOverrides:
+def baseOverrides(options: Composer.BaseOptions()) -> Resolve.AuthResolutionOverrides:
+  match options:
+    case Ai.StreamOptions{signal, _, key, _, env, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: Resolve.AuthResolutionOverrides{key, env, None{}, signal}
+
+def requestOverrides(options: Maybe<&2, Composer.RequestOptions>) -> Resolve.AuthResolutionOverrides:
   match options:
     case None{}: Resolve.noOverrides()
-    case Some{Ai.SimpleStreamOptions{signal, _, apiKey, _, env, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}: Resolve.AuthResolutionOverrides{apiKey, env, None{}, signal}
+    case Some{value}: baseOverrides(Composer.requestBase(value))
 
 def withAuthBaseUrl(model: Model(), url: Maybe<&2, String>) -> Model():
   match model url:
@@ -2058,35 +2062,38 @@ def mergedEnv(auth: Maybe<&2, Ai.ProviderEnv()>, request: Maybe<&2, Ai.ProviderE
 
 # upstream prepareRequest's options: the request's key wins over the
 # resolved one, auth headers come first, and the environments merge.
-def authorizedOptions(auth: Auth.AuthResult, options: Composer.StreamOptions()) -> Composer.StreamOptions():
+def authorizedBase(auth: Auth.AuthResult, options: Composer.BaseOptions()) -> Composer.BaseOptions():
   match auth options:
-    case Auth.AuthResult{Auth.ModelAuth{key, authHeaders, _}, authEnv, _} Ai.SimpleStreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
-      Ai.SimpleStreamOptions{signal, telemetry, Maybe.or(&2, String, apiKey, key), shared, mergedEnv(authEnv, env), onPayload, onResponse, AiModels.mergeHeaders(authHeaders, headers), timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}
+    case Auth.AuthResult{Auth.ModelAuth{key, authHeaders, _}, authEnv, _} Ai.StreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata}:
+      Ai.StreamOptions{signal, telemetry, Maybe.or(&2, String, apiKey, key), shared, mergedEnv(authEnv, env), onPayload, onResponse, AiModels.mergeHeaders(authHeaders, headers), timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata}
 
-def optionsHeaders(options: Composer.StreamOptions()) -> Maybe<&2, Ai.ProviderHeaders()>:
-  match options:
-    case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: headers
+def authorizedOptions(auth: Auth.AuthResult, +options: Composer.RequestOptions) -> Composer.RequestOptions:
+  Composer.withRequestBase(options, authorizedBase(auth, Composer.requestBase(options)))
 
-def withOptionsHeaders(options: Composer.StreamOptions(), headers: Maybe<&2, Ai.ProviderHeaders()>) -> Composer.StreamOptions():
+def baseHeaders(options: Composer.BaseOptions()) -> Maybe<&2, Ai.ProviderHeaders()>:
   match options:
-    case Ai.SimpleStreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, _, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
-      Ai.SimpleStreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}
+    case Ai.StreamOptions{_, _, _, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _}: headers
+
+def withBaseHeaders(options: Composer.BaseOptions(), headers: Maybe<&2, Ai.ProviderHeaders()>) -> Composer.BaseOptions():
+  match options:
+    case Ai.StreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, _, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata}:
+      Ai.StreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata}
 
 # upstream: `if (transformHeaders) headers = await transformHeaders(headers ?? {})`.
-def transformedWith(transform: Maybe<&2, C.Callback<Ai.ProviderHeaders(), Ai.ProviderHeaders()>>, +options: Composer.StreamOptions()) -> IO(Composer.StreamOptions()):
+def transformedWith(transform: Maybe<&2, C.Callback<Ai.ProviderHeaders(), Ai.ProviderHeaders()>>, +options: Composer.RequestOptions) -> IO(Composer.RequestOptions):
   match transform:
-    case None{}: IO.pure(Composer.StreamOptions(), options)
+    case None{}: IO.pure(Composer.RequestOptions, options)
     case Some{callback}:
-      do IO<Composer.StreamOptions()>:
-        +headers : Ai.ProviderHeaders() <- C.call(Ai.ProviderHeaders(), Ai.ProviderHeaders(), callback, Maybe.default(&2, Ai.ProviderHeaders(), optionsHeaders(options), R.new(Ai.Nullable<String>)))
-        return withOptionsHeaders(options, Some{headers})
+      do IO<Composer.RequestOptions>:
+        +headers : Ai.ProviderHeaders() <- C.call(Ai.ProviderHeaders(), Ai.ProviderHeaders(), callback, Maybe.default(&2, Ai.ProviderHeaders(), baseHeaders(Composer.requestBase(options)), R.new(Ai.Nullable<String>)))
+        return Composer.withRequestBase(options, withBaseHeaders(Composer.requestBase(options), Some{headers}))
 
-def transformed(transforms: RequestTransforms, options: Maybe<&2, Composer.StreamOptions()>) -> IO(Maybe<&2, Composer.StreamOptions()>):
+def transformed(transforms: RequestTransforms, options: Maybe<&2, Composer.RequestOptions>) -> IO(Maybe<&2, Composer.RequestOptions>):
   match transforms options:
-    case _ None{}: IO.pure(Maybe<&2, Composer.StreamOptions()>, None{})
+    case _ None{}: IO.pure(Maybe<&2, Composer.RequestOptions>, None{})
     case RequestTransforms{transform, _} Some{value}:
-      do IO<Maybe<&2, Composer.StreamOptions()>>:
-        found : Composer.StreamOptions() <- transformedWith(transform, value)
+      do IO<Maybe<&2, Composer.RequestOptions>>:
+        found : Composer.RequestOptions <- transformedWith(transform, value)
         return Some{found}
 
 def sameApi(configured: Maybe<&2, Ai.ModelApi>, +api: Ai.ModelApi) -> Bool:
@@ -2103,27 +2110,33 @@ def entryStream(entry: Maybe<&2, ExtensionEntry>, +model: Model()) -> Maybe<&2, 
     case Some{ExtensionEntry{_, Some{config}, stream, _}}: Bool.pick(Maybe<&2, Composer.ProviderStream()>, sameApi(Composer.configApi(config), ModelApi.modelApi(Ai.JsonValue, model)), stream, None{})
     case None{}: None{}
 
-def optionsEnv(options: Composer.StreamOptions()) -> Maybe<&2, Ai.ProviderEnv()>:
+def baseEnv(options: Composer.BaseOptions()) -> Maybe<&2, Ai.ProviderEnv()>:
   match options:
-    case Ai.SimpleStreamOptions{_, _, _, _, env, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: env
+    case Ai.StreamOptions{_, _, _, _, env, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: env
 
-def routedCall(stream: Composer.ProviderStream(), +routed: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>, +streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
-  C.call(Composer.StreamRequest(), Composer.StreamOutput(), stream, AgentTypes.StreamInput{routed, context, Maybe.map(&2, Composer.StreamOptions(), Composer.StreamOptions(), value => AiModels.streamSimpleOptions(Ai.JsonValue, Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError, streams, routed, value), options)})
+def optionsEnv(options: Composer.RequestOptions) -> Maybe<&2, Ai.ProviderEnv()>: baseEnv(Composer.requestBase(options))
+
+# Apply provider routing to the common fields, preserving raw API settings.
+def routedOptions(+options: Composer.RequestOptions, streams: AiModels.ProviderStreams, model: Model()) -> Composer.RequestOptions:
+  Composer.withRequestBase(options, AiModels.streamOptions(Ai.JsonValue, Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError, streams, model, Composer.requestBase(options)))
+
+def routedCall(stream: Composer.ProviderStream(), +routed: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.RequestOptions>, +streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
+  C.call(Composer.StreamRequest(), Composer.StreamOutput(), stream, AgentTypes.StreamInput{routed, context, Maybe.map(&2, Composer.RequestOptions, Composer.RequestOptions, value => routedOptions(value, streams, routed), options)})
 
 # Built-in apis stream through the installed api stream, for the model the
 # provider's streams dispatch (Cloudflare's resolved account URL, OpenCode's
 # session header).
-def viaApiStreams(apiStreams: Maybe<&2, Composer.ProviderStream()>, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, +options: Maybe<&2, Composer.StreamOptions()>, +streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
+def viaApiStreams(apiStreams: Maybe<&2, Composer.ProviderStream()>, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, +options: Maybe<&2, Composer.RequestOptions>, +streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
   match apiStreams:
     case None{}: IO.pure(Composer.StreamOutput(), failed("No API provider registered for api: " ++ ModelApi.name(ModelApi.modelApi(Ai.JsonValue, model))))
-    case Some{stream}: routedCall(stream, AiModels.streamModel(Ai.JsonValue, streams, model, Maybe.bind(&2, Composer.StreamOptions(), Ai.ProviderEnv(), options, optionsEnv)), context, options, streams)
+    case Some{stream}: routedCall(stream, AiModels.streamModel(Ai.JsonValue, streams, model, Maybe.bind(&2, Composer.RequestOptions, Ai.ProviderEnv(), options, optionsEnv)), context, options, streams)
 
-def dispatchedWith(custom: Maybe<&2, Composer.ProviderStream()>, apiStreams: Maybe<&2, Composer.ProviderStream()>, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>, streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
+def dispatchedWith(custom: Maybe<&2, Composer.ProviderStream()>, apiStreams: Maybe<&2, Composer.ProviderStream()>, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.RequestOptions>, streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
   match custom:
     case Some{stream}: C.call(Composer.StreamRequest(), Composer.StreamOutput(), stream, AgentTypes.StreamInput{model, context, options})
     case None{}: viaApiStreams(apiStreams, model, context, options, streams)
 
-def dispatched(state: ExtensionState, fallback: Maybe<&2, Composer.ProviderStream()>, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>, streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
+def dispatched(state: ExtensionState, fallback: Maybe<&2, Composer.ProviderStream()>, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.RequestOptions>, streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
   match state:
     case ExtensionState{entries, apiStreams}: dispatchedWith(entryStream(findEntry(entries, Ai.modelProvider(model)), model), Maybe.or(&2, Composer.ProviderStream(), apiStreams, fallback), model, context, options, streams)
 
@@ -2135,15 +2148,15 @@ def preparedModel(resolution: Resolve.Resolution(), +model: Model()) -> Model():
     case Done{Some{Auth.AuthResult{Auth.ModelAuth{_, _, url}, _, _}}}: withAuthBaseUrl(model, url)
     case _: model
 
-def preparedOptions(resolution: Resolve.Resolution(), options: Maybe<&2, Composer.StreamOptions()>) -> Maybe<&2, Composer.StreamOptions()>:
+def preparedOptions(resolution: Resolve.Resolution(), options: Maybe<&2, Composer.RequestOptions>) -> Maybe<&2, Composer.RequestOptions>:
   match resolution options:
     case Done{Some{auth}} Some{value}: Some{authorizedOptions(auth, value)}
-    case Done{Some{auth}} None{}: Some{authorizedOptions(auth, Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError))}
+    case Done{Some{auth}} None{}: Some{authorizedOptions(auth, Composer.SimpleOptions{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError)})}
     case _ other: other
 
-def preparedStream(+runtime: ModelRuntime, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, +transforms: RequestTransforms, +resolution: Resolve.Resolution(), options: Maybe<&2, Composer.StreamOptions()>) -> IO(Composer.StreamOutput()):
+def preparedStream(+runtime: ModelRuntime, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, +transforms: RequestTransforms, +resolution: Resolve.Resolution(), options: Maybe<&2, Composer.RequestOptions>) -> IO(Composer.StreamOutput()):
   do IO<Composer.StreamOutput()>:
-    final : Maybe<&2, Composer.StreamOptions()> <- transformed(transforms, preparedOptions(resolution, options))
+    final : Maybe<&2, Composer.RequestOptions> <- transformed(transforms, preparedOptions(resolution, options))
     streams : AiModels.ProviderStreams <- getProviderStreams(runtime, Ai.modelProvider(model))
     state : ExtensionState <- Ref.read(ExtensionState, extensionsRef(runtime))
     dispatched(state, fallbackStream(transforms), preparedModel(resolution, model), context, final, streams)
@@ -2154,18 +2167,28 @@ def preparedStream(+runtime: ModelRuntime, +model: Model(), context: Ai.Transcri
 # provider streams it: an extension stream, else the built-in api stream.
 # An unknown provider, failed auth lookup, or missing configured auth
 # stops before the transport is invoked.
-def authenticatedStream(+runtime: ModelRuntime, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, +transforms: RequestTransforms, options: Maybe<&2, Composer.StreamOptions()>, resolution: Resolve.Resolution()) -> IO(Composer.StreamOutput()):
+def authenticatedStream(+runtime: ModelRuntime, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Tools.ToolDetails>, +transforms: RequestTransforms, options: Maybe<&2, Composer.RequestOptions>, resolution: Resolve.Resolution()) -> IO(Composer.StreamOutput()):
   match resolution:
     case Fail{error}: IO.pure(Composer.StreamOutput(), failed(Resolve.errorMessage(error)))
     case Done{None{}}: IO.pure(Composer.StreamOutput(), failed("Provider is not configured: " ++ Ai.modelProvider(model)))
     case Done{Some{auth}}: preparedStream(runtime, model, context, transforms, Done{Some{auth}}, options)
 
-def streamSimple(+runtime: ModelRuntime, request: Composer.StreamRequest(), transforms: RequestTransforms) -> IO(Composer.StreamOutput()):
+def streamRequest(+runtime: ModelRuntime, request: Composer.StreamRequest(), transforms: RequestTransforms) -> IO(Composer.StreamOutput()):
   match request:
     case AgentTypes.StreamInput{+model, context, +options}:
       do IO<Composer.StreamOutput()>:
         resolution : Resolve.Resolution() <- getModelAuth(runtime, model, requestOverrides(options))
         authenticatedStream(runtime, model, context, transforms, options, resolution)
+
+# Both public methods share auth, routing and header preparation. The request
+# variant remains intact until its provider selects raw or simple streaming.
+def streamSimple(+runtime: ModelRuntime, request: Composer.SimpleStreamRequest(), transforms: RequestTransforms) -> IO(Composer.StreamOutput()):
+  match request:
+    case AgentTypes.StreamInput{model, context, options}: streamRequest(runtime, AgentTypes.StreamInput{model, context, Maybe.map(&2, Composer.StreamOptions(), Composer.RequestOptions, value => Composer.SimpleOptions{value}, options)}, transforms)
+
+def stream(+runtime: ModelRuntime, request: Composer.RawStreamRequest(), transforms: RequestTransforms) -> IO(Composer.StreamOutput()):
+  match request:
+    case AgentTypes.StreamInput{model, context, options}: streamRequest(runtime, AgentTypes.StreamInput{model, context, Some{Composer.RawOptions{Maybe.default(&2, Composer.ApiStreamOptions, options, Composer.CommonOptions{Composer.emptyBase()})}}}, transforms)
 
 def errorReply(model: Model(), message: String, now: F64) -> Ai.AssistantMessage<V.Value, V.Value>:
   match model:
@@ -2183,15 +2206,16 @@ def completed(+model: Model(), response: Composer.StreamOutput()) -> IO(Ai.Assis
         released : Result<&2, &2, Tools.ToolError, Unit> <- release
         return message
 
-# upstream ModelRuntime.completeSimple (and complete, which the native
-# provider options do not distinguish): the stream's final message.
+# Completion consumes the selected stream's final message and releases its run.
 def completeSimple(+runtime: ModelRuntime, +model: Model(), context: Ai.Context<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
   do IO<Ai.AssistantMessage<V.Value, V.Value>>:
     response : Composer.StreamOutput() <- streamSimple(runtime, AgentTypes.StreamInput{model, Transcript.normalizeContext(V.Value, V.Value, V.Value, Tools.ToolDetails, context), options}, noTransforms())
     completed(model, response)
 
-def complete(+runtime: ModelRuntime, +model: Model(), context: Ai.Context<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
-  completeSimple(runtime, model, context, options)
+def complete(+runtime: ModelRuntime, +model: Model(), context: Ai.Context<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.ApiStreamOptions>) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
+    response : Composer.StreamOutput() <- stream(runtime, AgentTypes.StreamInput{model, Transcript.normalizeContext(V.Value, V.Value, V.Value, Tools.ToolDetails, context), options}, noTransforms())
+    completed(model, response)
 
 def nativeIdsOf(catalog: Catalog) -> List<&2, String>:
   match catalog:

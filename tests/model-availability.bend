@@ -99,7 +99,7 @@ def checkStreamOwnership(+runtime: Models.ModelRuntime) -> IO(Unit):
   do IO<Unit>:
     +fallback : Composer.ProviderStream() <- C.create(~String, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~streamFailure, "session")
     global : Composer.ProviderStream() <- C.create(~String, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~streamFailure, "runtime")
-    +request : Composer.StreamRequest() = AgentTypes.StreamInput{model("a"), Ai.TranscriptContext{Nil{}}, None{}}
+    +request : Composer.SimpleStreamRequest() = AgentTypes.StreamInput{model("a"), Ai.TranscriptContext{Nil{}}, None{}}
     local : Composer.StreamOutput() <- Models.streamSimple(runtime, request, Models.RequestTransforms{None{}, Some{fallback}})
     require(failedWith(local, "session"), "per-request stream did not serve an unconfigured runtime")
     Models.setApiStreams(runtime, Some{global})

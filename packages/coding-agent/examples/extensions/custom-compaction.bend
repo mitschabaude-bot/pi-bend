@@ -90,8 +90,8 @@ def requestId(generated: Result<&2, &2, Uuid.Error, String>) -> Maybe<&2, String
 
 # The request honors the compaction's abort signal, without cache writes, on
 # a fresh routing id.
-def requestOptions(signal: Abort.AbortSignal<Unit>, sessionId: Maybe<&2, String>) -> Composer.StreamOptions():
-  Ai.SimpleStreamOptions{Some{signal}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{F.fromU32(8192)}, None{}, Some{Ai.CacheNone{}}, sessionId, None{}, None{}, None{}, None{}, None{}, None{}}
+def requestOptions(signal: Abort.AbortSignal<Unit>, sessionId: Maybe<&2, String>) -> Composer.ApiStreamOptions:
+  Composer.CommonOptions{Ai.StreamOptions{Some{signal}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{F.fromU32(8192)}, None{}, Some{Ai.CacheNone{}}, sessionId, None{}, None{}}}
 
 def summarize(+ctx: Ctx.ExtensionContext, +model: Ai.Model<Ai.JsonValue>, preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>, +signal: Abort.AbortSignal<Unit>) -> IO(Outcome()):
   match preparation:

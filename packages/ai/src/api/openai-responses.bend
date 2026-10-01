@@ -387,12 +387,12 @@ def assembledParams(-Reason: Data, -Telemetry: Data, -E: Data, +model: T.Model<T
 # an explicit tool choice, and no output-token budget or cache retention.
 def codexParams(-Reason: Data, -Telemetry: Data, -E: Data, +model: T.Model<T.JsonValue>, input: List<&2, T.JsonValue>, tools: List<&2, T.JsonValue>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, retention: T.CacheRetention, instructions: String) -> T.JsonValue:
   match model options:
-    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, sampling, _, _, _, session, _, _, effort, summary, tier, choice}:
+    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, _, _, _, _, session, _, _, effort, summary, tier, choice}:
       fields = {R.Record{R.Property{"model", T.JsonString{id}} <> R.Property{"store", T.JsonBoolean{False{}}} <> R.Property{"stream", T.JsonBoolean{True{}}} <> R.Property{"instructions", T.JsonString{instructions}} <> R.Property{"input", T.JsonArray{input}} <> R.Property{"text", T.JsonObject{R.Record{R.Property{"verbosity", T.JsonString{"low"}} <> Nil{}}}} <> R.Property{"include", T.JsonArray{T.JsonString{"reasoning.encrypted_content"} <> Nil{}}} <> Nil{}} : R.Record<T.JsonValue>}
       keyed = optionalString(fields, "prompt_cache_key", promptCacheKey(retention, session))
       chosen = R.set(T.JsonValue, R.set(T.JsonValue, keyed, "tool_choice", Maybe.default(&2, T.JsonValue, choice, T.JsonString{"auto"})), "parallel_tool_calls", T.JsonBoolean{True{}})
       configured = optionalNullableString(optionalNumber(chosen, "temperature", temperature), "service_tier", tierValue(tier))
-      T.JsonObject{samplingFields(addReasoning(addTools(configured, tools), model, effort, summary), sampling)}
+      T.JsonObject{addReasoning(addTools(configured, tools), model, effort, summary)}
 
 def endpointParams(-Reason: Data, -Telemetry: Data, -E: Data, endpoint: Endpoint, instructions: Maybe<&2, String>, model: T.Model<T.JsonValue>, input: List<&2, T.JsonValue>, tools: List<&2, T.JsonValue>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, compat: ResolvedCompat, retention: T.CacheRetention) -> T.JsonValue:
   match endpoint instructions:

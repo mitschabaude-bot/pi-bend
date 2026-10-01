@@ -148,6 +148,7 @@ case('preserves gpt-5.5 xhigh reasoning effort from simple options', [step(sse()
 case('forwards required tool choice', [step(sse())], dict(toolChoice='required'), model={'id': 'gpt-5.5', 'name': 'GPT-5.5'}, context=dict(messages=[{'role': 'user', 'content': 'Do not call ping. Respond with text instead.', 'timestamp': 1}], tools=[PING]), check=lambda r: expect(first_request(r)['body'].get('tool_choice') == 'required', first_request(r)['body']))
 # The raw API has its own options, including values SimpleStreamOptions
 # cannot represent. Compare the complete request/event/result with pinned pi.
+case('native: inherited sampling cannot replace Codex request fields', [step(sse())], dict(samplingParams={'model': 'wrong-model', 'stream': False, 'text': {'verbosity': 'high'}, 'max_output_tokens': 1, 'top_p': 0.5}), check=lambda r: (expect(first_request(r)['body']['model'] != 'wrong-model', first_request(r)['body']), expect(first_request(r)['body']['stream'] is True), expect(first_request(r)['body']['text'] == {'verbosity': 'low'}), expect('max_output_tokens' not in first_request(r)['body']), expect('top_p' not in first_request(r)['body'])))
 for verbosity in ('low', 'medium', 'high'):
     case(f'native: raw text verbosity {verbosity}', [step(sse())], dict(textVerbosity=verbosity), check=lambda r, expected=verbosity: expect(first_request(r)['body']['text'] == {'verbosity': expected}, first_request(r)['body']))
 for summary in ('auto', 'concise', 'detailed', 'off', 'on', None):

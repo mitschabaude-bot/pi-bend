@@ -136,6 +136,13 @@ def streamSimpleOptions(-SamplingValue: Data, -Value: Data, -Signal: Data, -Tele
     case OpenCodeStreams{apis}: optionsWith(Value, Signal, Telemetry, Fetch, Error, wraps(apis, Api.name(Api.modelApi(SamplingValue, model))), options)
     case _: options
 
+# Raw requests use the same provider session affinity without converting
+# their API-specific options through streamSimple.
+def streamOptions(-SamplingValue: Data, -Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, streams: ProviderStreams, model: T.Model<SamplingValue>, +options: T.StreamOptions<Value, Signal, Telemetry, Fetch, Error>) -> T.StreamOptions<Value, Signal, Telemetry, Fetch, Error>:
+  match streams:
+    case OpenCodeStreams{apis}: Bool.pick(T.StreamOptions<Value, Signal, Telemetry, Fetch, Error>, wraps(apis, Api.name(Api.modelApi(SamplingValue, model))), OpenCode.withSessionHeader(Value, Signal, Telemetry, Fetch, Error, options), options)
+    case _: options
+
 def usedBy(models: List<&2, T.Model<T.JsonValue>>, +api: String) -> Bool:
   match models:
     case Nil{}: False{}
