@@ -32,6 +32,10 @@ import ../src/core/tools/index.bend as Tools
 import ../src/core/extensions/loader.bend as Loader
 import ../src/core/extensions/runner.bend as Runner
 import ../src/core/extensions/types.bend as Ext
+import ../src/core/extensions/context.bend as Ctx
+import ../../ai/src/utils/transcript.bend as Transcript
+import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 # Port of all nine sdk-stream-options.test.ts cases. Forwarding uses an
 # injected provider through the SDK Agent stream; cache warming runs a
@@ -345,6 +349,139 @@ def cacheWarmingCase(+directory: String, +restored: Bool) -> IO(Unit):
     count : Nat <- Rf.dispose(Nat, calls)
     disposeIds(ids)
 
+
+# Regression 8964: the provider and command are registered by distinct
+# extensions. Consume the real stream through the command's bound registry.
+type ExtensionStreamEvidence is Data:
+  ExtensionStreamEvidence{options: Rf.Ref<Maybe<&2, Composer.StreamOptions()>>, text: Rf.Ref<String>, reply: Rf.Ref<Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>>}
+
+def extensionReply() -> Ai.AssistantMessage<V.Value, V.Value>:
+  Ai.AssistantMessage{[Ai.AssistantText{Ai.TextContent{"custom provider response", None{}}}], "issue-8964-extension-api", "extension-provider", "custom-model", None{}, None{}, None{}, None{}, warmUsage(), Ai.Stop{}, None{}, None{}, None{}, None{}, zero()}
+
+def extensionStream(slot: Rf.Ref<Maybe<&2, Composer.StreamOptions()>>, request: Composer.StreamRequest()) -> IO(Composer.StreamOutput()):
+  match request:
+    case AgentTypes.StreamInput{_, _, options}:
+      do IO<Composer.StreamOutput()>:
+        Rf.write(Maybe<&2, Composer.StreamOptions()>, slot, options)
+        +events : Events.AssistantMessageEventStream(V.Value, V.Value) <- Events.createAssistantMessageEventStream(~V.Value, ~V.Value)
+        Events.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.TextDelta{zero(), "custom provider response", extensionReply()})
+        Events.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.StreamDone{Ai.DoneStop{}, extensionReply()})
+        return Done{AgentTypes.StreamLease{events, releaseCompleted(events)}}
+
+def providerFactory(stream: Composer.ProviderStream(), api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    definition : Composer.ProviderModelConfig = Composer.ProviderModelConfig{"custom-model", "Custom model", None{}, None{}, False{}, None{}, [Ai.InputText{}], None{}, Ai.ModelCost{zero(), zero(), zero(), zero(), None{}}, None{}, number(128000), number(4096), None{}, None{}, None{}}
+    Loader.registerProviderConfig(api, "extension-provider", Composer.ProviderConfigInput{None{}, Some{"https://extension.invalid"}, Some{"extension-key"}, Some{Ai.CustomModelApi{"issue-8964-extension-api"}}, Some{stream}, None{}, None{}, Some{[definition]}})
+
+def extensionDelta(event: Ai.AssistantMessageEvent<V.Value, V.Value>) -> String:
+  match event:
+    case Ai.TextDelta{_, text, _}: text
+    case _: ""
+
+@unsafe def drainExtension(next: Events.Iteration<Ai.AssistantMessageEvent<V.Value, V.Value>>, +cursor: Events.Iterator<Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>>, text: String) -> IO(String):
+  match next:
+    case Events.End{}: IO.pure(String, text)
+    case Events.Yield{event}:
+      do IO<String>:
+        next : Events.Iteration<Ai.AssistantMessageEvent<V.Value, V.Value>> <- Events.nextValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, cursor)
+        drainExtension(next, cursor, text ++ extensionDelta(event))
+
+def extensionReleased(result: Result<&2, &2, Tools.ToolError, Unit>) -> Result<&2, &2, String, Unit>:
+  match result:
+    case Done{_}: Done{Unit{}}
+    case Fail{error}: Fail{Tools.errorMessage(error)}
+
+def consumeExtension(evidence: ExtensionStreamEvidence, output: Composer.StreamOutput()) -> IO(Result<&2, &2, String, Unit>):
+  match evidence output:
+    case _ Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{Tools.errorMessage(error)})
+    case ExtensionStreamEvidence{_, text, reply} Done{AgentTypes.StreamLease{+events, release}}:
+      do IO<Result<&2, &2, String, Unit>>:
+        +cursor : Events.Iterator<Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>> <- Events.iterator(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events)
+        first : Events.Iteration<Ai.AssistantMessageEvent<V.Value, V.Value>> <- Events.nextValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, cursor)
+        content : String <- drainExtension(first, cursor, "")
+        result : Ai.AssistantMessage<V.Value, V.Value> <- Events.resultValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events)
+        Rf.write(String, text, content)
+        Rf.write(Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>, reply, Some{result})
+        Events.disposeIterator(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, cursor)
+        released : Result<&2, &2, Tools.ToolError, Unit> <- release
+        return extensionReleased(released)
+
+def streamRegisteredExtension(+registry: Models.ModelRuntime, evidence: ExtensionStreamEvidence, found: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Unit>):
+  match found:
+    case None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{"registered model missing"})
+    case Some{selected}:
+      do IO<Result<&2, &2, String, Unit>>:
+        transcript : Ai.Context<V.Value, V.Value, V.Value, Tools.ToolDetails> = Ai.Context{None{}, [Ai.User{Ai.UserMessage{Ai.UserText{"Hello"}, zero()}}], None{}}
+        output : Composer.StreamOutput() <- Models.streamSimple(registry, AgentTypes.StreamInput{selected, Transcript.normalizeContext(V.Value, V.Value, V.Value, Tools.ToolDetails, transcript), None{}}, Models.noTransforms())
+        consumeExtension(evidence, output)
+
+def streamExtension(evidence: ExtensionStreamEvidence, call: Ext.CommandCall) -> IO(Result<&2, &2, String, Unit>):
+  match call:
+    case Ext.CommandCall{_, context}:
+      do IO<Result<&2, &2, String, Unit>>:
+        +registry : Models.ModelRuntime = Ctx.modelRegistry(Ctx.commandContext(context))
+        found : Maybe<&2, Models.Model()> <- Models.getModel(registry, "extension-provider", "custom-model")
+        streamRegisteredExtension(registry, evidence, found)
+
+def commandFactory(evidence: ExtensionStreamEvidence, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.CommandHandler() <- C.create(~ExtensionStreamEvidence, ~Ext.CommandCall, ~Result<&2, &2, String, Unit>, ~streamExtension, evidence)
+    Loader.registerCommand(api, "stream-custom", Ext.CommandOptions{Some{"Stream custom provider"}, None{}, handler})
+
+def extensionResult(reply: Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>) -> Bool:
+  match reply:
+    case Some{Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"custom provider response", _}} <> Nil{}, _, _, _, _, _, _, _, _, Ai.Stop{}, _, _, _, _, _}}: True{}
+    case _: False{}
+
+def checkExtensionSession(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, evidence: ExtensionStreamEvidence, isolated: Models.ModelRuntime, before: Maybe<&2, Models.Model()>) -> IO(Unit):
+  match pair evidence:
+    case Tuple{owner, +live} ExtensionStreamEvidence{slot, text, reply}:
+      do IO<Unit>:
+        prompted : Result<&2, &2, String, Unit> <- Session.prompt(live, "/stream-custom", Nil{}, None{})
+        after : Maybe<&2, Models.Model()> <- Models.getModel(isolated, "extension-provider", "custom-model")
+        captured : Maybe<&2, Composer.StreamOptions()> <- Rf.read(Maybe<&2, Composer.StreamOptions()>, slot)
+        options : Composer.StreamOptions() <- requiredOption(captured)
+        content : String <- Rf.read(String, text)
+        result : Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>> <- Rf.read(Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>, reply)
+        check(Maybe.is_none(&2, Models.Model(), before) && Maybe.is_none(&2, Models.Model(), after) && Result.is_done(&2, &2, String, Unit, prompted) && String.eq(Maybe.default(&2, String, Ai.apiKeyOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError, options), ""), "extension-key") && String.eq(content, "custom provider response") && extensionResult(result), "allows an extension command to use ctx.modelRegistry.streamSimple")
+        Sdk.dispose(owner)
+
+def checkExtensionOutcome(result: Sdk.Outcome(), evidence: ExtensionStreamEvidence, isolated: Models.ModelRuntime, before: Maybe<&2, Models.Model()>) -> IO(Unit):
+  match result:
+    case Fail{message}: IO.die(Unit, 1, message)
+    case Done{owner}: checkExtensionSession(Sdk.sessionOf(owner), evidence, isolated, before)
+
+def extensionStreamingCase(+directory: String) -> IO(Unit):
+  do IO<Unit>:
+    +slot : Rf.Ref<Maybe<&2, Composer.StreamOptions()>> <- Rf.new(Maybe<&2, Composer.StreamOptions()>, None{})
+    +text : Rf.Ref<String> <- Rf.new(String, "")
+    +reply : Rf.Ref<Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>> <- Rf.new(Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>, None{})
+    +evidence : ExtensionStreamEvidence = ExtensionStreamEvidence{slot, text, reply}
+    +stream : Composer.ProviderStream() <- C.create(~Rf.Ref<Maybe<&2, Composer.StreamOptions()>>, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~extensionStream, slot)
+    first : Ext.ExtensionFactory() <- C.create(~Composer.ProviderStream(), ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~providerFactory, stream)
+    second : Ext.ExtensionFactory() <- C.create(~ExtensionStreamEvidence, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~commandFactory, evidence)
+    +store : Auth.CredentialStore <- Credentials.inMemoryCredentialStore()
+    +context : Auth.AuthContext <- AuthContext.defaultProviderAuthContext()
+    +models : Models.ModelRuntime <- Models.fromProviders(Nil{}, store, context)
+    isolatedContext : Auth.AuthContext <- AuthContext.defaultProviderAuthContext()
+    +isolated : Models.ModelRuntime <- Models.fromProviders(Nil{}, store, isolatedContext)
+    before : Maybe<&2, Models.Model()> <- Models.getModel(isolated, "extension-provider", "custom-model")
+    pair : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(directory, directory, Settings.options())
+    +settings : Settings.SettingsManager = settingsOf(pair)
+    +loader : Resources.DefaultResourceLoader <- Resources.createDefaultResourceLoader(Paths.Environment{directory, directory, Runtime.urlContext()}, Resources.defaultResourceLoaderOptions(directory, directory, settings), [Ext.InlineExtension{"provider", first, False{}}, Ext.InlineExtension{"command", second, False{}}])
+    Resources.reload(Resources.loaderOf(loader), Resources.ResourceLoaderReloadOptions{None{}})
+    created : Sdk.Outcome() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{directory}, Some{directory}, Some{models}, None{}, None{}, Nil{}, None{}, None{}, None{}, Some{Resources.loaderOf(loader)}, None{}, Some{settings}, Nil{}, None{}})
+    checkExtensionOutcome(created, evidence, isolated, before)
+    Resources.disposeDefaultResourceLoader(loader)
+    Models.dispose(models)
+    Models.dispose(isolated)
+    Auth.disposeStore(store)
+    C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), stream)
+    oldOptions : Maybe<&2, Composer.StreamOptions()> <- Rf.dispose(Maybe<&2, Composer.StreamOptions()>, slot)
+    oldText : String <- Rf.dispose(String, text)
+    oldReply : Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>> <- Rf.dispose(Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>, reply)
+    return Unit{}
+
 def run(+directory: String) -> IO(Unit):
   do IO<Unit>:
     wrote : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(FS.child(directory, "settings.json"), "{\"httpIdleTimeoutMs\":1234,\"websocketConnectTimeoutMs\":1234,\"retry\":{\"provider\":{\"maxRetries\":2,\"maxRetryDelayMs\":3000}}}")
@@ -376,6 +513,7 @@ def run(+directory: String) -> IO(Unit):
     previousError : List<&2, Ext.ExtensionError> <- Rf.dispose(List<&2, Ext.ExtensionError>, errors)
     cacheWarmingCase(directory, False{})
     cacheWarmingCase(directory, True{})
+    extensionStreamingCase(FS.child(directory, "extension-streaming"))
 
 def runArgs(args: List<String>) -> IO(Unit):
   match args:

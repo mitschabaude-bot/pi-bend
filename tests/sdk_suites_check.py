@@ -67,6 +67,7 @@ SUITES = {
         'SDK stream options disposed',
         'schedules cache warming after a completed session request',
         'waits for the next request instead of restoring cache warming',
+        'allows an extension command to use ctx.modelRegistry.streamSimple',
     ], True, set()),
     'sdk-provider-events': ([
         'payload handlers replace in order, retain None, and continue after failure',
