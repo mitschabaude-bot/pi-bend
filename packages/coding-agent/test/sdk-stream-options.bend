@@ -14,6 +14,12 @@ import ../../runtime/src/record.bend as Record
 import ../../runtime/src/filesystem.bend as FS
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/f64.bend as F
+import ../../ai/src/utils/event-stream.bend as Events
+import ../../ai/src/utils/uuid.bend as Uuid
+import ../../runtime/src/date.bend as Date
+import ../src/core/session-manager.bend as Manager
+import ../src/core/session-persistence.bend as Persistence
+import ../src/core/cache-warmer.bend as Warmer
 import ../src/utils/paths.bend as Paths
 import ../src/core/agent-runtime.bend as Runtime
 import ../src/core/agent-session.bend as Session
@@ -27,9 +33,9 @@ import ../src/core/extensions/loader.bend as Loader
 import ../src/core/extensions/runner.bend as Runner
 import ../src/core/extensions/types.bend as Ext
 
-# Port of sdk-stream-options.test.ts: six request defaults/overrides plus
-# assembled headers. The SDK Agent's stream function reaches an injected
-# provider stream that captures the effective options without HTTP.
+# Port of all nine sdk-stream-options.test.ts cases. Forwarding uses an
+# injected provider through the SDK Agent stream; cache warming runs a
+# completed prompt through AgentSession. No external HTTP is required.
 # Build: sh scripts/build-incremental.sh packages/coding-agent/test/sdk-stream-options.bend build/sdk-stream-options-native
 # Check: python3 tests/sdk_suites_check.py --prefix build/ --lanes native-1,native-4 sdk-stream-options
 
@@ -46,10 +52,10 @@ def equal(value: Maybe<&2, F64>, expected: U32) -> Bool:
 def model(api: Ai.ModelApi, +id: String) -> Ai.Model<Ai.JsonValue>:
   Ai.Model{id, id, api, "capture-provider", "https://capture.invalid/v1", False{}, None{}, [Ai.InputText{}], None{}, Ai.ModelCost{zero(), zero(), zero(), zero(), None{}}, None{}, number(128000), number(4096), None{}, Some{Record.set(String, Record.new(String), "x-model", "model")}, None{}}
 
-def provider(codex: Ai.Model<Ai.JsonValue>, completions: Ai.Model<Ai.JsonValue>) -> IO(AiModels.Provider):
+def provider(models: List<&2, Ai.Model<Ai.JsonValue>>) -> IO(AiModels.Provider):
   do IO<AiModels.Provider>:
     key : Auth.ApiKeyAuth <- AuthHelpers.envApiKeyAuth("Capture key", ["PI_SDK_STREAM_UNUSED"])
-    return AiModels.Provider{"capture-provider", "Capture Provider", "https://capture.invalid/v1", Auth.ProviderAuth{Some{key}, None{}}, [codex, completions], AiModels.ApiStreams{}, None{}, None{}}
+    return AiModels.Provider{"capture-provider", "Capture Provider", "https://capture.invalid/v1", Auth.ProviderAuth{Some{key}, None{}}, models, AiModels.ApiStreams{}, None{}, None{}}
 
 def capture(slot: Rf.Ref<Maybe<&2, Composer.StreamOptions()>>, request: Composer.StreamRequest()) -> IO(Composer.StreamOutput()):
   match request:
@@ -206,6 +212,139 @@ def finished(result: Sdk.Outcome(), models: Models.ModelRuntime, stream: Compose
     case Fail{message}: IO.die(Unit, 1, message)
     case Done{owner}: checkedSession(Sdk.sessionOf(owner), models, stream, slot, errors, codex, completions, loader)
 
+def warmModel() -> Ai.Model<Ai.JsonValue>:
+  Ai.Model{"capture-model", "Capture Model", Ai.AnthropicMessagesApi{}, "capture-provider", "https://capture.invalid/v1", False{}, None{}, [Ai.InputText{}], None{}, Ai.ModelCost{number(10), number(50), F.divide(number(1), number(4)), F.divide(number(25), number(2)), None{}}, Some{Ai.ModelPromptCache{Some{number(300)}, None{}}}, number(128000), number(4096), None{}, None{}, None{}}
+
+def warmUsage() -> Ai.Usage:
+  Ai.Usage{zero(), zero(), number(100000), zero(), None{}, None{}, number(100000), Ai.UsageCost{zero(), zero(), zero(), zero(), zero()}}
+
+def warmReply(now: F64) -> Ai.AssistantMessage<V.Value, V.Value>:
+  Ai.AssistantMessage{[Ai.AssistantText{Ai.TextContent{"ok", None{}}}], "anthropic-messages", "capture-provider", "capture-model", None{}, None{}, None{}, None{}, warmUsage(), Ai.Stop{}, None{}, None{}, None{}, None{}, now}
+
+def releaseCompleted(+events: Events.AssistantMessageEventStream(V.Value, V.Value)) -> IO(Result<&2, &2, Tools.ToolError, Unit>):
+  do IO<Result<&2, &2, Tools.ToolError, Unit>>:
+    Events.disposeAssistantMessageEventStream(V.Value, V.Value, events)
+    return Done{Unit{}}
+
+def completeRequest(calls: Rf.Ref<Nat>, request: Composer.StreamRequest()) -> IO(Composer.StreamOutput()):
+  do IO<Composer.StreamOutput()>:
+    Rf.modify(Nat, Unit, calls, count => (count + 1n, Unit{}))
+    now : F64 <- Date.now()
+    +events : Events.AssistantMessageEventStream(V.Value, V.Value) <- Events.createAssistantMessageEventStream(~V.Value, ~V.Value)
+    Events.end(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Some{warmReply(now)})
+    return Done{AgentTypes.StreamLease{events, releaseCompleted(events)}}
+
+def requiredRecord(result: Persistence.Outcome(Session.Session())) -> IO(Session.Session()):
+  match result:
+    case Done{record}: IO.pure(Session.Session(), record)
+    case Fail{error}: IO.die(Session.Session(), 1, Persistence.message(error))
+
+def requiredState(result: Result<&2, &2, Manager.Error, Session.State()>) -> IO(Session.State()):
+  match result:
+    case Done{state}: IO.pure(Session.State(), state)
+    case Fail{_}: IO.die(Session.State(), 1, "invalid restored cache-warming fixture")
+
+def warmStamp(id: String, +now: F64) -> Manager.EntryStamp:
+  Manager.EntryStamp{id, Maybe.default(&2, String, Date.formatIso(now), "1970-01-01T00:00:00.000Z")}
+
+def populateWarmRecord(restored: Bool, record: Session.Session(), +now: F64) -> IO(Session.Session()):
+  match restored record:
+    case False{} record: IO.pure(Session.Session(), record)
+    case True{} Persistence.Session{state, cwd, directory, file, persist, flushed, ids}:
+      do IO<Session.Session()>:
+        modelState : Session.State() <- requiredState(Manager.appendModelChange(V.Value, Tools.ToolDetails, V.Value, state, warmStamp("model", F.subtract(now, number(61000))), "capture-provider", "capture-model"))
+        thinking : Session.State() <- requiredState(Manager.appendThinkingLevelChange(V.Value, Tools.ToolDetails, V.Value, modelState, warmStamp("thinking", F.subtract(now, number(60500))), "off"))
+        user : Session.State() <- requiredState(Manager.appendMessage(V.Value, Tools.ToolDetails, V.Value, thinking, warmStamp("user", F.subtract(now, number(60000))), AgentTypes.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{"test"}, F.subtract(now, number(60000))}}}))
+        assistant : Session.State() <- requiredState(Manager.appendMessage(V.Value, Tools.ToolDetails, V.Value, user, warmStamp("assistant", F.subtract(now, number(59000))), AgentTypes.LlmMessage{Ai.Assistant{warmReply(F.subtract(now, number(59000)))}}))
+        usage : Session.State() <- requiredState(Manager.appendUsage(V.Value, Tools.ToolDetails, V.Value, assistant, warmStamp("warm", F.subtract(now, number(58000))), "cache_warm", "capture-provider", "capture-model", warmUsage(), None{}))
+        return Persistence.Session{usage, cwd, directory, file, persist, flushed, ids}
+
+def scheduled(status: Warmer.CacheWarmingStatus, now: F64) -> Bool:
+  match status:
+    case Warmer.CacheWarmingStatus{Warmer.Scheduled{}, _, Some{next}, _, _}: F64.is_gt(next, now)
+    case _: False{}
+
+def inactive(status: Warmer.CacheWarmingStatus, +reason: String) -> Bool:
+  match status:
+    case Warmer.CacheWarmingStatus{Warmer.Inactive{}, Some{found}, None{}, _, _}: String.eq(found, reason)
+    case _: False{}
+
+def messagesOf(state: Session.AgentState()) -> List<&2, Session.Message()>:
+  match state:
+    case AgentTypes.AgentState{_, _, _, messages, _, _, _, _}: messages
+
+def checkWarming(restored: Bool, +live: Session.AgentSession, calls: Rf.Ref<Nat>) -> IO(Unit):
+  match restored:
+    case True{}:
+      do IO<Unit>:
+        count : Nat <- Rf.read(Nat, calls)
+        status : Warmer.CacheWarmingStatus <- Session.cacheWarmingStatus(live)
+        check(Nat.is_eq(count, 0n) && inactive(status, "waiting for first request"), "waits for the next request instead of restoring cache warming")
+    case False{}:
+      do IO<Unit>:
+        prompted : Result<&2, &2, String, Unit> <- Session.prompt(live, "test", Nil{}, None{})
+        registration(prompted)
+        +now : F64 <- Date.now()
+        status : Warmer.CacheWarmingStatus <- Session.cacheWarmingStatus(live)
+        Bool.pick(Unit -> IO(Unit), scheduled(status, now), _ => IO.pure(Unit, Unit{}), _ => IO.die(Unit, 1, "completed request did not schedule cache warming"))(Unit{})
+        state : Session.AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(live))
+        +messages : List<&2, Session.Message()> = messagesOf(state)
+        Agent.replaceMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(live), messages)
+        Agent.setModel(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(live), warmModel())
+        same : Warmer.CacheWarmingStatus <- Session.cacheWarmingStatus(live)
+        Bool.pick(Unit -> IO(Unit), scheduled(same, now), _ => IO.pure(Unit, Unit{}), _ => IO.die(Unit, 1, "equivalent native snapshots invalidated warming"))(Unit{})
+        Agent.replaceMessages(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(live), List.drop(&2, Session.Message(), messages, 1n))
+        changed : Warmer.CacheWarmingStatus <- Session.cacheWarmingStatus(live)
+        check(inactive(changed, "conversation context changed"), "schedules cache warming after a completed session request")
+
+def finishWarm(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, restored: Bool, calls: Rf.Ref<Nat>) -> IO(Unit):
+  match pair:
+    case Tuple{owner, live}:
+      do IO<Unit>:
+        checkWarming(restored, live, calls)
+        Sdk.dispose(owner)
+
+def checkedWarmSession(result: Sdk.Outcome(), restored: Bool, calls: Rf.Ref<Nat>) -> IO(Unit):
+  match result:
+    case Fail{error}: IO.die(Unit, 1, error)
+    case Done{owner}: finishWarm(Sdk.sessionOf(owner), restored, calls)
+
+def disposeIds(ids: Uuid.Generator) -> IO(Unit):
+  match ids:
+    case Uuid.Generator{state}:
+      do IO<Unit>:
+        previous : Uuid.State <- Rf.dispose(Uuid.State, state)
+        return Unit{}
+
+def cacheWarmingCase(+directory: String, +restored: Bool) -> IO(Unit):
+  do IO<Unit>:
+    wrote : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(FS.child(directory, "settings.json"), "{\"cacheWarming\":\"idle\"}")
+    written(wrote)
+    +calls : Rf.Ref<Nat> <- Rf.new(Nat, 0n)
+    +stream : Composer.ProviderStream() <- C.create(~Rf.Ref<Nat>, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~completeRequest, calls)
+    +store : Auth.CredentialStore <- Credentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- AuthContext.defaultProviderAuthContext()
+    +models : Models.ModelRuntime <- Models.fromProviders(Nil{}, store, context)
+    native : AiModels.Provider <- provider([warmModel()])
+    registered : Result<&2, &2, String, Unit> <- Models.registerNativeProviderStream(models, native, Some{stream})
+    registration(registered)
+    authorized : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(models, "capture-provider", "test-key", None{})
+    authorization(authorized)
+    pair : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(directory, directory, Settings.options())
+    settings : Settings.SettingsManager = settingsOf(pair)
+    +ids : Uuid.Generator <- Uuid.generator()
+    createdRecord : Persistence.Outcome(Session.Session()) <- Session.memorySession(ids, directory, Persistence.noOptions())
+    blank : Session.Session() <- requiredRecord(createdRecord)
+    now : F64 <- Date.now()
+    record : Session.Session() <- populateWarmRecord(restored, blank, now)
+    created : Sdk.Outcome() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{directory}, Some{directory}, Some{models}, Some{warmModel()}, None{}, Nil{}, Some{Runtime.NoToolsAll{}}, None{}, None{}, None{}, Some{record}, Some{settings}, Nil{}, None{}})
+    checkedWarmSession(created, restored, calls)
+    Models.dispose(models)
+    Auth.disposeStore(store)
+    C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), stream)
+    count : Nat <- Rf.dispose(Nat, calls)
+    disposeIds(ids)
+
 def run(+directory: String) -> IO(Unit):
   do IO<Unit>:
     wrote : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(FS.child(directory, "settings.json"), "{\"httpIdleTimeoutMs\":1234,\"websocketConnectTimeoutMs\":1234,\"retry\":{\"provider\":{\"maxRetries\":2,\"maxRetryDelayMs\":3000}}}")
@@ -218,7 +357,7 @@ def run(+directory: String) -> IO(Unit):
     +models : Models.ModelRuntime <- Models.fromProviders(Nil{}, store, context)
     +codex : Ai.Model<Ai.JsonValue> = model(Ai.OpenAICodexResponsesApi{}, "capture-codex")
     +completions : Ai.Model<Ai.JsonValue> = model(Ai.OpenAICompletionsApi{}, "capture-completions")
-    native : AiModels.Provider <- provider(codex, completions)
+    native : AiModels.Provider <- provider([codex, completions])
     registered : Result<&2, &2, String, Unit> <- Models.registerNativeProviderStream(models, native, Some{stream})
     registration(registered)
     authorized : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(models, "capture-provider", "test-key", None{})
@@ -235,7 +374,8 @@ def run(+directory: String) -> IO(Unit):
     C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), stream)
     previous : Maybe<&2, Composer.StreamOptions()> <- Rf.dispose(Maybe<&2, Composer.StreamOptions()>, slot)
     previousError : List<&2, Ext.ExtensionError> <- Rf.dispose(List<&2, Ext.ExtensionError>, errors)
-    return Unit{}
+    cacheWarmingCase(directory, False{})
+    cacheWarmingCase(directory, True{})
 
 def runArgs(args: List<String>) -> IO(Unit):
   match args:

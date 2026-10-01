@@ -52,6 +52,8 @@ SUITES = {
         'before_provider_headers isolates a throwing handler and applies the next',
         'runs before_provider_headers on assembled headers without forwarding the transform',
         'SDK stream options disposed',
+        'schedules cache warming after a completed session request',
+        'waits for the next request instead of restoring cache warming',
     ], True, set()),
 }
 

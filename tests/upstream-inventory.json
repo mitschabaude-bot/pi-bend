@@ -3733,13 +3733,13 @@
     },
     {
       "source": "packages/coding-agent/test/sdk-stream-options.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/coding-agent/test/sdk-stream-options.bend",
         "tests/sdk_suites_check.py"
       ],
       "sha256": "2bd2362c91704e04ebd6dff6b6d1ec4db3f545104c2345b240c3633a667ce10e",
-      "notes": "Seven of nine upstream cases pass through the SDK-created Agent stream and a native fake provider: idle/request/connect timeouts (including explicit zero overrides), retry defaults, and assembled provider/model/request headers transformed by a native extension. The transform cannot be forwarded in the typed provider option record. python3 tests/sdk_suites_check.py --prefix build/ --lanes native-1,native-4 sdk-stream-options checks exact verdicts. The fake provider returns a capture marker rather than a completion; the two cache-warming cases still require a completed session prompt and remain pending. Live settings changes between requests are not covered."
+      "notes": "All nine upstream cases pass on native one/four through the SDK-created Agent and an injected native provider: idle/request/connect timeout defaults and explicit zero overrides, retry settings, assembled header interception, completed-prompt cache warming, unchanged immutable snapshot updates, invalidated request prefixes, and restored-session inactivity without a provider call. The forwarding cases use a capture marker; warming uses a completed native event stream and real AgentSession.prompt. Equivalent JS shallow copies become same-value updates through native Agent APIs. The header transform cannot be forwarded in the typed provider options. Command: python3 tests/sdk_suites_check.py --prefix build/ --lanes native-1,native-4 sdk-stream-options. Broader SDK source coverage, including per-request live settings, remains partial."
     },
     {
       "source": "packages/coding-agent/test/session-context-edit.test.ts",
