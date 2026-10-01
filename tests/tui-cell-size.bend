@@ -49,7 +49,7 @@ def record(recorder: Recorder,data: String) -> IO(Unit):
     stopped(recorder,key)
 def ready(queries: Ref.Ref<Maybe<&2,Query.Handle>>,value: Process.QueryReady) -> IO(Unit):
   match value:
-    case Process.QueryReady{handle,_,_,_,_}: Ref.write(Maybe<&2,Query.Handle>,queries,Some{handle})
+    case Process.QueryReady{handle,_,_,_,_,_}: Ref.write(Maybe<&2,Query.Handle>,queries,Some{handle})
 def requireFocus(result: Tui.ResultOf(Tui.TuiBase)) -> IO(Tui.TuiBase):
   match result:
     case Fail{_}: IO.die(Tui.TuiBase,1,"focus rejected")

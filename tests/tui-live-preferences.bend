@@ -17,7 +17,7 @@ def rendered(_: Unit,_: Nat) -> IO(List<&2,String>):
   IO.pure(List<&2,String>,["live preferences " ++ Marker.CURSOR_MARKER()])
 def ready(context: Context,value: Process.QueryReady) -> IO(Unit):
   match context value:
-    case Context{_,setter,output} Process.QueryReady{_,_,writer,_,callback}:
+    case Context{_,setter,output} Process.QueryReady{_,_,writer,_,callback,_}:
       do IO<Unit>:
         Ref.write(Maybe<&2,Callback.Callback<Process.TerminalPreference,Unit>>,setter,Some{callback})
         Ref.write(Maybe<&2,Callback.Callback<String,Unit>>,output,Some{writer})

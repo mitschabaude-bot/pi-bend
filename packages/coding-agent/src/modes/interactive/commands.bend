@@ -28,7 +28,7 @@ type Action is Data:
   ResumeSession{}
   OpenTree{}
   OpenFork{}
-  CopyLastAssistant{}
+  CopyLastAssistant{flashConfirmation: Bool}
   OpenSettings{}
   OpenTrust{}
   NewSessionStarted{}
@@ -62,7 +62,7 @@ type Command is Data:
   Resume{}
   Tree{}
   Fork{}
-  Copy{}
+  Copy{flashConfirmation: Bool}
   Settings{}
   Trust{}
   Changelog{}
@@ -107,7 +107,7 @@ def classify(+text: String,+parts: List<&2,String>) -> Command:
     case "/resume" <> Nil{}: Resume{}
     case "/tree" <> Nil{}: Tree{}
     case "/fork" <> Nil{}: Fork{}
-    case "/copy" <> Nil{}: Copy{}
+    case "/copy" <> Nil{}: Copy{False{}}
     case "/session" <> Nil{}: Session{}
     case "/hotkeys" <> Nil{}: Hotkeys{}
     case "/settings" <> Nil{}: Settings{}
@@ -246,7 +246,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Resume{}: IO.pure(Action,ResumeSession{})
     case Tree{}: IO.pure(Action,OpenTree{})
     case Fork{}: IO.pure(Action,OpenFork{})
-    case Copy{}: IO.pure(Action,CopyLastAssistant{})
+    case Copy{confirmation}: IO.pure(Action,CopyLastAssistant{confirmation})
     case Session{}: IO.pure(Action,ShowSessionInfo{})
     case Hotkeys{}: IO.pure(Action,ShowHotkeys{})
     case Settings{}: IO.pure(Action,OpenSettings{})

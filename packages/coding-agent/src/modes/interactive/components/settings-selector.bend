@@ -440,7 +440,7 @@ def themeChanged(current: Maybe<&2,ThemeController.Handle>,value: String,transcr
 def terminalPreference(current: Maybe<&2,ThemeController.Handle>,preference: Process.TerminalPreference) -> IO(Unit):
   match current:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{ThemeController.Handle{_,Process.QueryReady{_,_,_,_,setter},_,_,_,_}}:
+    case Some{ThemeController.Handle{_,Process.QueryReady{_,_,_,_,setter,_},_,_,_,_}}:
       Callback.call(Process.TerminalPreference,Unit,setter,preference)
 def terminalEffect(controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,preference: Process.TerminalPreference) -> IO(Unit):
   do IO<Unit>:
@@ -492,12 +492,12 @@ def modeCompleted(context: ModeContext,result: Process.RendererResult) -> IO(Uni
           _ => Transcript.status(transcript,"Close active overlays before changing TUI mode"))(Unit{})
 def requestMode(current: Maybe<&2,ThemeController.Handle>,fullscreen: Bool,fallback: Bool,completed: Callback.Callback<Process.RendererResult,Unit>) -> IO(Unit):
   match current:
-    case Some{ThemeController.Handle{_,Process.QueryReady{_,_,_,_,setter},_,_,_,_}}:
+    case Some{ThemeController.Handle{_,Process.QueryReady{_,_,_,_,setter,_},_,_,_,_}}:
       Callback.call(Process.TerminalPreference,Unit,setter,Process.RendererMode{Process.RendererRequest{fullscreen,completed}})
     case None{}: Callback.call(Process.RendererResult,Unit,completed,Process.RendererResult{fallback,False{}})
 def inspectMode(current: Maybe<&2,ThemeController.Handle>,completed: Callback.Callback<Process.RendererResult,Unit>) -> IO(Unit):
   match current:
-    case Some{ThemeController.Handle{_,Process.QueryReady{_,_,_,_,setter},_,_,_,_}}:
+    case Some{ThemeController.Handle{_,Process.QueryReady{_,_,_,_,setter,_},_,_,_,_}}:
       Callback.call(Process.TerminalPreference,Unit,setter,Process.RendererMode{Process.RendererInspection{completed}})
     case None{}: IO.pure(Unit,Unit{})
 def changeSetting(context: ChangeContext,selection: ListUI.Change) -> IO(Unit):

@@ -199,7 +199,7 @@ def configureTerminal(view: View, +preferences: Callback.Callback<Process.Termin
 
 def terminalReadyShared(+view: Ref.Ref<View>, ready: Process.QueryReady) -> IO(Unit):
   match ready:
-    case Process.QueryReady{_, terminal, _, request, +preferences}:
+    case Process.QueryReady{_, terminal, _, request, +preferences,_}:
       do IO<Unit>:
         size : Terminal.Dimensions <- Terminal.getDimensions(terminal)
         Ref.modify(View, Unit, view, current => resizedView(current, size))

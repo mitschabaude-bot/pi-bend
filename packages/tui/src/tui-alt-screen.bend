@@ -101,11 +101,11 @@ def flashDecorated(message: Maybe<&2,Flash>,lines: List<&2,String>,+width: Nat) 
   match message lines:
     case None{} lines: lines
     case Some{Flash{message,_}} +line <> rest:
-      +badge = "\u{1b}[7m " ++ message
+      +badge = "\u{1b}[7m" ++ Layout.truncateToWidth(" " ++ message ++ " ",width,"",False{}) ++ "\u{1b}[27m"
       +size = Layout.visibleWidth(badge)
       +placed = Bool.pick(Unit -> String,String.is_empty(line),
-        _ => Layout.spaces(width - size - 1n,"") ++ badge,
-        _ => Tui.compositeTuiLine(line,badge,width - size - 1n,size,width))(Unit{})
+        _ => Layout.spaces(width - size,"") ++ badge,
+        _ => Tui.compositeTuiLine(line,badge,width - size,size,width))(Unit{})
       placed <> rest
     case Some{_} Nil{}: Nil{}
 def plan(state: State,+lines: List<&2,String>,cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,+height: Nat) -> Plan:

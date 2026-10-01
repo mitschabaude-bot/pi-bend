@@ -3262,10 +3262,11 @@
       "source": "packages/coding-agent/test/interactive-tui.test.ts",
       "status": "partial",
       "ports": [
-        "tests/parity/scenarios.py"
+        "tests/parity/scenarios.py",
+        "tests/interactive_copy_flash_check.py"
       ],
       "sha256": "e1d51377ee06cf9ae6c4be4fcfe247b0889a73b42779b7dc02e81d59a722ecfc",
-      "notes": "Mounted fullscreen scenarios compare clipboard bytes for automatic selection copy and the Ctrl+X precedence in enabled/disabled modes. The suite\u2019s renderer switching, jump indicator, paste and spacing cases are not claimed here."
+      "notes": "Mounted fullscreen scenarios compare clipboard bytes for automatic selection copy and the Ctrl+X precedence in enabled/disabled modes. The suite\u2019s renderer switching, jump indicator, paste and spacing cases are not claimed here. The named cases \"flashes Copied! for the copy shortcut in fullscreen mode\" and \"keeps the status-line confirmation for the copy shortcut in regular mode\" are covered by tests/interactive_copy_flash_check.py through the actual CLI, with exact text/ANSI frames, clipboard payload, expiry, preserved drafts and /copy feedback on native one/four."
     },
     {
       "source": "packages/coding-agent/test/keybindings-migration.test.ts",

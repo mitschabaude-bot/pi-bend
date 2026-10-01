@@ -54,7 +54,7 @@ def listened(+queries: Query.Handle,listening: Bool) -> IO(Unit):
         return Unit{}
 def ready(mode: Mode,value: Process.QueryReady) -> IO(Unit):
   match mode value:
-    case Mode{listening,timeout} Process.QueryReady{+queries,_,write,_,_}:
+    case Mode{listening,timeout} Process.QueryReady{+queries,_,write,_,_,_}:
       do IO<Unit>:
         listened(queries,listening)
         IO.spawn(Unit,query(queries,write,timeout))

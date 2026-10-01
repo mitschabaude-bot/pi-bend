@@ -557,7 +557,7 @@ def changePreference(context: PreferenceSink,change: TerminalPreference) -> IO(U
 type EventSink is Data:
   EventSink{state: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,queries: Query.Handle,termux: Bool,preferences: Ref.Ref<Preferences>}
 type QueryReady is Data:
-  QueryReady{queries: Query.Handle,terminal: Terminal.Handle,write: Callback.Callback<String,Unit>,requestRender: Callback.Callback<Unit,Unit>,setTerminalPreference: Callback.Callback<TerminalPreference,Unit>}
+  QueryReady{queries: Query.Handle,terminal: Terminal.Handle,write: Callback.Callback<String,Unit>,requestRender: Callback.Callback<Unit,Unit>,setTerminalPreference: Callback.Callback<TerminalPreference,Unit>,flash: Callback.Callback<String,Bool>}
 type QueryWriter is Data:
   QueryWriter{terminal: Terminal.Handle,stopped: Deferred.Deferred<Unit>,failure: Deferred.Deferred<Terminal.Error>}
 def active(session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>) -> Active:
@@ -685,6 +685,31 @@ def scheduleFlash(listener: EventSink,deadline: Maybe<&2,Nat>) -> IO(Unit):
   match deadline:
     case None{}: IO.pure(Unit,Unit{})
     case Some{deadline}: IO.spawn(Unit,flashTimer(listener,deadline))
+
+# A regular terminal has no flash overlay. Report that to callers so they can
+# use their ordinary status presentation instead.
+def flashed(pair: Active & Maybe<&2,Nat>) -> Active & Bool:
+  match pair:
+    case (current,deadline): (current,Bool.not(Maybe.is_none(&2,Nat,deadline)))
+def flashActive(current: Active,message: String,+deadline: Nat,handle: Terminal.Handle,termux: Bool) -> IO(Active & Bool):
+  match current:
+    case Active{Session{tui,Main{screen}},components,mounted,previous,owed,ticks}:
+      IO.pure(Active & Bool,(Active{Session{tui,Main{screen}},components,mounted,previous,owed,ticks},False{}))
+    case Active{Session{tui,Fullscreen{screen}},+components,+mounted,previous,owed,ticks}:
+      do IO<Active & Bool>:
+        rendered : Draw <- draw(Session{tui,Fullscreen{Alt.withFlash(screen,message,deadline)}},handle,termux)
+        return flashed(inputFinished(Input{rendered,True{},False{},Some{deadline}},components,mounted,previous,owed,ticks))
+def flashMessageWith(+listener: EventSink,+message: String) -> IO(Bool):
+  match listener:
+    case EventSink{state,ready,_,+termux,_}:
+      do IO<Bool>:
+        +handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+        now : Nat <- IO.now()
+        +deadline : Nat = now + 1000n
+        +shown : Bool <- Serial.run(Active,Bool,state,current => flashActive(current,message,deadline,handle,termux))
+        scheduleFlash(listener,Bool.pick(Maybe<&2,Nat>,shown,Some{deadline},None{}))
+        return shown
+def flashMessage(listener: EventSink,message: String) -> IO(Bool): flashMessageWith(listener,message)
 def scheduledPreferences(+pending: Ref.Ref<Preferences>,event: Tui.RenderEvent,current: Active,+handle: Terminal.Handle,termux: Bool) -> IO(Active & List<&2,Tui.RenderEffect>):
   do IO<Active & List<&2,Tui.RenderEffect>>:
     next : Active <- applyPendingPreferences(pending,current,handle)
@@ -903,7 +928,7 @@ def queryCellSize(handle: Terminal.Handle) -> IO(Result<&2,&2,Terminal.Error,Uni
     Bool.pick(Unit -> IO(Result<&2,&2,Terminal.Error,Unit>),imagesSupported(Image.getCapabilities(Image.create(),environment,False{})),
       _ => Terminal.write(handle,"\u{1b}[16t"),
       _ => IO.pure(Result<&2,&2,Terminal.Error,Unit>,Done{Unit{}}))(Unit{})
-def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,+requestRender: Callback.Callback<Unit,Unit>,preferences: Ref.Ref<Preferences>,+stopped: Deferred.Deferred<Unit>,+termux: Bool,finish: Active -> Nat -> IO(Active & Screen.Stream)) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,+ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,+requestRender: Callback.Callback<Unit,Unit>,+preferences: Ref.Ref<Preferences>,+stopped: Deferred.Deferred<Unit>,+termux: Bool,finish: Active -> Nat -> IO(Active & Screen.Stream)) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match pair:
     case (terminal,+terminalHandle):
       do IO<Result<&2,&2,Terminal.Error,Active>>:
@@ -911,6 +936,7 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         +failure : Deferred.Deferred<Terminal.Error> <- Deferred.new(Terminal.Error)
         +writer : Callback.Callback<String,Unit> <- Callback.create(~QueryWriter,~String,~Unit,~queryWrite,QueryWriter{terminalHandle,stopped,failure})
         +preference : Callback.Callback<TerminalPreference,Unit> <- Callback.create(~PreferenceSink,~TerminalPreference,~Unit,~changePreference,PreferenceSink{preferences,requestRender,writer})
+        +flash : Callback.Callback<String,Bool> <- Callback.create(~EventSink,~String,~Bool,~flashMessage,EventSink{handle,ready,queries,termux,preferences})
         Query.setRunning(queries,writer,True{})
         fullscreen : Bool <- Serial.run(Active,Bool,handle,isFullscreen)
         entered : Result<&2,&2,Terminal.Error,Unit> <- Bool.pick(Unit -> IO(Result<&2,&2,Terminal.Error,Unit>),fullscreen,_ => Terminal.write(terminalHandle,Alt.enter()),_ => IO.pure(Result<&2,&2,Terminal.Error,Unit>,Done{Unit{}}))(Unit{})
@@ -918,7 +944,7 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         cellQuery : Result<&2,&2,Terminal.Error,Unit> <- queryCellSize(terminalHandle)
         matchWrite(cellQuery,stopped,failure)
         initial : Unit <- Serial.run(Active,Unit,handle,current => resizeOperation(current,terminalHandle,termux))
-        notifyReady(onReady,QueryReady{queries,terminalHandle,writer,requestRender,preference})
+        notifyReady(onReady,QueryReady{queries,terminalHandle,writer,requestRender,preference,flash})
         finished : Unit <- Deferred.result(Unit,stopped)
         notifyStopping(onStopping)
         drained : Unit <- Serial.run(Active,Unit,handle,unchanged)
@@ -935,6 +961,7 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         final : Active <- Serial.retire(Active,owner)
         failed : Maybe<&2,Terminal.Error> <- Deferred.peek(Terminal.Error,failure)
         Callback.dispose(TerminalPreference,Unit,preference)
+        Callback.dispose(String,Bool,flash)
         Callback.dispose(String,Unit,writer)
         Deferred.dispose(Terminal.Error,failure)
         return stoppedResult(written,closed,failed,final)

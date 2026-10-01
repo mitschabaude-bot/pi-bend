@@ -47,7 +47,7 @@ def edit(environment: Edit,key: String) -> IO(Unit):
     case _ _: IO.pure(Unit,Unit{})
 def ready(label: String,value: Process.QueryReady) -> IO(Unit):
   match value:
-    case Process.QueryReady{_,_,_,request,_}:
+    case Process.QueryReady{_,_,_,request,_,_}:
       do IO<Unit>:
         Callback.call(Unit,Unit,request,Unit{})
         IO.print_err(label)
