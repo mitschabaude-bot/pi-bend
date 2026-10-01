@@ -38,7 +38,7 @@ type Action is Data:
   ShowSessionInfo{}
   ShowHotkeys{}
   ReloadResources{}
-  RunBash{command: String,excluded: Bool}
+  RunBash{command: String,excluded: Bool,text: String}
 type CredentialCommand is Data:
   BeginLogin{provider: Maybe<&2,String>}
   BeginLogout{}
@@ -69,7 +69,7 @@ type Command is Data:
   Session{}
   Hotkeys{}
   Reload{}
-  Bash{command: String,excluded: Bool}
+  Bash{command: String,excluded: Bool,text: String}
   Unsupported{text: String}
 
 def argument(text: String,prefix: Nat) -> Maybe<&2,String>:
@@ -77,7 +77,7 @@ def argument(text: String,prefix: Nat) -> Maybe<&2,String>:
   Bool.pick(Maybe<&2,String>,String.is_empty(value),None{},Some{value})
 def bashCommand(+text: String,prefix: Nat,excluded: Bool) -> Command:
   +command = Text.trim(String.drop(text,prefix))
-  Bool.pick(Command,String.is_empty(command),Send{text},Bash{command,excluded})
+  Bool.pick(Command,String.is_empty(command),Send{text},Bash{command,excluded,text})
 # upstream's built-in commands that are not ported yet; they report so
 # instead of reaching the model.
 def unported(parts: List<&2,String>) -> Bool:
@@ -253,7 +253,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Trust{}: IO.pure(Action,OpenTrust{})
     case Changelog{}: IO.pure(Action,ShowChangelog{})
     case Reload{}: IO.pure(Action,ReloadResources{})
-    case Bash{command,excluded}: IO.pure(Action,RunBash{command,excluded})
+    case Bash{command,excluded,text}: IO.pure(Action,RunBash{command,excluded,text})
     case Unsupported{text}: IO.pure(Action,CommandError{text ++ " is not available in pi-bend yet"})
 def parse(text: String) -> Command:
   +clean = Text.trim(text)

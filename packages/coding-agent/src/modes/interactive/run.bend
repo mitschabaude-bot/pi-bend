@@ -1136,12 +1136,12 @@ def restoreBashEditor(target: Maybe<&2,Live.Handle>,command: String) -> IO(Unit)
   match target:
     case None{}: IO.pure(Unit,Unit{})
     case Some{handle}: Live.setText(handle,command)
-def bashBusy(input: BashInput,command: String,excluded: Bool) -> IO(Unit):
+def bashBusy(input: BashInput,text: String) -> IO(Unit):
   match input:
     case BashInput{_,_,editor,failure,redraw,_}:
       do IO<Unit>:
         target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
-        restoreBashEditor(target,Bool.pick(String,excluded,"!!","!") ++ command)
+        restoreBashEditor(target,text)
         Interactive.report(failure,Interactive.CommandWarning{"A bash command is already running. Press Esc to cancel it first."})
 def reserveBash(state: BashActivity,+fresh: Deferred.Deferred<Unit>) -> BashActivity & BashReservation:
   match state:
@@ -1159,29 +1159,37 @@ def disposeBashActivity(state: BashActivity) -> IO(Unit):
   match state:
     case BashActivity{_,_,None{}}: IO.pure(Unit,Unit{})
     case BashActivity{_,_,Some{done}}: Deferred.dispose(Unit,done)
-def bashReserved(input: BashInput,command: String,excluded: Bool,reservation: BashReservation) -> IO(Unit):
-  match reservation:
-    case BashBusy{unused}:
+# The command observer runs after editor input returns, so history updates
+# can use the live editor without re-entering its serialized input callback.
+def bashHistory(target: Maybe<&2,Live.Handle>,text: String) -> IO(Unit):
+  match target:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{handle}: Live.addToHistory(handle,text)
+def bashReserved(+input: BashInput,command: String,excluded: Bool,text: String,reservation: BashReservation) -> IO(Unit):
+  match input reservation:
+    case _ BashBusy{unused}:
       do IO<Unit>:
         Deferred.dispose(Unit,unused)
-        bashBusy(input,command,excluded)
-    case BashClosed{unused}: Deferred.dispose(Unit,unused)
-    case BashReserved{previous,completion}:
+        bashBusy(input,text)
+    case _ BashClosed{unused}: Deferred.dispose(Unit,unused)
+    case BashInput{_,_,editor,_,_,_} BashReserved{previous,completion}:
       do IO<Unit>:
         disposePrevious(previous)
+        target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
+        bashHistory(target,text)
         IO.spawn(Unit,runBashTask(input,command,excluded,completion))
-def bashRequested(+input: BashInput,+command: String,+excluded: Bool) -> IO(Unit):
+def bashRequested(+input: BashInput,+command: String,+excluded: Bool,+text: String) -> IO(Unit):
   match input:
     case BashInput{session,_,_,_,_,activity}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         running : Bool <- Session.isBashRunning(live)
-        Bool.pick(Unit -> IO(Unit),running,_ => bashBusy(input,command,excluded),_ => do IO<Unit>:
+        Bool.pick(Unit -> IO(Unit),running,_ => bashBusy(input,text),_ => do IO<Unit>:
           fresh : Deferred.Deferred<Unit> <- Deferred.new(Unit)
           reservation : BashReservation <- Ref.modify(BashActivity,BashReservation,activity,current => reserveBash(current,fresh))
-          bashReserved(input,command,excluded,reservation))(Unit{})
-def bashObserved(input: CommandObservation,command: String,excluded: Bool) -> IO(Unit):
-  match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash,_,_,_,_,_,_,_}: bashRequested(bash,command,excluded)
+          bashReserved(input,command,excluded,text,reservation))(Unit{})
+def bashObserved(input: CommandObservation,command: String,excluded: Bool,text: String) -> IO(Unit):
+  match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash,_,_,_,_,_,_,_}: bashRequested(bash,command,excluded,text)
 def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match input:
     case CommandObservation{sink,session,+footer,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}:
@@ -1538,7 +1546,7 @@ def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Uni
     case Commands.ResumeSession{}: resumeObserved(input)
     case Commands.OpenTree{}: treeObserved(input,Selector.TreeMode{})
     case Commands.OpenFork{}: treeObserved(input,Selector.ForkMode{})
-    case Commands.RunBash{command,excluded}: bashObserved(input,command,excluded)
+    case Commands.RunBash{command,excluded,text}: bashObserved(input,command,excluded,text)
     case other: ordinaryCommandObserved(input,other)
 type WorkerFailure is Data:
   WorkerFailure{failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}

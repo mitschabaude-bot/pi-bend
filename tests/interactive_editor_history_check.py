@@ -109,6 +109,42 @@ def follow_up_observations(result):
     return observed
 
 
+def bash_history_scenario():
+    return {
+        "name": "editor-bash-history", "args": MODEL, "timeout": 15,
+        "files": {"home/.pi/agent/keybindings.json": json.dumps({"tui.editor.historyPrevious": "alt+h"})},
+        "steps": [
+            ("wait", READY, "startup"), ("settle", .5),
+            ("keys", "!  echo first-bash"), ("key", "Enter"),
+            ("wait", "\\n first-bash\\n", "first-bash"), ("settle", .2),
+            ("keys", "!!  echo second-bash"), ("key", "Enter"),
+            ("wait", "\\n second-bash\\n", "second-bash"), ("settle", .2),
+            ("key", "M-h"), ("settle", .15), ("snap", "latest"),
+            ("key", "M-h"), ("settle", .15), ("snap", "older"),
+            ("key", "C-c"), ("settle", .2),
+            ("keys", "   "), ("key", "Enter"), ("settle", .2),
+            ("key", "M-h"), ("settle", .15), ("snap", "after-blank"),
+            ("key", "C-c"), ("settle", .2),
+            ("keys", "!  sleep 10"), ("key", "Enter"),
+            ("wait", "\\$ sleep 10", "running"),
+            ("keys", "!!  echo rejected-busy"), ("key", "Enter"),
+            ("wait", "A bash command is already running", "busy"),
+            ("snap", "busy-editor"),
+            ("key", "Escape"), ("wait", "\\(cancelled\\)", "cancelled"), ("settle", .2),
+            ("key", "C-c"), ("settle", .2),
+            ("key", "M-h"), ("settle", .15), ("snap", "after-busy"),
+            ("key", "M-h"), ("settle", .15), ("snap", "before-busy"),
+        ],
+    }
+
+
+def bash_history_observations(result):
+    assert all(value is not None for value in result["timings"].values()), result["timings"]
+    return {name: editor_text(result["snaps"][name]) for name in (
+        "latest", "older", "after-blank", "busy-editor", "after-busy", "before-busy",
+    )}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pi-only", action="store_true")
@@ -127,6 +163,13 @@ def main():
         "follow-up-history": "follow-up prompt", "preceding-history": "stream prompt", "requests": 3,
     }, follow_up
     print("pi: idle submission and streaming follow-up history pass", flush=True)
+    bash_history = bash_history_observations(run_side("pi", [shutil.which("pi") or "pi"], bash_history_scenario(), False))
+    assert bash_history == {
+        "latest": "!!  echo second-bash", "older": "!  echo first-bash",
+        "after-blank": "!!  echo second-bash", "busy-editor": "!!  echo rejected-busy",
+        "after-busy": "!  sleep 10", "before-busy": "!!  echo second-bash",
+    }, bash_history
+    print("pi: accepted, blank, and busy shell history pass", flush=True)
     if args.pi_only:
         return
     assert BINARY.is_file(), f"Candidate binary is missing: {BINARY}"
@@ -136,6 +179,8 @@ def main():
         assert native == upstream, (threads, native, upstream)
         native_follow_up = follow_up_observations(run_side("bend", [str(BINARY)], follow_up_scenario(), False))
         assert native_follow_up == follow_up, (threads, native_follow_up, follow_up)
+        native_bash_history = bash_history_observations(run_side("bend", [str(BINARY)], bash_history_scenario(), False))
+        assert native_bash_history == bash_history, (threads, native_bash_history, bash_history)
         print(f"native {threads}: editor history matches pi", flush=True)
 
 
