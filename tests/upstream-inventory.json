@@ -3366,12 +3366,12 @@
     },
     {
       "source": "packages/coding-agent/test/model-runtime-auth-options.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/model-availability.bend"
       ],
       "sha256": "eabf6f097a74406dc4db5fe189016b38797c676b0b267f0147f510c027783f27",
-      "notes": "The scoped availability/failure test is ported: reads stay within the requested provider, failures reach getError, and success clears it. The native test also checks that scoped reads leave the snapshot intact and full reads replace it. The other auth-option cases are pending."
+      "notes": "All eleven contracts execute in tests/model-availability.bend on native one/four: credential-store injection, scoped reads/errors, method metadata and active auth, subscription distinctions, config API-key login, request env, case-insensitive Authorization precedence, one assembled-header transform, extension OAuth cancellation and OAuth-only registration. Native OAuth uses Auth.OAuthAuth; transforms are separate typed arguments and cannot leak into provider options. Cancellation checks the caller signal and its supplied native Unit reason instead of JS Error identity. A retained-method check also covers provider replacement and immutable headers."
     },
     {
       "source": "packages/coding-agent/test/model-runtime-cloudflare-compat.test.ts",

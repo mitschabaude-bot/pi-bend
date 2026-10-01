@@ -188,7 +188,7 @@ def checkedSession(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, mo
         check(equal(optionAt(fifth, 1n), 0), "lets request websocketConnectTimeoutMs override settings")
         +sixth : Composer.StreamOptions() <- request(live, slot, completions, None{}, None{}, None{})
         check(equal(optionAt(sixth, 2n), 2) && equal(optionAt(sixth, 3n), 3000), "forwards provider retry settings")
-        config : Composer.ProviderConfigInput = Composer.ProviderConfigInput{None{}, None{}, Some{"test-key"}, Some{Ai.OpenAICompletionsApi{}}, Some{stream}, Some{Record.set(String, Record.new(String), "x-provider", "provider")}, None{}, None{}}
+        config : Composer.ProviderConfigInput = Composer.ProviderConfigInput{None{}, None{}, Some{"test-key"}, Some{Ai.OpenAICompletionsApi{}}, Some{stream}, Some{Record.set(String, Record.new(String), "x-provider", "provider")}, None{}, None{}, None{}}
         registered : Result<&2, &2, String, Unit> <- Models.registerProvider(models, "capture-provider", config)
         registration(registered)
         found : Maybe<&2, Runner.ExtensionRunner> <- Session.extensionRunner(live)
@@ -371,7 +371,7 @@ def extensionStream(slot: Rf.Ref<Maybe<&2, Composer.RequestOptions>>, request: C
 def providerFactory(stream: Composer.ProviderStream(), api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     definition : Composer.ProviderModelConfig = Composer.ProviderModelConfig{"custom-model", "Custom model", None{}, None{}, False{}, None{}, [Ai.InputText{}], None{}, Ai.ModelCost{zero(), zero(), zero(), zero(), None{}}, None{}, number(128000), number(4096), None{}, None{}, None{}}
-    Loader.registerProviderConfig(api, "extension-provider", Composer.ProviderConfigInput{None{}, Some{"https://extension.invalid"}, Some{"extension-key"}, Some{Ai.CustomModelApi{"issue-8964-extension-api"}}, Some{stream}, None{}, None{}, Some{[definition]}})
+    Loader.registerProviderConfig(api, "extension-provider", Composer.ProviderConfigInput{None{}, Some{"https://extension.invalid"}, Some{"extension-key"}, Some{Ai.CustomModelApi{"issue-8964-extension-api"}}, Some{stream}, None{}, None{}, Some{[definition]}, None{}})
 
 def extensionDelta(event: Ai.AssistantMessageEvent<V.Value, V.Value>) -> String:
   match event:

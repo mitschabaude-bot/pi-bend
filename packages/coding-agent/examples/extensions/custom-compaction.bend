@@ -104,7 +104,7 @@ def summarize(+ctx: Ctx.ExtensionContext, +model: Ai.Model<Ai.JsonValue>, prepar
         ids : Uuid.Generator <- Uuid.generator()
         generated : Result<&2, &2, Uuid.Error, String> <- Uuid.uuidv7(ids, None{})
         +messages : List<&2, Ai.Message<V.Value, V.Value, V.Value, Tools.ToolDetails>> = [Ai.User{Ai.UserMessage{Ai.UserBlocks{[Ai.TextImageText{Ai.TextContent{summaryPrompt(previousContext(previousSummary), conversation), None{}}}]}, now}}]
-        response : Ai.AssistantMessage<V.Value, V.Value> <- Models.complete(Ctx.modelRegistry(ctx), model, Ai.Context{None{}, messages, None{}}, Some{requestOptions(signal, requestId(generated))})
+        response : Ai.AssistantMessage<V.Value, V.Value> <- Models.complete(Ctx.modelRegistry(ctx), model, Ai.Context{None{}, messages, None{}}, Some{requestOptions(signal, requestId(generated))}, Models.noTransforms())
         summarized(ctx, signal, firstKeptEntryId, tokensBefore, response)
 
 def withModel(+ctx: Ctx.ExtensionContext, found: Maybe<&2, Ai.Model<Ai.JsonValue>>, preparation: Compaction.CompactionPreparation<V.Value, Tools.ToolDetails, V.Value>, signal: Abort.AbortSignal<Unit>) -> IO(Outcome()):

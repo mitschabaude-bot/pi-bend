@@ -1,4 +1,21 @@
 import Base
+import ../packages/runtime/src/abort.bend as Abort
+import ../packages/ai/src/auth/oauth/openrouter.bend as OpenRouterOAuth
+import ../packages/ai/src/auth/oauth/openai-codex.bend as CodexOAuth
+import ../packages/ai/src/auth/oauth/anthropic.bend as AnthropicOAuth
+import ../packages/ai/src/providers/radius.bend as Radius
+import ../packages/ai/src/providers/cloudflare-workers-ai.bend as Workers
+import ../packages/ai/src/providers/cloudflare-ai-gateway.bend as Gateway
+import ../packages/ai/src/providers/openrouter.bend as OpenRouter
+import ../packages/ai/src/providers/openai-codex.bend as Codex
+import ../packages/ai/src/providers/anthropic.bend as Anthropic
+import ../packages/ai/src/providers/google-vertex.bend as Vertex
+import ../packages/ai/src/providers/amazon-bedrock.bend as Bedrock
+import ../packages/coding-agent/src/core/agent-runtime.bend as Runtime
+import ../packages/runtime/src/fetch.bend as Fetch
+import ../packages/runtime/src/record.bend as R
+import ../packages/runtime/src/date.bend as Date
+import ../packages/runtime/src/f64.bend as F
 import ../packages/ai/src/types.bend as Ai
 import ../packages/ai/src/models.bend as AiModels
 import ../packages/ai/src/auth/types.bend as Auth
@@ -329,6 +346,272 @@ def loginBesideStalledRefresh() -> IO(Unit):
     Auth.disposeStore(store)
     return Unit{}
 
+# Native ports of the other ten model-runtime-auth-options contracts.
+# Authentication methods are typed provider fields, rather than JS properties.
+def checked(ok: Bool, +name: String) -> IO(Unit):
+  do IO<Unit>:
+    require(ok, name)
+    IO.print("ok " ++ name)
+
+def storeCredential(value: Auth.Credential, _: Maybe<&2, Auth.Credential>) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
+  IO.pure(Auth.StoreResult(Maybe<&2, Auth.Credential>), Done{Some{value}})
+
+def saveCredential(store: Auth.CredentialStore, id: String, value: Auth.Credential) -> IO(Unit):
+  do IO<Unit>:
+    +update : Auth.Modification() <- C.create(~Auth.Credential, ~Maybe<&2, Auth.Credential>, ~Auth.StoreResult(Maybe<&2, Auth.Credential>), ~storeCredential, value)
+    saved : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.modify(store, id, update, None{})
+    require(Result.is_done(&2, &2, String, Maybe<&2, Auth.Credential>, saved), "fixture credential write failed")
+    C.dispose(Maybe<&2, Auth.Credential>, Auth.StoreResult(Maybe<&2, Auth.Credential>), update)
+
+def networkForbidden(_: Unit, request: Fetch.Input<Unit>) -> IO(Fetch.Result_(Unit)):
+  IO.die(Fetch.Result_(Unit), 1, "auth-option fixture attempted a network request")
+
+def hasMethod(provider: Maybe<&2, AiModels.Provider>, kind: Auth.CredentialType, name: String, method: String, subscription: Bool) -> Bool:
+  match provider kind:
+    case Some{AiModels.Provider{_, +actualName, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{actualMethod, _, _, _}}, _}, _, _, _, _}} Auth.ApiKeyType{}: String.eq(actualName, name) && String.eq(actualMethod, method)
+    case Some{AiModels.Provider{_, +actualName, _, Auth.ProviderAuth{_, Some{Auth.OAuthAuth{actualMethod, +flag, _, _, _, _}}}, _, _, _, _}} Auth.OAuthType{}: String.eq(actualName, name) && String.eq(actualMethod, method) && Bool.pick(Bool, subscription, flag, Bool.not(flag))
+    case _ _: False{}
+
+def methodCount(provider: Maybe<&2, AiModels.Provider>) -> Nat:
+  match provider:
+    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{key, oauth}, _, _, _, _}}: Bool.pick(Nat, Maybe.is_some(&2, Auth.ApiKeyAuth, key), 1n, 0n) + Bool.pick(Nat, Maybe.is_some(&2, Auth.OAuthAuth, oauth), 1n, 0n)
+    case None{}: 0n
+
+def hasKeyLogin(provider: Maybe<&2, AiModels.Provider>) -> Bool:
+  match provider:
+    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_, Some{_}, _, _}}, None{}}, _, _, _, _}}: True{}
+    case _: False{}
+
+def resolvedKey(auth: Resolve.Resolution(), key: String) -> Bool:
+  match auth:
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{Some{actual}, _, _}, _, _}}}: String.eq(actual, key)
+    case _: False{}
+
+def oauthStatus(result: Result<&2, &2, String, Maybe<&2, Auth.AuthCheck>>) -> Bool:
+  match result:
+    case Done{Some{Auth.AuthCheck{_, Auth.OAuthType{}}}}: True{}
+    case _: False{}
+
+def subscription(+runtime: Models.ModelRuntime, +id: String, expected: Bool) -> IO(Bool):
+  do IO<Bool>:
+    oauth : Bool <- Models.isUsingOAuth(runtime, id)
+    +active : Bool <- Models.isUsingSubscription(runtime, id)
+    return oauth && Bool.pick(Bool, expected, active, Bool.not(active))
+
+def providerMetadata() -> IO(Unit):
+  do IO<Unit>:
+    +fetch : Fetch.Fetch(Unit) <- C.create(~Unit, ~Fetch.Input<Unit>, ~Fetch.Result_(Unit), ~networkForbidden, Unit{})
+    anthropicAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, Runtime.urlContext())
+    codexAuth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, Runtime.urlContext())
+    openrouterAuth : Auth.OAuthAuth <- OpenRouterOAuth.openRouterOAuth(fetch, Runtime.urlContext())
+    a : AiModels.Provider <- Anthropic.anthropicProvider(Some{anthropicAuth})
+    bedrock : AiModels.Provider <- Bedrock.amazonBedrockProvider()
+    vertex : AiModels.Provider <- Vertex.googleVertexProvider()
+    gateway : AiModels.Provider <- Gateway.cloudflareAIGatewayProvider()
+    workers : AiModels.Provider <- Workers.cloudflareWorkersAIProvider()
+    router : AiModels.Provider <- OpenRouter.openrouterProvider(Some{openrouterAuth})
+    radius : AiModels.Provider <- Radius.radiusProvider(Radius.defaultOptions(), Radius.RadiusTransport{fetch, Runtime.urlContext()})
+    +store : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    saveCredential(store, "anthropic", Auth.ApiKeyCredential{Some{"stored-key"}, None{}})
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    +runtime : Models.ModelRuntime <- Models.fromProviders([a, bedrock, vertex, gateway, workers, Codex.openaiCodexProvider(codexAuth), router, radius], store, context)
+    auth : Resolve.Resolution() <- Models.getAuth(runtime, "anthropic", Resolve.noOverrides())
+    checked(resolvedKey(auth, "stored-key"), "accepts a pi-ai CredentialStore")
+    +providers : List<&2, AiModels.Provider> <- Models.getProviders(runtime)
+    checked(hasMethod(AiModels.findProvider(providers, "amazon-bedrock"), Auth.ApiKeyType{}, "Amazon Bedrock", "AWS credentials or bearer token", False{}) && hasMethod(AiModels.findProvider(providers, "google-vertex"), Auth.ApiKeyType{}, "Google Vertex AI", "Google Cloud credentials", False{}) && hasMethod(AiModels.findProvider(providers, "anthropic"), Auth.OAuthType{}, "Anthropic", "Anthropic (Claude Pro/Max)", True{}) && hasMethod(AiModels.findProvider(providers, "cloudflare-ai-gateway"), Auth.ApiKeyType{}, "Cloudflare AI Gateway", "Cloudflare API key", False{}) && hasMethod(AiModels.findProvider(providers, "cloudflare-workers-ai"), Auth.ApiKeyType{}, "Cloudflare Workers AI", "Cloudflare API key", False{}) && hasMethod(AiModels.findProvider(providers, "openai-codex"), Auth.OAuthType{}, "OpenAI Codex", "OpenAI (ChatGPT Plus/Pro)", True{}) && Nat.is_eq(methodCount(AiModels.findProvider(providers, "openai-codex")), 1n), "projects provider-owned methods, names, and status")
+    now : F64 <- Date.now()
+    +credential : Auth.Credential = Auth.OAuthCredential{"refresh", "access", F.add(now, F.fromU32(3600000)), R.new(V.Value)}
+    saveCredential(store, "anthropic", credential)
+    saveCredential(store, "openrouter", credential)
+    saveCredential(store, "radius", credential)
+    status : Result<&2, &2, String, Maybe<&2, Auth.AuthCheck>> <- Models.checkAuth(runtime, "anthropic")
+    checked(Nat.is_eq(methodCount(AiModels.findProvider(providers, "anthropic")), 2n) && oauthStatus(status), "attaches the provider's active auth status to every method option")
+    anthropicSubscription : Bool <- subscription(runtime, "anthropic", True{})
+    routerSubscription : Bool <- subscription(runtime, "openrouter", False{})
+    radiusSubscription : Bool <- subscription(runtime, "radius", False{})
+    checked(anthropicSubscription && routerSubscription && radiusSubscription, "distinguishes subscription OAuth from generic OAuth sign-in")
+    Models.dispose(runtime)
+    Auth.disposeStore(store)
+    C.dispose(Fetch.Input<Unit>, Fetch.Result_(Unit), fetch)
+
+# Extension configuration and assembled request headers.
+def configModel(+id: String, headers: Maybe<&2, R.Record<String>>) -> Composer.ProviderModelConfig:
+  Composer.ProviderModelConfig{id, id, None{}, None{}, False{}, None{}, [Ai.InputText{}], None{}, Ai.ModelCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), None{}}, None{}, F.fromU32(10000), F.fromU32(1000), None{}, headers, None{}}
+
+def configProvider(name: String, key: Maybe<&2, String>, headers: Maybe<&2, R.Record<String>>, authHeader: Bool, stream: Maybe<&2, Composer.ProviderStream()>, oauth: Maybe<&2, Auth.OAuthAuth>, modelHeaders: Maybe<&2, R.Record<String>>) -> Composer.ProviderConfigInput:
+  Composer.ProviderConfigInput{Some{name}, Some{"https://example.test/v1"}, key, Some{Ai.OpenAICompletionsApi{}}, stream, headers, Some{authHeader}, Some{[configModel("extension-model", modelHeaders)]}, oauth}
+
+def registered(result: Result<&2, &2, String, Unit>) -> IO(Unit):
+  match result:
+    case Done{_}: IO.pure(Unit, Unit{})
+    case Fail{error}: IO.die(Unit, 1, error)
+
+def requiredModel(found: Maybe<&2, AiModels.Model()>) -> IO(AiModels.Model()):
+  match found:
+    case Some{value}: IO.pure(AiModels.Model(), value)
+    case None{}: IO.die(AiModels.Model(), 1, "registered model missing")
+
+# Capture the typed options that reached the registered provider.
+def captureHeaders(slot: Ref.Ref<Maybe<&2, Ai.ProviderHeaders()>>, request: Composer.StreamRequest()) -> IO(Composer.StreamOutput()):
+  match request:
+    case AgentTypes.StreamInput{_, _, Some{options}}:
+      do IO<Composer.StreamOutput()>:
+        Ref.write(Maybe<&2, Ai.ProviderHeaders()>, slot, Models.baseHeaders(Composer.requestBase(options)))
+        return Fail{Tools.Failure{"captured"}}
+    case _: IO.die(Composer.StreamOutput(), 1, "authorized request options missing")
+
+def headerValue(value: Ai.Nullable<String>) -> V.Value:
+  match value:
+    case Ai.PresentValue{text}: V.Text{text}
+    case Ai.NullValue{}: V.Null{}
+
+def headerProperties(properties: List<&2, R.Property<Ai.Nullable<String>>>) -> List<&2, R.Property<V.Value>>:
+  match properties:
+    case Nil{}: Nil{}
+    case R.Property{key, value} <> rest: R.Property{key, headerValue(value)} <> headerProperties(rest)
+
+def headerObject(headers: Ai.ProviderHeaders()) -> V.Value:
+  V.ObjectValue{R.Record{headerProperties(R.entries(Ai.Nullable<String>, headers))}}
+
+def headersEqual(headers: Maybe<&2, Ai.ProviderHeaders()>, expected: R.Record<Ai.Nullable<String>>) -> Bool:
+  match headers:
+    case Some{found}: V.equal(headerObject(found), headerObject(expected))
+    case None{}: False{}
+
+# A retained composed method must survive registration replacement as well.
+def assembledHeaders(count: Ref.Ref<Nat>, headers: Ai.ProviderHeaders()) -> IO(Ai.ProviderHeaders()):
+  do IO<Ai.ProviderHeaders()>:
+    +assembled : Ai.ProviderHeaders() = headers
+    Ref.modify(Nat, Unit, count, value => (value + 1n, Unit{}))
+    require(headersEqual(Some{assembled}, R.Record{[R.Property{"Authorization", Ai.PresentValue{"Bearer generated-key"}}, R.Property{"x-provider", Ai.PresentValue{"provider"}}, R.Property{"x-model", Ai.PresentValue{"model"}}, R.Property{"x-explicit", Ai.PresentValue{"explicit"}}]}), "header transform received incomplete headers")
+    return R.set(Ai.Nullable<String>, assembled, "x-transformed", Ai.PresentValue{"yes"})
+
+def refreshCapture(slot: Ref.Ref<Maybe<&2, Abort.AbortSignal<Unit>>>, input: Auth.RefreshInput) -> IO(Result<&2, &2, String, Auth.Credential>):
+  match input:
+    case Auth.RefreshInput{Auth.OAuthCredential{refresh, access, _, extra}, signal}:
+      do IO<Result<&2, &2, String, Auth.Credential>>:
+        Ref.write(Maybe<&2, Abort.AbortSignal<Unit>>, slot, Some{signal})
+        now : F64 <- Date.now()
+        return Done{Auth.OAuthCredential{refresh, access, F.add(now, F.fromU32(60000)), extra}}
+    case _: IO.pure(Result<&2, &2, String, Auth.Credential>, Fail{"expected OAuth credential"})
+
+def extensionLogin(_: Unit, interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  do IO<Auth.LoginOutcome()>:
+    now : F64 <- Date.now()
+    return Done{Auth.OAuthCredential{"refresh", "access", F.add(now, F.fromU32(60000)), R.new(V.Value)}}
+
+def extensionAuth(_: Unit, credential: Auth.Credential) -> IO(Result<&2, &2, String, Auth.ModelAuth>):
+  match credential:
+    case Auth.OAuthCredential{_, access, _, _}: IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Done{Auth.ModelAuth{Some{access}, None{}, None{}}})
+    case _: IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Fail{"expected OAuth credential"})
+
+def retainedSignal(found: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Abort.AbortSignal<Unit>):
+  match found:
+    case Some{signal}: IO.pure(Abort.AbortSignal<Unit>, signal)
+    case None{}: IO.die(Abort.AbortSignal<Unit>, 1, "refresh did not receive cancellation signal")
+
+def suppliedUnit(reason: Maybe<&2, Abort.AbortReason<Unit>>) -> Bool:
+  match reason:
+    case Some{Abort.Supplied{Unit{}}}: True{}
+    case _: False{}
+
+def requestEnvironment(result: Resolve.Resolution()) -> Bool:
+  match result:
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{Some{key}, headers, None{}}, _, _}}}: String.eq(key, "request-key") && headersEqual(headers, R.Record{[R.Property{"x-request-value", Ai.PresentValue{"request-header"}}]})
+    case _: False{}
+
+def requestOptions(headers: Ai.ProviderHeaders()) -> Composer.StreamOptions():
+  Ai.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{headers}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+
+def oauthMethod(provider: Maybe<&2, AiModels.Provider>) -> IO(Auth.OAuthAuth):
+  match provider:
+    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{_, Some{method}}, _, _, _, _}}: IO.pure(Auth.OAuthAuth, method)
+    case _: IO.die(Auth.OAuthAuth, 1, "registered OAuth method missing")
+
+def derivedHeaders(result: Result<&2, &2, String, Auth.ModelAuth>) -> Maybe<&2, Ai.ProviderHeaders()>:
+  match result:
+    case Done{Auth.ModelAuth{_, headers, _}}: headers
+    case _: None{}
+
+def deriveHeaders(method: Auth.OAuthAuth, credential: Auth.Credential) -> IO(Maybe<&2, Ai.ProviderHeaders()>):
+  match method:
+    case Auth.OAuthAuth{_, _, _, _, _, toAuth}:
+      do IO<Maybe<&2, Ai.ProviderHeaders()>>:
+        result : Result<&2, &2, String, Auth.ModelAuth> <- C.call(Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>, toAuth, credential)
+        return derivedHeaders(result)
+
+def configAuthOptions() -> IO(Unit):
+  do IO<Unit>:
+    +store : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    +runtime : Models.ModelRuntime <- Models.fromProviders(Nil{}, store, context)
+    registration : Result<&2, &2, String, Unit> <- Models.registerProvider(runtime, "extension-api-key", configProvider("Extension API Key", Some{"$EXTENSION_TEST_API_KEY"}, None{}, False{}, None{}, None{}, None{}))
+    registered(registration)
+    +method : Maybe<&2, AiModels.Provider> <- Models.getProvider(runtime, "extension-api-key")
+    checked(hasMethod(method, Auth.ApiKeyType{}, "Extension API Key", "API key", False{}) && hasKeyLogin(method), "constructs an API key method for an extension API-key provider")
+    envRegistration : Result<&2, &2, String, Unit> <- Models.registerProvider(runtime, "request-env-provider", configProvider("Request env", Some{"$REQUEST_SCOPED_API_KEY"}, Some{R.Record{[R.Property{"x-request-value", "$REQUEST_SCOPED_HEADER"}]}}, False{}, None{}, None{}, None{}))
+    registered(envRegistration)
+    envAuth : Resolve.Resolution() <- Models.getAuth(runtime, "request-env-provider", Resolve.AuthResolutionOverrides{None{}, Some{R.Record{[R.Property{"REQUEST_SCOPED_API_KEY", "request-key"}, R.Property{"REQUEST_SCOPED_HEADER", "request-header"}]}}, None{}, None{}})
+    checked(requestEnvironment(envAuth), "resolves configured auth from request-scoped environment overrides")
+    +slot : Ref.Ref<Maybe<&2, Ai.ProviderHeaders()>> <- Ref.new(Maybe<&2, Ai.ProviderHeaders()>, None{})
+    +capture : Composer.ProviderStream() <- C.create(~Ref.Ref<Maybe<&2, Ai.ProviderHeaders()>>, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~captureHeaders, slot)
+    headerRegistration : Result<&2, &2, String, Unit> <- Models.registerProvider(runtime, "auth-header-provider", configProvider("Headers", Some{"generated-key"}, None{}, True{}, Some{capture}, None{}, None{}))
+    registered(headerRegistration)
+    found : Maybe<&2, AiModels.Model()> <- Models.getModel(runtime, "auth-header-provider", "extension-model")
+    selected : AiModels.Model() <- requiredModel(found)
+    reply : Ai.AssistantMessage<V.Value, V.Value> <- Models.completeSimple(runtime, selected, Ai.Context{None{}, Nil{}, None{}}, Some{requestOptions(R.Record{[R.Property{"authorization", Ai.PresentValue{"Explicit token"}}]})}, Models.noTransforms())
+    actual : Maybe<&2, Ai.ProviderHeaders()> <- Ref.read(Maybe<&2, Ai.ProviderHeaders()>, slot)
+    checked(headersEqual(actual, R.Record{[R.Property{"authorization", Ai.PresentValue{"Explicit token"}}]}), "lets an explicit Authorization header override authHeader case-insensitively")
+    assembledRegistration : Result<&2, &2, String, Unit> <- Models.registerProvider(runtime, "header-provider", configProvider("Headers", Some{"generated-key"}, Some{R.Record{[R.Property{"x-provider", "provider"}]}}, True{}, Some{capture}, None{}, Some{R.Record{[R.Property{"x-model", "model"}]}}))
+    registered(assembledRegistration)
+    +count : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+    +transform : C.Callback<Ai.ProviderHeaders(), Ai.ProviderHeaders()> <- C.create(~Ref.Ref<Nat>, ~Ai.ProviderHeaders(), ~Ai.ProviderHeaders(), ~assembledHeaders, count)
+    assembledFound : Maybe<&2, AiModels.Model()> <- Models.getModel(runtime, "header-provider", "extension-model")
+    assembledModel : AiModels.Model() <- requiredModel(assembledFound)
+    transformedReply : Ai.AssistantMessage<V.Value, V.Value> <- Models.completeSimple(runtime, assembledModel, Ai.Context{None{}, Nil{}, None{}}, Some{requestOptions(R.Record{[R.Property{"x-explicit", Ai.PresentValue{"explicit"}}]})}, Models.RequestTransforms{Some{transform}, None{}})
+    calls : Nat <- Ref.read(Nat, count)
+    transformedHeaders : Maybe<&2, Ai.ProviderHeaders()> <- Ref.read(Maybe<&2, Ai.ProviderHeaders()>, slot)
+    checked(Nat.is_eq(calls, 1n) && headersEqual(transformedHeaders, R.Record{[R.Property{"Authorization", Ai.PresentValue{"Bearer generated-key"}}, R.Property{"x-provider", Ai.PresentValue{"provider"}}, R.Property{"x-model", Ai.PresentValue{"model"}}, R.Property{"x-explicit", Ai.PresentValue{"explicit"}}, R.Property{"x-transformed", Ai.PresentValue{"yes"}}]}), "transforms fully assembled headers once without forwarding the transform")
+    +signalSlot : Ref.Ref<Maybe<&2, Abort.AbortSignal<Unit>>> <- Ref.new(Maybe<&2, Abort.AbortSignal<Unit>>, None{})
+    login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~Unit, ~Auth.ProviderAuthInteraction, ~Auth.LoginOutcome(), ~extensionLogin, Unit{})
+    refresh : C.Callback<Auth.RefreshInput, Result<&2, &2, String, Auth.Credential>> <- C.create(~Ref.Ref<Maybe<&2, Abort.AbortSignal<Unit>>>, ~Auth.RefreshInput, ~Result<&2, &2, String, Auth.Credential>, ~refreshCapture, signalSlot)
+    derive : C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>> <- C.create(~Unit, ~Auth.Credential, ~Result<&2, &2, String, Auth.ModelAuth>, ~extensionAuth, Unit{})
+    +oauth : Auth.OAuthAuth = Auth.OAuthAuth{"Extension subscription", True{}, None{}, login, refresh, derive}
+    oauthRegistration : Result<&2, &2, String, Unit> <- Models.registerProvider(runtime, "extension-oauth", configProvider("Extension OAuth", None{}, Some{R.Record{[R.Property{"x-generation", "old"}]}}, False{}, None{}, Some{oauth}, None{}))
+    registered(oauthRegistration)
+    saveCredential(store, "extension-oauth", Auth.OAuthCredential{"refresh", "expired", F.fromU32(0), R.new(V.Value)})
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    auth : Resolve.Resolution() <- Models.getAuth(runtime, "extension-oauth", Resolve.AuthResolutionOverrides{None{}, None{}, None{}, Some{Abort.signal(Unit, controller)}})
+    require(resolvedKey(auth, "expired"), "extension refresh did not resolve its credential")
+    capturedSignal : Maybe<&2, Abort.AbortSignal<Unit>> <- Ref.read(Maybe<&2, Abort.AbortSignal<Unit>>, signalSlot)
+    +signal : Abort.AbortSignal<Unit> <- retainedSignal(capturedSignal)
+    before : Bool <- Abort.aborted(Unit, signal)
+    cancelled : Bool <- Abort.abort(Unit, controller, Some{Unit{}})
+    after : Bool <- Abort.aborted(Unit, signal)
+    reason : Maybe<&2, Abort.AbortReason<Unit>> <- Abort.reason(Unit, signal)
+    checked(Bool.not(before) && cancelled && after && suppliedUnit(reason), "forwards cancellation to extension OAuth refresh")
+    +oauthProvider : Maybe<&2, AiModels.Provider> <- Models.getProvider(runtime, "extension-oauth")
+    checked(Nat.is_eq(methodCount(oauthProvider), 1n) && hasMethod(oauthProvider, Auth.OAuthType{}, "Extension OAuth", "Extension subscription", True{}), "does not fabricate an API key method for an extension OAuth-only provider")
+    retained : Auth.OAuthAuth <- oauthMethod(oauthProvider)
+    replacement : Result<&2, &2, String, Unit> <- Models.registerProvider(runtime, "extension-oauth", configProvider("Extension OAuth", None{}, Some{R.Record{[R.Property{"x-generation", "new"}]}}, False{}, None{}, Some{oauth}, None{}))
+    registered(replacement)
+    currentProvider : Maybe<&2, AiModels.Provider> <- Models.getProvider(runtime, "extension-oauth")
+    current : Auth.OAuthAuth <- oauthMethod(currentProvider)
+    +credential : Auth.Credential = Auth.OAuthCredential{"refresh", "access", F.fromU32(0), R.new(V.Value)}
+    oldHeaders : Maybe<&2, Ai.ProviderHeaders()> <- deriveHeaders(retained, credential)
+    newHeaders : Maybe<&2, Ai.ProviderHeaders()> <- deriveHeaders(current, credential)
+    require(headersEqual(oldHeaders, R.Record{[R.Property{"x-generation", Ai.PresentValue{"old"}}]}) && headersEqual(newHeaders, R.Record{[R.Property{"x-generation", Ai.PresentValue{"new"}}]}), "provider replacement invalidated a retained method or its header snapshot")
+    Models.dispose(runtime)
+    Auth.disposeOAuthAuth(oauth)
+    Auth.disposeStore(store)
+    Abort.dispose(Unit, controller)
+    C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), capture)
+    C.dispose(Ai.ProviderHeaders(), Ai.ProviderHeaders(), transform)
+    discardedHeaders : Maybe<&2, Ai.ProviderHeaders()> <- Ref.dispose(Maybe<&2, Ai.ProviderHeaders()>, slot)
+    discardedCount : Nat <- Ref.dispose(Nat, count)
+    discardedSignal : Maybe<&2, Abort.AbortSignal<Unit>> <- Ref.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, signalSlot)
+    return Unit{}
+
 def main() -> IO(Unit):
   do IO<Unit>:
     +state : Ref.Ref<State> <- Ref.new(State, State{Nil{}, False{}, True{}, True{}})
@@ -339,10 +622,13 @@ def main() -> IO(Unit):
     +runtime : Models.ModelRuntime <- Models.fromProviders([a, b], store, context)
     checkStreamOwnership(runtime)
     check(runtime, state)
+    IO.print("ok scopes provider availability reads and records refresh failures")
     checkAuthGate(runtime)
     Models.dispose(runtime)
     Auth.disposeStore(store)
     previous : State <- Ref.dispose(State, state)
     checkDynamicSynchronization()
     loginBesideStalledRefresh()
+    providerMetadata()
+    configAuthOptions()
     IO.print("model availability: scoped reads, credential synchronization, snapshots, stream ownership, and auth gating pass")

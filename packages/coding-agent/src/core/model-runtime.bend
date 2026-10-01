@@ -1920,10 +1920,18 @@ def replacedEntry(+id: String, entry: Maybe<&2, ExtensionEntry>, state: Extensio
     case ExtensionState{+entries, streams}:
       (ExtensionState{List.append(&2, ExtensionEntry, withoutEntry(entries, id), Maybe.default(&2, List<&2, ExtensionEntry>, Maybe.map(&2, ExtensionEntry, List<&2, ExtensionEntry>, found => [found], entry), Nil{})), streams}, ownedOf(findEntry(entries, id)))
 
+# A replaced generation may still be borrowed by auth work or a retained
+# provider method. Retire its composed callbacks with the other generations.
+def retiredAuth(definition: Definition, owned: List<&2, OwnedAuth>) -> Definition & Unit:
+  match definition owned:
+    case definition Nil{}: (definition, Unit{})
+    case Definition{providers, builtins, config, errors, generation, source, retired} owned:
+      (Definition{providers, builtins, config, errors, generation, source, Generation{owned, Nil{}, Nil{}} <> retired}, Unit{})
+
 def setEntry(+runtime: ModelRuntime, +id: String, entry: Maybe<&2, ExtensionEntry>) -> IO(Unit):
   do IO<Unit>:
     previous : List<&2, OwnedAuth> <- Ref.modify(ExtensionState, List<&2, OwnedAuth>, extensionsRef(runtime), state => replacedEntry(id, entry, state))
-    disposeOwned(previous)
+    Ref.modify(Definition, Unit, definitionRef(runtime), definition => retiredAuth(definition, previous))
 
 def noNetwork() -> ModelsRefreshOptions: ModelsRefreshOptions{Some{False{}}, None{}, None{}, None{}}
 
@@ -1986,7 +1994,7 @@ def registeredConfig(+runtime: ModelRuntime, +id: String, +merged: Composer.Prov
         # modelOverrides are the topmost layer (upstream getModels).
         config : Config.ModelConfig <- getModelConfig(runtime)
         +provider : AiModels.Provider = AiModels.Provider{id, name, url, auth, Composer.applyOverrides(models, modelsJsonOverrides(config, id)), AiModels.inheritedStreams(base), Maybe.bind(&2, AiModels.Provider, AiModels.RefreshModels(), base, AiModels.providerRefresh), baseFilter(base)}
-        setEntry(runtime, id, Some{ExtensionEntry{id, Some{merged}, Composer.configStream(merged), ownedAuth(auth, maybeProviderAuth(base))}})
+        setEntry(runtime, id, Some{ExtensionEntry{id, Some{merged}, Composer.configStream(merged), ownedAuth(auth, Composer.sourceAuth(Composer.Layers{None{}, Some{merged}}, maybeProviderAuth(base)))}})
         Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (registeredNative(provider, catalog), Unit{}))
         rebuildCollection(runtime, [id])
         refreshed : ModelsRefreshResult <- refresh(runtime, noNetwork())
@@ -2207,14 +2215,14 @@ def completed(+model: Model(), response: Composer.StreamOutput()) -> IO(Ai.Assis
         return message
 
 # Completion consumes the selected stream's final message and releases its run.
-def completeSimple(+runtime: ModelRuntime, +model: Model(), context: Ai.Context<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+def completeSimple(+runtime: ModelRuntime, +model: Model(), context: Ai.Context<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>, transforms: RequestTransforms) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
   do IO<Ai.AssistantMessage<V.Value, V.Value>>:
-    response : Composer.StreamOutput() <- streamSimple(runtime, AgentTypes.StreamInput{model, Transcript.normalizeContext(V.Value, V.Value, V.Value, Tools.ToolDetails, context), options}, noTransforms())
+    response : Composer.StreamOutput() <- streamSimple(runtime, AgentTypes.StreamInput{model, Transcript.normalizeContext(V.Value, V.Value, V.Value, Tools.ToolDetails, context), options}, transforms)
     completed(model, response)
 
-def complete(+runtime: ModelRuntime, +model: Model(), context: Ai.Context<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.ApiStreamOptions>) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+def complete(+runtime: ModelRuntime, +model: Model(), context: Ai.Context<V.Value, V.Value, V.Value, Tools.ToolDetails>, options: Maybe<&2, Composer.ApiStreamOptions>, transforms: RequestTransforms) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
   do IO<Ai.AssistantMessage<V.Value, V.Value>>:
-    response : Composer.StreamOutput() <- stream(runtime, AgentTypes.StreamInput{model, Transcript.normalizeContext(V.Value, V.Value, V.Value, Tools.ToolDetails, context), options}, noTransforms())
+    response : Composer.StreamOutput() <- stream(runtime, AgentTypes.StreamInput{model, Transcript.normalizeContext(V.Value, V.Value, V.Value, Tools.ToolDetails, context), options}, transforms)
     completed(model, response)
 
 def nativeIdsOf(catalog: Catalog) -> List<&2, String>:
