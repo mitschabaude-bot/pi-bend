@@ -237,7 +237,9 @@ def bashFactory(setup: BashSetup,request: Host.Request) -> IO(Result<&1,&1,Strin
     case BashSetup{agentDir,runners,operations} Host.Request{+cwd,stored,_}:
       do IO<Result<&1,&1,String,Host.Created<Services()>>>:
         +runtime : Ext.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
-        errors : List<&2,Ext.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime,[Ext.InlineExtension{"user-bash",api => bashExtension(operations,api),False{}}])
+        +factory : Ext.ExtensionFactory() <- Callback.create(~Bash.BashOperations,~Ext.ExtensionAPI,~Result<&2,&2,String,Unit>,~bashExtension,operations)
+        errors : List<&2,Ext.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime,[Ext.InlineExtension{"user-bash",factory,False{}}])
+        Callback.dispose(Ext.ExtensionAPI,Result<&2,&2,String,Unit>,factory)
         models : Models.ModelRuntime <- ModelFixture.create(Faux.fauxSources())
         +runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
         Ref.modify(List<&2,Runner.ExtensionRunner>,Unit,runners,loaded => (runner <> loaded,Unit{}))
@@ -248,7 +250,9 @@ def uiFactory(setup: BashSetup,request: Host.Request) -> IO(Result<&1,&1,String,
     case BashSetup{agentDir,runners,_} Host.Request{+cwd,stored,_}:
       do IO<Result<&1,&1,String,Host.Created<Services()>>>:
         +runtime : Ext.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
-        errors : List<&2,Ext.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime,[Ext.InlineExtension{"ui",uiExtension,False{}}])
+        +factory : Ext.ExtensionFactory() <- Callback.create(~Unit,~Ext.ExtensionAPI,~Result<&2,&2,String,Unit>,~(_ => api => uiExtension(api)),Unit{})
+        errors : List<&2,Ext.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime,[Ext.InlineExtension{"ui",factory,False{}}])
+        Callback.dispose(Ext.ExtensionAPI,Result<&2,&2,String,Unit>,factory)
         models : Models.ModelRuntime <- ModelFixture.create(Faux.fauxSources())
         +runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
         Ref.modify(List<&2,Runner.ExtensionRunner>,Unit,runners,loaded => (runner <> loaded,Unit{}))

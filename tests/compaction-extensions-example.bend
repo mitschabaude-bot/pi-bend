@@ -48,10 +48,11 @@ def handlerCount(runner: Runner.ExtensionRunner, +event: String) -> IO(Nat):
 
 def emptyModels() -> IO(Models.ModelRuntime): Fixture.create(Nil{})
 
-def loaded(extension: T.InlineExtension) -> IO(Runner.ExtensionRunner):
+def loaded(+extension: T.InlineExtension) -> IO(Runner.ExtensionRunner):
   do IO<Runner.ExtensionRunner>:
     +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
     errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, [extension])
+    Loader.disposeInlineExtensions([extension])
     models : Models.ModelRuntime <- emptyModels()
     Runner.create(runtime, "/tmp/pi-compaction-example", models)
 
@@ -98,7 +99,8 @@ def exampleExtension(api: T.ExtensionAPI) -> IO(Outcome()):
 
 def typeChecks() -> IO(Unit):
   do IO<Unit>:
-    runner : Runner.ExtensionRunner <- loaded(T.InlineExtension{"example", exampleExtension, False{}})
+    +factory : T.ExtensionFactory() <- C.create(~Unit, ~T.ExtensionAPI, ~Outcome(), ~(_ => api => exampleExtension(api)), Unit{})
+    runner : Runner.ExtensionRunner <- loaded(T.InlineExtension{"example", factory, False{}})
     +count : Nat <- handlerCount(runner, "session_before_compact")
     check(Nat.is_eq(count, 1n), "custom compaction example should type-check correctly", Nat.show(count) ++ " handlers")
 
@@ -118,7 +120,8 @@ def checkCompactEvent(api: T.ExtensionAPI) -> IO(Outcome()):
 
 def compactEventFields() -> IO(Unit):
   do IO<Unit>:
-    runner : Runner.ExtensionRunner <- loaded(T.InlineExtension{"compact-event", checkCompactEvent, False{}})
+    +factory : T.ExtensionFactory() <- C.create(~Unit, ~T.ExtensionAPI, ~Outcome(), ~(_ => api => checkCompactEvent(api)), Unit{})
+    runner : Runner.ExtensionRunner <- loaded(T.InlineExtension{"compact-event", factory, False{}})
     +count : Nat <- handlerCount(runner, "session_compact")
     check(Nat.is_eq(count, 1n), "compact event should have correct fields", Nat.show(count) ++ " handlers")
 
@@ -185,7 +188,9 @@ def dispatchesThroughComplete() -> IO(Unit):
     stream : Composer.ProviderStream() <- C.create(~R.Ref<List<&2, Seen>>, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~capture, seen)
     registered : Outcome() <- Models.registerProvider(models, "google", Composer.ProviderConfigInput{None{}, None{}, Some{"registry-test-key"}, Some{Ai.GoogleGenerativeAiApi{}}, Some{stream}, None{}, None{}, None{}})
     +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, [T.InlineExtension{"custom-compaction", CustomCompaction.customCompaction, False{}}])
+    +factory : T.ExtensionFactory() <- C.create(~Unit, ~T.ExtensionAPI, ~Outcome(), ~(_ => api => CustomCompaction.customCompaction(api)), Unit{})
+    errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, [T.InlineExtension{"custom-compaction", factory, False{}}])
+    C.dispose(T.ExtensionAPI, Outcome(), factory)
     +runner : Runner.ExtensionRunner <- Runner.create(runtime, "/tmp/pi-compaction-example", models)
     +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     +result : Maybe<&2, T.SessionBeforeCompactResult> <- Runner.emitSessionBeforeCompact(runner, T.SessionBeforeCompactEvent{preparation(), Nil{}, None{}, T.ManualReason{}, False{}, Abort.signal(Unit, controller)})

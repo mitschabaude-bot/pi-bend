@@ -675,7 +675,7 @@ def loadExtensionFromFactory(+runtime: T.ExtensionRuntime(), factory: T.Extensio
   do IO<Result<&2, &2, String, Unit>>:
     id : Nat <- R.modify(T.ExtensionRuntimeState, Nat, runtime, state => added(path, hidden, state))
     +api : T.ExtensionAPI <- IO.pure(T.ExtensionAPI, T.ExtensionAPI{runtime, id})
-    outcome : Result<&2, &2, String, Unit> <- factory(api)
+    outcome : Result<&2, &2, String, Unit> <- C.call(T.ExtensionAPI, Result<&2, &2, String, Unit>, factory, api)
     finishLoad(api, outcome)
 
 def loadError(+path: String, result: Result<&2, &2, String, Unit>, rest: List<&2, T.LoadError>) -> List<&2, T.LoadError>:
@@ -686,7 +686,7 @@ def loadError(+path: String, result: Result<&2, &2, String, Unit>, rest: List<&2
 # upstream DefaultResourceLoader.loadExtensionFactories: a named factory
 # loads as `<inline:name>`, a bare one as `<inline:N>` (its 1-based
 # position), in order; failures become load errors.
-def loadFactoriesFrom(+runtime: T.ExtensionRuntime(), extensions: List<&1, T.InlineExtension>, +position: Nat) -> IO(List<&2, T.LoadError>):
+def loadFactoriesFrom(+runtime: T.ExtensionRuntime(), extensions: List<&2, T.InlineExtension>, +position: Nat) -> IO(List<&2, T.LoadError>):
   match extensions:
     case Nil{}: IO.pure(List<&2, T.LoadError>, Nil{})
     case T.InlineExtension{name, factory, hidden} <> rest:
@@ -702,8 +702,20 @@ def loadFactoriesFrom(+runtime: T.ExtensionRuntime(), extensions: List<&1, T.Inl
         others : List<&2, T.LoadError> <- loadFactoriesFrom(runtime, rest, position + 1n)
         return loadError(path, result, others)
 
-def loadExtensionFactories(+runtime: T.ExtensionRuntime(), extensions: List<&1, T.InlineExtension>) -> IO(List<&2, T.LoadError>):
+def loadExtensionFactories(+runtime: T.ExtensionRuntime(), extensions: List<&2, T.InlineExtension>) -> IO(List<&2, T.LoadError>):
   loadFactoriesFrom(runtime, extensions, 1n)
+
+def disposeInlineExtensions(extensions: List<&2, T.InlineExtension>) -> IO(Unit):
+  match extensions:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case T.InlineExtension{_, factory, _} <> rest:
+      do IO<Unit>:
+        C.dispose(T.ExtensionAPI, Result<&2, &2, String, Unit>, factory)
+        disposeInlineExtensions(rest)
+    case T.BareExtension{factory} <> rest:
+      do IO<Unit>:
+        C.dispose(T.ExtensionAPI, Result<&2, &2, String, Unit>, factory)
+        disposeInlineExtensions(rest)
 
 # Binding to the model runtime (upstream agent-session-services)
 # -------------------------------------------------------------

@@ -455,18 +455,26 @@ def disposeRunners(runners: List<&2, Runner.ExtensionRunner>) -> IO(Unit):
 def eventsLoadout(+env: EventsEnv, +cwd: String) -> IO(Runtime.Loadout):
   do IO<Runtime.Loadout>:
     +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.InlineExtension{"events", api => eventsFactory(env, api), False{}}])
+    +factory : Ext.ExtensionFactory() <- C.create(~EventsEnv, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => eventsFactory(environment, api)), env)
+    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.InlineExtension{"events", factory, False{}}])
+    C.dispose(Ext.ExtensionAPI, Result<&2, &2, String, Unit>, factory)
     models : Models.ModelRuntime <- ModelFixture.create(Fx.fauxSources())
     +runner : Runner.ExtensionRunner <- Runner.create(runtime, cwd, models)
     R.modify(List<&2, Runner.ExtensionRunner>, Unit, runnersOf(env), created => (runner <> created, Unit{}))
     return Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, Some{runner}, Nil{}, None{}, Nil{}}
 
+def bindInitial(fixture: Fx.Fixture, start: Maybe<&2, Ext.SessionStartEvent>) -> IO(Unit):
+  match start:
+    case None{}: Session.bindExtensions(Fx.sessionOf(fixture), Ext.SessionStartEvent{Ext.StartupStart{}, None{}})
+    case Some{_}: IO.pure(Unit, Unit{})
+
 def eventsFactoryCall(env: EventsEnv, request: Host.Request) -> IO(Result<&1, &1, String, Host.Created<Services()>>):
   match env request:
-    case EventsEnv{+agentDir, cancelSwitch, cancelFork, runners} Host.Request{+cwd, +stored, _}:
+    case EventsEnv{+agentDir, cancelSwitch, cancelFork, runners} Host.Request{+cwd, +stored, start}:
       do IO<Result<&1, &1, String, Host.Created<Services()>>>:
         loadout : Runtime.Loadout <- eventsLoadout(EventsEnv{agentDir, cancelSwitch, cancelFork, runners}, cwd)
         +fixture : Fx.Fixture <- Fx.fixtureWithModel(stored, cwd, agentDir, "one" <> "two" <> "three" <> Nil{}, Nil{}, loadout, Some{Fx.fauxModel()}, Fx.fauxSources())
+        bindInitial(fixture, start)
         return created(fixture)
 
 def phase(name: String, unit: Unit) -> IO(Unit): IO.print("{\"type\":\"phase\",\"name\":" ++ Decode.quote(name) ++ "}")

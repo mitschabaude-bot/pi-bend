@@ -1460,7 +1460,7 @@ def reloaded(result: Result<&2,&2,String,Unit>) -> Bool:
   match result:
     case Done{_}: True{}
     case Fail{_}: False{}
-def reloadIdle(transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,+session: Session.AgentSession,trust: TrustContext,cwd: String,streaming: Bool,compacting: Bool) -> IO(Bool):
+def reloadIdle(transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,+session: Session.AgentSession,trust: TrustContext,cwd: String,streaming: Bool,compacting: Bool,options: Maybe<&2,Session.ReloadOptions>) -> IO(Bool):
   match streaming compacting:
     case True{} _:
       do IO<Bool>:
@@ -1472,7 +1472,7 @@ def reloadIdle(transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,+se
         return False{}
     case False{} False{}:
       do IO<Bool>:
-        +result : Result<&2,&2,String,Unit> <- Session.reload(session)
+        +result : Result<&2,&2,String,Unit> <- Session.reload(session,options)
         reloadResult(transcript,header,session,trust,cwd,result)
         return reloaded(result)
 def reloadShortcuts(shortcuts: Shortcuts.Host,+live: Session.AgentSession,autocomplete: AutocompleteSlot,editor: Ref.Ref<Maybe<&2,Live.Handle>>,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
@@ -1497,17 +1497,23 @@ def reloadBindings(+target: Ref.Ref<Keybindings.KeybindingsManager>,customDir: S
     previous : Keybindings.KeybindingsManager <- Ref.read(Keybindings.KeybindingsManager,target)
     result : Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager> <- AppKeys.reload(AppKeys.KeybindingsManager{previous,Some{Path.normalize(customDir ++ "/../keybindings.json")},AppKeys.Environment{"linux",None{},None{}}})
     applyReloadedBindings(result,target,transcript,header)
-def reloadObserved(input: CommandObservation) -> IO(Unit):
+def beforeReloadStart(input: CommandObservation,unit: Unit) -> IO(Unit):
   match input:
-    case CommandObservation{_,+session,_,_,redraw,cwd,_,_,_,_,BashInput{_,+transcript,editor,_,_,_},_,trust,+header,bindings,+autocomplete,ExportTheme{_,customDir},shortcuts}:
+    case CommandObservation{_,+session,_,_,_,_,_,_,_,_,BashInput{_,+transcript,editor,_,_,_},_,_,+header,bindings,autocomplete,ExportTheme{_,customDir},shortcuts}:
+      do IO<Unit>:
+        reloadBindings(bindings,customDir,transcript,header)
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        reloadShortcuts(shortcuts,live,autocomplete,editor,session)
+def reloadObserved(+input: CommandObservation) -> IO(Unit):
+  match input:
+    case CommandObservation{_,+session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,trust,header,_,_,_,_}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         streaming : Bool <- Session.isStreaming(live)
         compacting : Bool <- Session.isCompacting(live)
-        done : Bool <- reloadIdle(transcript,header,live,trust,cwd,streaming,compacting)
-        Bool.pick(Unit -> IO(Unit),done,_ => do IO<Unit>:
-            reloadBindings(bindings,customDir,transcript,header)
-            reloadShortcuts(shortcuts,live,autocomplete,editor,session),_ => IO.pure(Unit,Unit{}))(Unit{})
+        +before : Callback.Callback<Unit,Unit> <- Callback.create(~CommandObservation,~Unit,~Unit,~beforeReloadStart,input)
+        done : Bool <- reloadIdle(transcript,header,live,trust,cwd,streaming,compacting,Some{Session.ReloadOptions{Some{before}}})
+        Callback.dispose(Unit,Unit,before)
         Interactive.requestRender(redraw)
 def sessionStatus(input: CommandObservation,message: String) -> IO(Unit):
   match input:
@@ -3325,6 +3331,7 @@ def initializeApplication(failure: Interactive.StatusSink,first: Bool,managed: M
         target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editorRefOf(interaction))
         seedStoredTranscript(transcript,live,existing,target)
         startAutocomplete(interaction,session,files)
+        Session.bindExtensions(live,Session.initialStartEvent(live))
         Interactive.maybeWarnAboutAnthropicSubscriptionAuth(failure,live)
         startupProjectTrustWarning(transcript,session)
         startupChangelog(transcript,session,builtinDir)

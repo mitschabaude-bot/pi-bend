@@ -55,8 +55,17 @@ def registeringCommand(name: String, description: String, api: T.ExtensionAPI) -
     options : T.CommandOptions <- commandOptions(description)
     Loader.registerCommand(api, name, options)
 
-def commandExtension(label: String, name: String, description: String) -> T.InlineExtension:
-  T.InlineExtension{label, api => registeringCommand(name, description, api), False{}}
+type CommandSpec is Data:
+  CommandSpec{name: String, description: String}
+
+def registerSpec(spec: CommandSpec, api: T.ExtensionAPI) -> IO(Outcome()):
+  match spec:
+    case CommandSpec{name, description}: registeringCommand(name, description, api)
+
+def commandExtension(label: String, name: String, description: String) -> IO(T.InlineExtension):
+  do IO<T.InlineExtension>:
+    +factory : T.ExtensionFactory() <- C.create(~CommandSpec, ~T.ExtensionAPI, ~Outcome(), ~registerSpec, CommandSpec{name, description})
+    return T.InlineExtension{label, factory, False{}}
 
 def failing(api: T.ExtensionAPI) -> IO(Outcome()):
   do IO<Outcome()>:
@@ -65,10 +74,11 @@ def failing(api: T.ExtensionAPI) -> IO(Outcome()):
 
 def emptyModels() -> IO(Models.ModelRuntime): Fixture.create(Nil{})
 
-def loaded(extensions: List<&1, T.InlineExtension>) -> IO(Runner.ExtensionRunner):
+def loaded(+extensions: List<&2, T.InlineExtension>) -> IO(Runner.ExtensionRunner):
   do IO<Runner.ExtensionRunner>:
     +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
     errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, extensions)
+    Loader.disposeInlineExtensions(extensions)
     models : Models.ModelRuntime <- emptyModels()
     Runner.create(runtime, "/tmp/pi-runner-test", models)
 
@@ -104,20 +114,25 @@ def descriptionOf(command: Maybe<&2, T.ResolvedCommand>) -> String:
 
 def collectsCommandsFromMultipleExtensions() -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded(commandExtension("cmd-a", "cmd-a", "Test command") <> commandExtension("cmd-b", "cmd-b", "Test command") <> Nil{})
+    first : T.InlineExtension <- commandExtension("cmd-a", "cmd-a", "Test command")
+    second : T.InlineExtension <- commandExtension("cmd-b", "cmd-b", "Test command")
+    +runner : Runner.ExtensionRunner <- loaded([first, second])
     +commands : List<&2, T.ResolvedCommand> <- Runner.getRegisteredCommands(runner)
     check(Nat.is_eq(List.length(&2, T.ResolvedCommand, commands), 2n) && String.eq(joined(namesOf(commands)), "cmd-a,cmd-b") && String.eq(joined(invocationsOf(commands)), "cmd-a,cmd-b"), "collects commands from multiple extensions")
 
 def getsCommandByInvocationName() -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded(commandExtension("cmd", "my-cmd", "My command") <> Nil{})
+    extension : T.InlineExtension <- commandExtension("cmd", "my-cmd", "My command")
+    +runner : Runner.ExtensionRunner <- loaded([extension])
     found : Maybe<&2, T.ResolvedCommand> <- Runner.getCommand(runner, "my-cmd")
     missing : Maybe<&2, T.ResolvedCommand> <- Runner.getCommand(runner, "not-exists")
     same(shownCommand(found) ++ " / " ++ shownCommand(missing), "my-cmd my-cmd My command / undefined", "gets command by invocation name")
 
 def suffixesDuplicateExtensionCommandsInInsertionOrder() -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded(commandExtension("cmd-a", "shared-cmd", "First command") <> commandExtension("cmd-b", "shared-cmd", "Second command") <> Nil{})
+    first : T.InlineExtension <- commandExtension("cmd-a", "shared-cmd", "First command")
+    second : T.InlineExtension <- commandExtension("cmd-b", "shared-cmd", "Second command")
+    +runner : Runner.ExtensionRunner <- loaded([first, second])
     +commands : List<&2, T.ResolvedCommand> <- Runner.getRegisteredCommands(runner)
     first : Maybe<&2, T.ResolvedCommand> <- Runner.getCommand(runner, "shared-cmd:1")
     second : Maybe<&2, T.ResolvedCommand> <- Runner.getCommand(runner, "shared-cmd:2")
@@ -127,7 +142,10 @@ def suffixesDuplicateExtensionCommandsInInsertionOrder() -> IO(Unit):
 # pushes the second `a` to `a:3` (upstream's do-while).
 def skipsTakenInvocationNames() -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded(commandExtension("one", "a", "x") <> commandExtension("two", "a:2", "y") <> commandExtension("three", "a", "z") <> Nil{})
+    first : T.InlineExtension <- commandExtension("one", "a", "x")
+    second : T.InlineExtension <- commandExtension("two", "a:2", "y")
+    third : T.InlineExtension <- commandExtension("three", "a", "z")
+    +runner : Runner.ExtensionRunner <- loaded([first, second, third])
     commands : List<&2, T.ResolvedCommand> <- Runner.getRegisteredCommands(runner)
     same(joined(invocationsOf(commands)), "a:1,a:2,a:3", "skips invocation names that are already taken")
 
@@ -144,7 +162,11 @@ def shownOutcome(outcome: Outcome()) -> String:
 def failedFactoriesAreDiscarded() -> IO(Unit):
   do IO<Unit>:
     +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, T.InlineExtension{"bad", failing, False{}} <> commandExtension("good", "good", "Good") <> Nil{})
+    bad : T.ExtensionFactory() <- C.create(~Unit, ~T.ExtensionAPI, ~Outcome(), ~(_ => api => failing(api)), Unit{})
+    good : T.InlineExtension <- commandExtension("good", "good", "Good")
+    +factories : List<&2, T.InlineExtension> = [T.InlineExtension{"bad", bad, False{}}, good]
+    errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, factories)
+    Loader.disposeInlineExtensions(factories)
     models : Models.ModelRuntime <- emptyModels()
     +runner : Runner.ExtensionRunner <- Runner.create(runtime, "/tmp/pi-runner-test", models)
     commands : List<&2, T.ResolvedCommand> <- Runner.getRegisteredCommands(runner)
@@ -308,8 +330,10 @@ def capture(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>, api: T.ExtensionAPI) -> IO(O
     R.write(Maybe<&2, T.ExtensionAPI>, slot, Some{api})
     return Done{Unit{}}
 
-def capturing(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>) -> T.InlineExtension:
-  T.InlineExtension{"capture", api => capture(slot, api), False{}}
+def capturing(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>) -> IO(T.InlineExtension):
+  do IO<T.InlineExtension>:
+    +factory : T.ExtensionFactory() <- C.create(~R.Ref<Maybe<&2, T.ExtensionAPI>>, ~T.ExtensionAPI, ~Outcome(), ~capture, slot)
+    return T.InlineExtension{"capture", factory, False{}}
 
 def pendingOf(state: T.ExtensionRuntimeState) -> Nat:
   match state:
@@ -334,7 +358,9 @@ def loadCapturing() -> IO(Loaded):
   do IO<Loaded>:
     +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
     +slot : R.Ref<Maybe<&2, T.ExtensionAPI>> <- R.new(Maybe<&2, T.ExtensionAPI>, None{})
-    errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, capturing(slot) <> Nil{})
+    +extension : T.InlineExtension <- capturing(slot)
+    errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, [extension])
+    Loader.disposeInlineExtensions([extension])
     found : Maybe<&2, T.ExtensionAPI> <- R.dispose(Maybe<&2, T.ExtensionAPI>, slot)
     loadedApi(runtime, found)
 
@@ -577,6 +603,13 @@ def registering(shared: Shared, registrations: List<&2, Registration>, api: T.Ex
   match shared:
     case Shared{calls, stops, runner}: registerAll(Harness{calls, stops, runner, api}, registrations)
 
+type SubscriptionSpec is Data:
+  SubscriptionSpec{shared: Shared, registrations: List<&2, Registration>}
+
+def registerSubscriptions(spec: SubscriptionSpec, api: T.ExtensionAPI) -> IO(Outcome()):
+  match spec:
+    case SubscriptionSpec{shared, registrations}: registering(shared, registrations, api)
+
 type Subscriptions is Data:
   Subscriptions{shared: Shared, runner: Runner.ExtensionRunner}
 
@@ -586,7 +619,8 @@ def subscriptionExtension(registrations: List<&2, Registration>) -> IO(Subscript
     stops : R.Ref<List<&2, Named>> <- R.new(List<&2, Named>, Nil{})
     +slot : R.Ref<Maybe<&2, Runner.ExtensionRunner>> <- R.new(Maybe<&2, Runner.ExtensionRunner>, None{})
     +shared : Shared <- IO.pure(Shared, Shared{calls, stops, slot})
-    +runner : Runner.ExtensionRunner <- loaded(T.InlineExtension{"subscriptions", api => registering(shared, registrations, api), False{}} <> Nil{})
+    +factory : T.ExtensionFactory() <- C.create(~SubscriptionSpec, ~T.ExtensionAPI, ~Outcome(), ~registerSubscriptions, SubscriptionSpec{shared, registrations})
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"subscriptions", factory, False{}}])
     R.write(Maybe<&2, Runner.ExtensionRunner>, slot, Some{runner})
     return Subscriptions{shared, runner}
 
@@ -663,7 +697,8 @@ def removesDuplicateRegistrationsIndependently() -> IO(Unit):
     stops : R.Ref<List<&2, Named>> <- R.new(List<&2, Named>, Nil{})
     +slot : R.Ref<Maybe<&2, Runner.ExtensionRunner>> <- R.new(Maybe<&2, Runner.ExtensionRunner>, None{})
     +shared : Shared <- IO.pure(Shared, Shared{calls, stops, slot})
-    +runner : Runner.ExtensionRunner <- loaded(T.InlineExtension{"subscriptions", api => sharedHandlerTwice(shared, api), False{}} <> Nil{})
+    +factory : T.ExtensionFactory() <- C.create(~Shared, ~T.ExtensionAPI, ~Outcome(), ~sharedHandlerTwice, shared)
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"subscriptions", factory, False{}}])
     stopByName(shared, "second")
     stopByName(shared, "second")
     Runner.emit(runner, agentEnd())
@@ -711,7 +746,9 @@ def line(value: V.Value) -> String:
 
 def rpcCommandsListExtensionCommands() -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded(commandExtension("cmd-a", "shared-cmd", "First command") <> commandExtension("cmd-b", "shared-cmd", "Second command") <> Nil{})
+    first : T.InlineExtension <- commandExtension("cmd-a", "shared-cmd", "First command")
+    second : T.InlineExtension <- commandExtension("cmd-b", "shared-cmd", "Second command")
+    +runner : Runner.ExtensionRunner <- loaded([first, second])
     commands : List<&2, T.ResolvedCommand> <- Runner.getRegisteredCommands(runner)
     same(line(V.ArrayValue{Rpc.extensionCommands(commands, Nil{})}), "[{\"name\":\"shared-cmd:1\",\"description\":\"First command\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<inline:cmd-a>\",\"source\":\"inline\",\"scope\":\"temporary\",\"origin\":\"top-level\"}},{\"name\":\"shared-cmd:2\",\"description\":\"Second command\",\"source\":\"extension\",\"sourceInfo\":{\"path\":\"<inline:cmd-b>\",\"source\":\"inline\",\"scope\":\"temporary\",\"origin\":\"top-level\"}}]", "get_commands lists extension commands by invocation name")
 
@@ -728,7 +765,11 @@ def diagnosticMessages(diagnostics: List<&2, Diagnostics.ResourceDiagnostic>) ->
 
 def autocompleteSkipsBuiltinNames() -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded(commandExtension("one", "model", "Shadow") <> commandExtension("two", "llama", "Manage llama.cpp") <> commandExtension("three", "tree", "First tree") <> commandExtension("four", "tree", "Second tree") <> Nil{})
+    first : T.InlineExtension <- commandExtension("one", "model", "Shadow")
+    second : T.InlineExtension <- commandExtension("two", "llama", "Manage llama.cpp")
+    third : T.InlineExtension <- commandExtension("three", "tree", "First tree")
+    fourth : T.InlineExtension <- commandExtension("four", "tree", "Second tree")
+    +runner : Runner.ExtensionRunner <- loaded([first, second, third, fourth])
     +commands : List<&2, T.ResolvedCommand> <- Runner.getRegisteredCommands(runner)
     same(joined(slashNames(Interactive.extensionCommands(commands, Interactive.builtinNames(Slash.BUILTIN_SLASH_COMMANDS())))) ++ " | " ++ String.join(diagnosticMessages(Interactive.getBuiltInCommandConflictDiagnostics(commands)), " / "), "llama=[t] Manage llama.cpp | Extension command '/model' conflicts with built-in interactive command. Skipping in autocomplete. @<inline:one> / Extension command '/tree' conflicts with built-in interactive command. Available as '/tree:1'. @<inline:three> / Extension command '/tree' conflicts with built-in interactive command. Available as '/tree:2'. @<inline:four>", "autocomplete lists extension commands and reports built-in conflicts")
 
@@ -825,6 +866,13 @@ def userBashExtension(+name: String, handler: C.Callback<T.HandlerCall<T.UserBas
     subscribed : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, T.OnUserBash{handler})
     return Result.map(&2, &2, String, Loader.Unsubscribe, Unit, done => Unit{}, subscribed)
 
+type UserBashSpec is Data:
+  UserBashSpec{name: String, handler: C.Callback<T.HandlerCall<T.UserBashEvent>, Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>>}
+
+def registerUserBash(spec: UserBashSpec, api: T.ExtensionAPI) -> IO(Outcome()):
+  match spec:
+    case UserBashSpec{name, handler}: userBashExtension(name, handler, api)
+
 def shownUserBash(outcome: Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>) -> String:
   match outcome:
     case Fail{error}: "rejects " ++ error
@@ -838,7 +886,8 @@ def userBashEvent(+command: String) -> T.UserBashEvent: T.UserBashEvent{command,
 def failsClosedWhenAUserBashHandlerThrows() -> IO(Unit):
   do IO<Unit>:
     handler : C.Callback<T.HandlerCall<T.UserBashEvent>, Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>> <- C.create(~Unit, ~T.HandlerCall<T.UserBashEvent>, ~Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>, ~routingFails, Unit{})
-    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"throws", api => userBashExtension("throws", handler, api), False{}}])
+    +factory : T.ExtensionFactory() <- C.create(~UserBashSpec, ~T.ExtensionAPI, ~Outcome(), ~registerUserBash, UserBashSpec{"throws", handler})
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"throws", factory, False{}}])
     +errors : R.Ref<List<&2, T.ExtensionError>> <- R.new(List<&2, T.ExtensionError>, Nil{})
     listener : C.Callback<T.ExtensionError, Unit> <- C.create(~R.Ref<List<&2, T.ExtensionError>>, ~T.ExtensionError, ~Unit, ~recordError, errors)
     subscription : Runner.ErrorSubscription <- Runner.onError(runner, listener)
@@ -849,7 +898,8 @@ def failsClosedWhenAUserBashHandlerThrows() -> IO(Unit):
 def acceptsValidUserBashOverrides() -> IO(Unit):
   do IO<Unit>:
     handler : C.Callback<T.HandlerCall<T.UserBashEvent>, Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>> <- C.create(~Unit, ~T.HandlerCall<T.UserBashEvent>, ~Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>, ~overrides, Unit{})
-    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"valid-results", api => userBashExtension("valid-results", handler, api), False{}}])
+    +factory : T.ExtensionFactory() <- C.create(~UserBashSpec, ~T.ExtensionAPI, ~Outcome(), ~registerUserBash, UserBashSpec{"valid-results", handler})
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"valid-results", factory, False{}}])
     operations : Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>> <- Runner.emitUserBash(runner, userBashEvent("operations"))
     result : Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>> <- Runner.emitUserBash(runner, userBashEvent("result"))
     same(shownUserBash(operations) ++ " | " ++ shownUserBash(result), "operations | result handled 0 False False", "accepts valid user_bash operations and result overrides")
@@ -857,6 +907,13 @@ def acceptsValidUserBashOverrides() -> IO(Unit):
 # flags (extensions-runner.test.ts; upstream writes .ts files, and its first
 # and last cases pass options without a type, which natively is required)
 def registeringFlag(+name: String, options: T.FlagOptions, api: T.ExtensionAPI) -> IO(Outcome()): Loader.registerFlag(api, name, options)
+
+type FlagSpec is Data:
+  FlagSpec{name: String, options: T.FlagOptions}
+
+def registerFlagSpec(spec: FlagSpec, api: T.ExtensionAPI) -> IO(Outcome()):
+  match spec:
+    case FlagSpec{name, options}: registeringFlag(name, options, api)
 
 def flagDescriptions(flags: List<&2, T.ExtensionFlag>) -> List<&2, String>:
   match flags:
@@ -870,13 +927,16 @@ def shownSettings(settings: List<&2, T.FlagSetting>) -> List<&2, String>:
 
 def collectsFlagsFromExtensions() -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"with-flag", api => registeringFlag("my-flag", T.FlagOptions{Some{"My flag"}, T.BooleanFlag{}, None{}}, api), False{}}])
+    +factory : T.ExtensionFactory() <- C.create(~FlagSpec, ~T.ExtensionAPI, ~Outcome(), ~registerFlagSpec, FlagSpec{"my-flag", T.FlagOptions{Some{"My flag"}, T.BooleanFlag{}, None{}}})
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"with-flag", factory, False{}}])
     flags : List<&2, T.ExtensionFlag> <- Runner.getFlags(runner)
     same(joined(flagDescriptions(flags)), "my-flag=My flag", "collects flags from extensions")
 
 def keepsFirstFlagWithTheSameName() -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"a-first", api => registeringFlag("shared-flag", T.FlagOptions{Some{"first"}, T.BooleanFlag{}, Some{T.FlagBoolean{True{}}}}, api), False{}}, T.InlineExtension{"b-second", api => registeringFlag("shared-flag", T.FlagOptions{Some{"second"}, T.BooleanFlag{}, Some{T.FlagBoolean{False{}}}}, api), False{}}])
+    first : T.ExtensionFactory() <- C.create(~FlagSpec, ~T.ExtensionAPI, ~Outcome(), ~registerFlagSpec, FlagSpec{"shared-flag", T.FlagOptions{Some{"first"}, T.BooleanFlag{}, Some{T.FlagBoolean{True{}}}}})
+    second : T.ExtensionFactory() <- C.create(~FlagSpec, ~T.ExtensionAPI, ~Outcome(), ~registerFlagSpec, FlagSpec{"shared-flag", T.FlagOptions{Some{"second"}, T.BooleanFlag{}, Some{T.FlagBoolean{False{}}}}})
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"a-first", first, False{}}, T.InlineExtension{"b-second", second, False{}}])
     flags : List<&2, T.ExtensionFlag> <- Runner.getFlags(runner)
     values : List<&2, T.FlagSetting> <- Runner.getFlagValues(runner)
     same(joined(flagDescriptions(flags)) ++ " | " ++ joined(shownSettings(values)), "shared-flag=first | shared-flag=true", "keeps first flag when two extensions register the same name")
@@ -884,7 +944,9 @@ def keepsFirstFlagWithTheSameName() -> IO(Unit):
 def rejectsMistypedFlagDefaults() -> IO(Unit):
   do IO<Unit>:
     +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, [T.InlineExtension{"bad-flag-default", api => registeringFlag("safe-mode", T.FlagOptions{None{}, T.BooleanFlag{}, Some{T.FlagString{"false"}}}, api), False{}}])
+    +factory : T.ExtensionFactory() <- C.create(~FlagSpec, ~T.ExtensionAPI, ~Outcome(), ~registerFlagSpec, FlagSpec{"safe-mode", T.FlagOptions{None{}, T.BooleanFlag{}, Some{T.FlagString{"false"}}}})
+    errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, [T.InlineExtension{"bad-flag-default", factory, False{}}])
+    C.dispose(T.ExtensionAPI, Outcome(), factory)
     values : String <- flagValueNames(runtime)
     models : Models.ModelRuntime <- emptyModels()
     +runner : Runner.ExtensionRunner <- Runner.create(runtime, "/tmp/pi-runner-test", models)
@@ -893,7 +955,8 @@ def rejectsMistypedFlagDefaults() -> IO(Unit):
 
 def canSetFlagValues() -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"flag", api => registeringFlag("test-flag", T.FlagOptions{Some{"Test flag"}, T.BooleanFlag{}, None{}}, api), False{}}])
+    +factory : T.ExtensionFactory() <- C.create(~FlagSpec, ~T.ExtensionAPI, ~Outcome(), ~registerFlagSpec, FlagSpec{"test-flag", T.FlagOptions{Some{"Test flag"}, T.BooleanFlag{}, None{}}})
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"flag", factory, False{}}])
     Runner.setFlagValue(runner, "--test-flag", T.FlagBoolean{True{}})
     values : List<&2, T.FlagSetting> <- Runner.getFlagValues(runner)
     same(joined(shownSettings(values)), "--test-flag=true", "can set flag values")

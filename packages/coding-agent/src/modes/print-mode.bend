@@ -123,6 +123,7 @@ def runPrintMode(+session: Session.AgentSession, options: PrintModeOptions) -> I
         writeHeader(mode, sessionHeader)
         +listener : Session.Listener() <- C.create(~Args.Mode, ~Session.AgentSessionEvent, ~Unit, ~observe, mode)
         Session.subscribe(session, listener)
+        Session.bindExtensions(session,Session.initialStartEvent(session))
         first : Result<&2, &2, String, Unit> <- sendInitial(session, initialMessage, initialImages)
         sent : Result<&2, &2, String, Unit> <- sendAll(session, messages, first)
         code : U32 <- finish(mode, session, sent)

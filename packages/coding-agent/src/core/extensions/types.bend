@@ -560,13 +560,13 @@ def ExtensionRuntime() -> Data: R.Ref<ExtensionRuntimeState>
 type ExtensionAPI is Data:
   ExtensionAPI{runtime: R.Ref<ExtensionRuntimeState>, extension: Nat}
 
-# upstream ExtensionFactory. A failure is the message the factory threw.
-def ExtensionFactory() -> Type: ExtensionAPI -> IO(Result<&2, &2, String, Unit>)
+# upstream ExtensionFactory. Each call obtains a fresh affine factory body;
+# a failure is the message the factory threw.
+def ExtensionFactory() -> Data: C.Callback<ExtensionAPI, Result<&2, &2, String, Unit>>
 
 # upstream InlineExtension in its named form: `<inline:name>`, omitted from
-# the startup list when hidden. Factories are Bend functions, so the list is
-# consumed when it is loaded.
-type InlineExtension is Type:
+# the startup list when hidden. The resource loader owns the callback handles.
+type InlineExtension is Data:
   InlineExtension{name: String, factory: ExtensionFactory(), hidden: Bool}
   BareExtension{factory: ExtensionFactory()}
 

@@ -468,7 +468,9 @@ type Selection is Data:
 # `resourceLoader` is the injected ResourceLoader of an SDK session (upstream
 # AgentSession.resourceLoader); without one the resources come from the
 # options (the CLI path).
-type LoadoutSource is Data: LoadoutSource{environment: Paths.Environment, options: CreateOptions, packageDir: String, resourceLoader: Maybe<&2, Resources.ResourceLoader>}
+type ExtensionOwner is Data:
+  ExtensionOwner{current: Ref.Ref<ExtensionRunner.ExtensionRunner>, factories: List<&2, ExtensionTypes.InlineExtension>, context: ToolContext.ContextSource()}
+type LoadoutSource is Data: LoadoutSource{environment: Paths.Environment, options: CreateOptions, packageDir: String, resourceLoader: Maybe<&2, Resources.ResourceLoader>, extensions: Maybe<&2, ExtensionOwner>}
 
 # `source` rebuilds the prompt resources on reload (upstream AgentSession.reload).
 # `registry` holds every tool that can be activated (upstream _toolRegistry);
@@ -606,12 +608,12 @@ def preparedWith(skills: List<&2, Skills.Skill>, templates: List<&2, Templates.P
 # already loaded.
 def sectionsForTools(source: LoadoutSource, active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match source:
-    case LoadoutSource{_, options, packageDir, _}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptions(options, active, contextList, skills)))
+    case LoadoutSource{_, options, packageDir, _, _}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptions(options, active, contextList, skills)))
 
 # The sections for the active tools with registered tools' prompts.
 def sectionsForToolsWith(source: LoadoutSource, active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>, prompts: ToolPrompts) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match source:
-    case LoadoutSource{_, options, packageDir, _}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptionsWith(options, active, contextList, skills, prompts)))
+    case LoadoutSource{_, options, packageDir, _, _}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptionsWith(options, active, contextList, skills, prompts)))
 
 def preparedWithTools(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String, active: List<&2, String>, existing: Maybe<&2, PackageManager.ResolvedPaths>) -> IO(Result<&2, &2, String, Prepared>):
   do IO<Result<&2, &2, String, Prepared>>:
@@ -650,8 +652,8 @@ def withSettings(options: CreateOptions, settings: Settings.SettingsManager) -> 
 # reloaded settings.
 def reprepare(source: LoadoutSource, settings: Settings.SettingsManager, active: List<&2, String>) -> IO(Result<&2, &2, String, Prepared>):
   match source:
-    case LoadoutSource{environment, options, packageDir, None{}}: preparedWithTools(environment, withSettings(options, settings), packageDir, active, None{})
-    case LoadoutSource{_, options, packageDir, Some{+loader}}:
+    case LoadoutSource{environment, options, packageDir, None{}, _}: preparedWithTools(environment, withSettings(options, settings), packageDir, active, None{})
+    case LoadoutSource{_, options, packageDir, Some{+loader}, _}:
       do IO<Result<&2, &2, String, Prepared>>:
         Resources.reload(loader, Resources.ResourceLoaderReloadOptions{Some{settings}})
         preparedFromLoader(loader, options, packageDir, active)
@@ -927,10 +929,40 @@ def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, sto
     Storage.dispose(storage)
     disposeTransport(transport)
 
+def currentToolContext(current: Ref.Ref<ExtensionRunner.ExtensionRunner>,unit: Unit) -> IO(Maybe<&2,ToolContext.ContextView>):
+  do IO<Maybe<&2,ToolContext.ContextView>>:
+    runner : ExtensionRunner.ExtensionRunner <- Ref.read(ExtensionRunner.ExtensionRunner,current)
+    ToolContext.current(ExtensionRunner.toolContext(runner))
+def createExtensionOwner(runner: ExtensionRunner.ExtensionRunner,factories: List<&2,ExtensionTypes.InlineExtension>) -> IO(ExtensionOwner):
+  do IO<ExtensionOwner>:
+    +current : Ref.Ref<ExtensionRunner.ExtensionRunner> <- Ref.new(ExtensionRunner.ExtensionRunner,runner)
+    reader : C.Callback<Unit,Maybe<&2,ToolContext.ContextView>> <- C.create(~Ref.Ref<ExtensionRunner.ExtensionRunner>,~Unit,~Maybe<&2,ToolContext.ContextView>,~currentToolContext,current)
+    return ExtensionOwner{current,factories,Some{reader}}
+def toolContextFrom(source: LoadoutSource,runner: ExtensionRunner.ExtensionRunner) -> ToolContext.ContextSource():
+  match source:
+    case LoadoutSource{_,_,_,_,Some{ExtensionOwner{_,_,context}}}: context
+    case _: ExtensionRunner.toolContext(runner)
+def disposeContext(context: ToolContext.ContextSource()) -> IO(Unit):
+  match context:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{reader}: C.dispose(Unit,Maybe<&2,ToolContext.ContextView>,reader)
+def disposeExtensionOwner(owner: Maybe<&2, ExtensionOwner>, runner: Maybe<&2, ExtensionRunner.ExtensionRunner>) -> IO(Unit):
+  match owner runner:
+    case Some{ExtensionOwner{current, factories, context}} _:
+      do IO<Unit>:
+        disposeContext(context)
+        live : ExtensionRunner.ExtensionRunner <- Ref.dispose(ExtensionRunner.ExtensionRunner, current)
+        ExtensionRunner.dispose(live)
+        ExtensionLoader.disposeInlineExtensions(factories)
+    case None{} Some{runner}: ExtensionRunner.dispose(runner)
+    case None{} None{}: IO.pure(Unit, Unit{})
+def extensionOwner(source: Maybe<&2, LoadoutSource>) -> Maybe<&2, ExtensionOwner>:
+  match source:
+    case None{}: None{}
+    case Some{LoadoutSource{_, _, _, _, owner}}: owner
 def disposeLoadout(loadout: Loadout) -> IO(Unit):
   match loadout:
-    case Loadout{_, _, _, _, None{}, _, _, _}: IO.pure(Unit, Unit{})
-    case Loadout{_, _, _, _, Some{runner}, _, _, _}: ExtensionRunner.dispose(runner)
+    case Loadout{_, _, _, _, runner, _, source, _}: disposeExtensionOwner(extensionOwner(source), runner)
 
 # Assembly with cleanup on every failure path.
 def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(V.Value, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
@@ -942,9 +974,9 @@ def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storage
         disposeLoadout(loadout)
         return Fail{StreamFn.errorMessage(error)}
 
-def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, extensions: ExtensionRunner.ExtensionRunner) -> IO(Unit):
+def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> IO(Unit):
   do IO<Unit>:
-    ExtensionRunner.dispose(extensions)
+    disposeExtensionOwner(extensionOwner(Some{source}), Some{extensions})
     Models.dispose(models)
     Auth.disposeStore(storageStore)
     Storage.dispose(storage)
@@ -977,7 +1009,7 @@ def activeTools(+registry: List<&2, Tools.Tool()>, names: List<&2, String>) -> L
 
 def loadoutFrom(prepared: Prepared, +registry: List<&2, Tools.Tool()>, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> Loadout:
   match prepared source:
-    case Prepared{sections, skills, templates, agentsFiles} LoadoutSource{paths, +options, packageDir, loader}: Loadout{sections, activeTools(registry, activeNamesOf(toolSetupOf(options))), skills, templates, Some{extensions}, agentsFiles, Some{LoadoutSource{paths, options, packageDir, loader}}, registry}
+    case Prepared{sections, skills, templates, agentsFiles} LoadoutSource{paths, +options, packageDir, loader, owner}: Loadout{sections, activeTools(registry, activeNamesOf(toolSetupOf(options))), skills, templates, Some{extensions}, agentsFiles, Some{LoadoutSource{paths, options, packageDir, loader, owner}}, registry}
 
 def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(V.Value, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
   match created:
@@ -986,12 +1018,12 @@ def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageSt
         result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~V.Value, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
         constructed(transport, storage, storageStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, extensions, source), result)
 
-def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, +models: Models.ModelRuntime, +paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
+def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, +models: Models.ModelRuntime, +paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, +source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, +fetch, +codexSessions} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
         queue : Queue.Owner <- Queue.create()
-        +context : ToolContext.ContextSource() <- IO.pure(ToolContext.ContextSource(), ExtensionRunner.toolContext(extensions))
+        +context : ToolContext.ContextSource() <- IO.pure(ToolContext.ContextSource(), toolContextFrom(source,extensions))
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, toolsOptionsFor(builtins, settings, paths), paths, cwd, agentDir, packageDir, fetch, context, Queue.borrow(queue))
         apiStream : Composer.ProviderStream() <- createApiStream(codexSessions, authorizer, fetch)
         Models.setApiStreams(models, Some{apiStream})
@@ -1003,20 +1035,23 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey
         assembled(Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings, extensions, source)
     case transport Fail{error} _:
       do IO<Outcome(AgentRuntime)>:
-        disposeBase(transport, storage, storageStore, models, extensions)
+        disposeBase(transport, storage, storageStore, models, extensions, source)
         return Fail{error}
     case transport _ Fail{error}:
       do IO<Outcome(AgentRuntime)>:
-        disposeBase(transport, storage, storageStore, models, extensions)
+        disposeBase(transport, storage, storageStore, models, extensions, source)
         return Fail{error}
 
 def registryOf(setup: ToolSetup) -> List<&2, Tools.ToolName>:
   match setup:
     case ToolSetup{registry, _}: registry
 
-def withModel(+options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, +paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
+def withModel(+options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, +paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, +extensions: ExtensionRunner.ExtensionRunner, factories: List<&2, ExtensionTypes.InlineExtension>) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, +selection, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, registryOf(toolSetupOf(options)), builtinsOf(selection), transport, storage, storageStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir, None{}}, extensions)
+    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, +selection, _, seed, settings, _}:
+      do IO<Outcome(AgentRuntime)>:
+        owner : ExtensionOwner <- createExtensionOwner(extensions,factories)
+        withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, registryOf(toolSetupOf(options)), builtinsOf(selection), transport, storage, storageStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir, None{}, Some{owner}}, extensions)
 
 # A runtime API key changes the provider's availability (upstream
 # setRuntimeApiKey refreshes it).
@@ -1075,19 +1110,45 @@ def failedWith(failure: Maybe<&2, String>, prompt: Result<&2, &2, String, Prepar
 # cached catalogs: here each registration already refreshes, and built-in
 # providers have no dynamic catalog, so it would only repeat the
 # availability check.
-type ExtensionLoadout is Type:
-  ExtensionLoadout{factories: List<&1, ExtensionTypes.InlineExtension>, errors: List<&2, ExtensionTypes.LoadError>, resolved: Maybe<&2, PackageManager.ResolvedPaths>}
-def loadExtensions(+cwd: String, +models: Models.ModelRuntime, factories: List<&1, ExtensionTypes.InlineExtension>, errors: List<&2, ExtensionTypes.LoadError>) -> IO(Extensions):
+type ExtensionLoadout is Data:
+  ExtensionLoadout{factories: List<&2, ExtensionTypes.InlineExtension>, errors: List<&2, ExtensionTypes.LoadError>, resolved: Maybe<&2, PackageManager.ResolvedPaths>}
+def extensionsFromRuntime(+cwd: String,+models: Models.ModelRuntime,+runtime: ExtensionTypes.ExtensionRuntime(),errors: List<&2,ExtensionTypes.LoadError>) -> IO(Extensions):
+  do IO<Extensions>:
+    providerErrors : List<&2, ExtensionTypes.ExtensionError> <- ExtensionLoader.bindProviders(runtime, models, None{})
+    runner : ExtensionRunner.ExtensionRunner <- ExtensionRunner.create(runtime, cwd, models)
+    return Extensions{runner, errors, providerErrors}
+def loadExtensions(cwd: String,models: Models.ModelRuntime,factories: List<&2, ExtensionTypes.InlineExtension>,errors: List<&2, ExtensionTypes.LoadError>) -> IO(Extensions):
   do IO<Extensions>:
     +runtime : ExtensionTypes.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
     loadErrors : List<&2, ExtensionTypes.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime, factories)
-    providerErrors : List<&2, ExtensionTypes.ExtensionError> <- ExtensionLoader.bindProviders(runtime, models, None{})
-    runner : ExtensionRunner.ExtensionRunner <- ExtensionRunner.create(runtime, cwd, models)
-    return Extensions{runner, List.append(&2, ExtensionTypes.LoadError, errors, loadErrors), providerErrors}
+    extensionsFromRuntime(cwd,models,runtime,List.append(&2,ExtensionTypes.LoadError,errors,loadErrors))
+def loadedExtensions(cwd: String,models: Models.ModelRuntime,loaded: Resources.LoadExtensionsResult) -> IO(Extensions):
+  match loaded:
+    case Resources.LoadExtensionsResult{_,errors,runtime}: extensionsFromRuntime(cwd,models,runtime,errors)
+def acceptedExtensions(+extensions: Extensions,error: Maybe<&2,String>) -> IO(Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>):
+  match error:
+    case None{}: IO.pure(Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>,Done{Some{runnerOf(extensions)}})
+    case Some{message}:
+      do IO<Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>>:
+        ExtensionRunner.dispose(runnerOf(extensions))
+        return Fail{message}
+# Resource loaders have already reloaded; the native CLI retains its factories.
+def rebuildExtensions(source: LoadoutSource,models: Models.ModelRuntime) -> IO(Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>):
+  match source:
+    case LoadoutSource{_,_,_,_,None{}}: IO.pure(Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>,Done{None{}})
+    case LoadoutSource{_,options,_,None{},Some{ExtensionOwner{_,factories,_}}}:
+      do IO<Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>>:
+        +extensions : Extensions <- loadExtensions(cwdOf(options),models,factories,Nil{})
+        acceptedExtensions(extensions,extensionFailure(extensions))
+    case LoadoutSource{_,options,_,Some{loader},Some{_}}:
+      do IO<Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>>:
+        loaded : Resources.LoadExtensionsResult <- Resources.getExtensions(loader)
+        +extensions : Extensions <- loadedExtensions(cwdOf(options),models,loaded)
+        acceptedExtensions(extensions,extensionFailure(extensions))
 
 def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, +paths: Paths.Environment, borrowed: Storage.AuthStorageOwner & Storage.AuthStorage, loadout: ExtensionLoadout) -> IO(Outcome(AgentRuntime)):
   match transport borrowed loadout:
-    case Transport{+authorizer, runtime, +fetch, +codexSessions} Tuple{storage, view} ExtensionLoadout{factories, errors, resolved}:
+    case Transport{+authorizer, runtime, +fetch, +codexSessions} Tuple{storage, view} ExtensionLoadout{+factories, errors, resolved}:
       do IO<Outcome(AgentRuntime)>:
         +storageStore : Auth.CredentialStore <- Storage.store(view)
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
@@ -1099,7 +1160,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options, resolution)
         key : Result<&2, &2, Resolve.ModelsError, Unit> <- applyKey(models, apiKey, selected)
         prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir, resolved)
-        withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, models, paths, failedWith(extensionFailure(extensions), failedWith(keyFailure(key), prompt)), selected, runnerOf(extensions))
+        withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, models, paths, failedWith(extensionFailure(extensions), failedWith(keyFailure(key), prompt)), selected, runnerOf(extensions), factories)
 
 def withPathsFields(options: CreateOptions, authPath: String, packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment, loadout: ExtensionLoadout) -> IO(Outcome(AgentRuntime)):
   do IO<Outcome(AgentRuntime)>:

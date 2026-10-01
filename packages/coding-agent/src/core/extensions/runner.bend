@@ -45,8 +45,8 @@ def create(+runtime: T.ExtensionRuntime(), +cwd: String, +models: Models.ModelRu
     diagnostics : R.Ref<List<&2,D.ResourceDiagnostic>> <- R.new(List<&2,D.ResourceDiagnostic>,Nil{})
     return ExtensionRunner{runtime, cwd, models, bindings, listeners, toolContext, diagnostics}
 
-# Whoever bound callbacks or listeners unbinds and disposes them; the
-# extensions' own registrations live as long as the program.
+# The mode/session owns bound callbacks and listeners; the runner owns
+# its runtime and context reader.
 def dispose(runner: ExtensionRunner) -> IO(Unit):
   match runner:
     case ExtensionRunner{runtime, _, _, bindings, listeners, toolContext, diagnostics}:
@@ -57,6 +57,38 @@ def dispose(runner: ExtensionRunner) -> IO(Unit):
         bound : Ctx.Bindings <- R.dispose(Ctx.Bindings, bindings)
         registered : Listeners <- R.dispose(Listeners, listeners)
         return Unit{}
+
+# Bindings belong to the mode/session; the runtime owns registrations.
+# Snapshot the borrowed bindings before retiring an extension generation.
+type ReloadBinding is Data:
+  ReloadBinding{bindings: Ctx.Bindings,listeners: Listeners,flags: List<&2,T.FlagSetting>}
+def captureReload(runner: ExtensionRunner) -> IO(ReloadBinding):
+  match runner:
+    case ExtensionRunner{runtime,_,_,bindings,listeners,_,_}:
+      do IO<ReloadBinding>:
+        bound : Ctx.Bindings <- R.read(Ctx.Bindings,bindings)
+        errors : Listeners <- R.read(Listeners,listeners)
+        state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState,runtime)
+        return ReloadBinding{bound,errors,Loader.flagValuesOf(state)}
+# Outstanding callbacks may retain the old context. Leave its channels live,
+# but remove actions and registrations; dropping handles then releases them.
+def invalidate(runner: ExtensionRunner) -> IO(Unit):
+  match runner:
+    case ExtensionRunner{runtime,_,_,bindings,listeners,_,diagnostics}:
+      do IO<Unit>:
+        R.write(Ctx.Bindings,bindings,Ctx.unbound())
+        R.write(Listeners,listeners,Listeners{0n,Nil{}})
+        R.write(List<&2,D.ResourceDiagnostic>,diagnostics,Nil{})
+        R.write(T.ExtensionRuntimeState,runtime,T.ExtensionRuntimeState{Nil{},Nil{},None{},0n,None{},None{},Nil{}})
+def restoredFlags(+state: T.ExtensionRuntimeState,flags: List<&2,T.FlagSetting>) -> T.ExtensionRuntimeState:
+  Loader.withFlagValues(state,Loader.settingsCommitted(Loader.flagValuesOf(state),flags))
+def restoreReload(runner: ExtensionRunner,snapshot: ReloadBinding) -> IO(Unit):
+  match runner snapshot:
+    case ExtensionRunner{runtime,_,_,bindings,listeners,_,_} ReloadBinding{bound,errors,flags}:
+      do IO<Unit>:
+        R.write(Ctx.Bindings,bindings,bound)
+        R.write(Listeners,listeners,errors)
+        R.modify(T.ExtensionRuntimeState,Unit,runtime,state => (restoredFlags(state,flags),Unit{}))
 
 def runtimeOf(runner: ExtensionRunner) -> T.ExtensionRuntime():
   match runner:

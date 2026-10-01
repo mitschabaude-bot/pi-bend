@@ -303,7 +303,9 @@ def picker(api: ExtT.ExtensionAPI) -> IO(Outcome()):
 def pickerLoadout(+cwd: String) -> IO(Runtime.Loadout):
   do IO<Runtime.Loadout>:
     +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"picker",api => picker(api),False{}}])
+    +factory : ExtT.ExtensionFactory() <- Callback.create(~Unit,~ExtT.ExtensionAPI,~Outcome(),~(_ => api => picker(api)),Unit{})
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"picker",factory,False{}}])
+    Callback.dispose(ExtT.ExtensionAPI,Outcome(),factory)
     models : Models.ModelRuntime <- ModelFixture.create(Nil{})
     runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
     return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
@@ -345,7 +347,9 @@ def themeExtension(api: ExtT.ExtensionAPI) -> IO(Outcome()):
 def themeLoadout(+cwd: String) -> IO(Runtime.Loadout):
   do IO<Runtime.Loadout>:
     +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"theme-reader",api => themeExtension(api),False{}}])
+    +factory : ExtT.ExtensionFactory() <- Callback.create(~Unit,~ExtT.ExtensionAPI,~Outcome(),~(_ => api => themeExtension(api)),Unit{})
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"theme-reader",factory,False{}}])
+    Callback.dispose(ExtT.ExtensionAPI,Outcome(),factory)
     models : Models.ModelRuntime <- ModelFixture.create(Nil{})
     runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
     return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
@@ -392,7 +396,9 @@ def asker(api: ExtT.ExtensionAPI) -> IO(Outcome()):
 def askerLoadout(+cwd: String) -> IO(Runtime.Loadout):
   do IO<Runtime.Loadout>:
     +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"asker",api => asker(api),False{}}])
+    +factory : ExtT.ExtensionFactory() <- Callback.create(~Unit,~ExtT.ExtensionAPI,~Outcome(),~(_ => api => asker(api)),Unit{})
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"asker",factory,False{}}])
+    Callback.dispose(ExtT.ExtensionAPI,Outcome(),factory)
     models : Models.ModelRuntime <- ModelFixture.create(Nil{})
     runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
     return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
@@ -445,7 +451,9 @@ def freshener(api: ExtT.ExtensionAPI) -> IO(Outcome()):
 def freshLoadout(+cwd: String) -> IO(Runtime.Loadout):
   do IO<Runtime.Loadout>:
     +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"freshener",api => freshener(api),False{}}])
+    +factory : ExtT.ExtensionFactory() <- Callback.create(~Unit,~ExtT.ExtensionAPI,~Outcome(),~(_ => api => freshener(api)),Unit{})
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"freshener",factory,False{}}])
+    Callback.dispose(ExtT.ExtensionAPI,Outcome(),factory)
     models : Models.ModelRuntime <- ModelFixture.create(Nil{})
     runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
     return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
@@ -499,7 +507,9 @@ def touring(api: ExtT.ExtensionAPI) -> IO(Outcome()):
 def tourLoadout(+cwd: String) -> IO(Runtime.Loadout):
   do IO<Runtime.Loadout>:
     +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"tour",api => touring(api),False{}}])
+    +factory : ExtT.ExtensionFactory() <- Callback.create(~Unit,~ExtT.ExtensionAPI,~Outcome(),~(_ => api => touring(api)),Unit{})
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"tour",factory,False{}}])
+    Callback.dispose(ExtT.ExtensionAPI,Outcome(),factory)
     models : Models.ModelRuntime <- ModelFixture.create(Nil{})
     runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
     return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
@@ -552,10 +562,11 @@ def starterQuits(api: ExtT.ExtensionAPI) -> IO(Outcome()):
     handler : ExtT.ExtensionHandler(ExtT.AgentStartEvent,Unit) <- Callback.create(~Unit,~ExtT.HandlerCall<ExtT.AgentStartEvent>,~Result<&2,&2,String,Maybe<&2,Unit>>,~quitOnStart,Unit{})
     subscribed : Result<&2,&2,String,Loader.Unsubscribe> <- Loader.on(api,ExtT.OnAgentStart{handler})
     return Result.map(&2,&2,String,Loader.Unsubscribe,Unit,unused => Unit{},subscribed)
-def loadoutOf(+cwd: String,name: String,factory: ExtT.ExtensionAPI -> IO(Outcome())) -> IO(Runtime.Loadout):
+def loadoutOf(+cwd: String,name: String,+factory: ExtT.ExtensionFactory()) -> IO(Runtime.Loadout):
   do IO<Runtime.Loadout>:
     +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
     errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{name,factory,False{}}])
+    Callback.dispose(ExtT.ExtensionAPI,Outcome(),factory)
     models : Models.ModelRuntime <- ModelFixture.create(Nil{})
     runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
     return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
@@ -585,11 +596,13 @@ def quitAtSettled(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
         report("RPC shutdown > ctx.shutdown() during a run ends RPC mode at agent_settled",before(captured,"\"type\":\"agent_settled\"","SHUTDOWN"))
 def shutdownRequested(+cwd: String,+agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    commands : Runtime.Loadout <- loadoutOf(cwd,"quitter",api => quitter(api))
+    commandFactory : ExtT.ExtensionFactory() <- Callback.create(~Unit,~ExtT.ExtensionAPI,~Outcome(),~(_ => api => quitter(api)),Unit{})
+    commands : Runtime.Loadout <- loadoutOf(cwd,"quitter",commandFactory)
     +first : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},commands)
     one : Rpc.Owner & Rpc.Handle <- started(first)
     quitCommand(first,one)
-    starts : Runtime.Loadout <- loadoutOf(cwd,"starter",api => starterQuits(api))
+    startFactory : ExtT.ExtensionFactory() <- Callback.create(~Unit,~ExtT.ExtensionAPI,~Outcome(),~(_ => api => starterQuits(api)),Unit{})
+    starts : Runtime.Loadout <- loadoutOf(cwd,"starter",startFactory)
     +second : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},starts)
     two : Rpc.Owner & Rpc.Handle <- started(second)
     quitAtSettled(second,two)
@@ -635,7 +648,9 @@ def userBashFactory(throws: Bool,api: ExtT.ExtensionAPI) -> IO(Outcome()):
 def userBashLoadout(+cwd: String,throws: Bool) -> IO(Runtime.Loadout):
   do IO<Runtime.Loadout>:
     +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"user-bash",api => userBashFactory(throws,api),False{}}])
+    +factory : ExtT.ExtensionFactory() <- Callback.create(~Bool,~ExtT.ExtensionAPI,~Outcome(),~userBashFactory,throws)
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"user-bash",factory,False{}}])
+    Callback.dispose(ExtT.ExtensionAPI,Outcome(),factory)
     models : Models.ModelRuntime <- ModelFixture.create(Nil{})
     runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
     return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}

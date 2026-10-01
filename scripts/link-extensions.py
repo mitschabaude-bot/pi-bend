@@ -43,17 +43,18 @@ def main() -> None:
     lines = [
         "import Base",
         "import ../core/extensions/types.bend as T",
+        "import ../../../runtime/src/callback.bend as C",
         "import ./index.bend as Standard",
     ]
     lines.extend(f"import {bend_path(path)} as Extension{i}" for i, path in enumerate(paths))
     lines.extend(
         [
             "",
-            "def builtInExtensions() -> List<&1, T.InlineExtension>: Standard.builtInExtensions()",
+            "def builtInExtensions() -> IO(List<&2, T.InlineExtension>): Standard.builtInExtensions()",
             "",
-            "def linkedExtensions(names: List<&2, String>) -> List<&1, T.InlineExtension>:",
+            "def linkedExtensions(names: List<&2, String>) -> IO(List<&2, T.InlineExtension>):",
             "  match names:",
-            "    case Nil{}: Nil{}",
+            "    case Nil{}: IO.pure(List<&2, T.InlineExtension>, Nil{})",
             "    case name <> rest:",
             "      match name:",
         ]
@@ -61,15 +62,23 @@ def main() -> None:
     for i, path in enumerate(paths):
         name = bend_path(path)
         lines.append(
-            f'        case "{name}": '
-            f'T.InlineExtension{{"{name}", api => Extension{i}.extension(api), False{{}}}} <> linkedExtensions(rest)'
+            f'        case "{name}":'
         )
+        lines.extend([
+            "          do IO<List<&2, T.InlineExtension>>:",
+            f"            factory : T.ExtensionFactory() <- C.create(~Unit, ~T.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => Extension{i}.extension(api)), Unit{{}})",
+            "            others : List<&2, T.InlineExtension> <- linkedExtensions(rest)",
+            f'            return T.InlineExtension{{"{name}", factory, False{{}}}} <> others',
+        ])
     lines.append("        case _: linkedExtensions(rest)")
     lines.extend(
         [
             "",
-            "def selected(+names: List<&2, String>) -> List<&1, T.InlineExtension>:",
-            "  List.append(&1, T.InlineExtension, linkedExtensions(names), Standard.selected(names))",
+            "def selected(+names: List<&2, String>) -> IO(List<&2, T.InlineExtension>):",
+            "  do IO<List<&2, T.InlineExtension>>:",
+            "    linked : List<&2, T.InlineExtension> <- linkedExtensions(names)",
+            "    standard : List<&2, T.InlineExtension> <- Standard.selected(names)",
+            "    return List.append(&2, T.InlineExtension, linked, standard)",
             "",
             "def withoutLinked(names: List<&2, String>) -> List<&2, String>:",
             "  match names:",

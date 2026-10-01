@@ -71,7 +71,6 @@ def installed(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +ag
         rebind : R.Ref<Maybe<&2, Rebind()>> <- R.new(Maybe<&2, Rebind()>, None{})
         retiring : R.Ref<Retiring<S>> <- R.new(Retiring<S>, NothingRetiring{})
         invalidate : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
-        Session.bindExtensions(live, Session.initialStartEvent(live))
         return Done{AgentSessionRuntime{current, factory, release, agentDir, rebind, retiring, invalidate}}
 
 def createChecked(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +agentDir: String, +directory: String, live: Session.Session(), checked: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, AgentSessionRuntime<S>>):

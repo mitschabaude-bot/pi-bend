@@ -272,7 +272,7 @@ type Warming is Data:
 # executor created for them (released with the binding; a tool call in
 # flight may still hold an earlier one).
 type ExtensionTools is Data:
-  ExtensionTools{names: List<&2, String>, executors: List<&2, Tools.Execute()>, sdk: List<&2, ExtensionTypes.ToolDefinition>}
+  ExtensionTools{names: List<&2, String>, executors: List<&2, Tools.Execute()>, sdk: List<&2, ExtensionTypes.ToolDefinition>, base: List<&2,Tools.Tool()>}
 
 type ExtensionBinding is Data:
   ExtensionBinding{actions: Ctx.ExtensionContextActions, providersChanged: C.Callback<Unit, Unit>, sessionActions: R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>>, shutdownHandler: R.Ref<Maybe<&2, C.Callback<Unit, Unit>>>, extensionTools: R.Ref<ExtensionTools>, startEvent: ExtensionTypes.SessionStartEvent}
@@ -732,19 +732,27 @@ def runnerIn(loadout: Runtime.Loadout) -> Maybe<&2, ExtensionRunner.ExtensionRun
   match loadout:
     case Runtime.Loadout{_, _, _, _, runner, _, _, _}: runner
 
+# Project the borrowed runner while returning the untouched loadout. Copying
+# the full loadout also copies prompt resources and the restored session seed.
+def runnerSnapshot(loadout: Runtime.Loadout) -> Runtime.Loadout & Maybe<&2,ExtensionRunner.ExtensionRunner>:
+  match loadout:
+    case Runtime.Loadout{sections,tools,skills,templates,+runner,files,source,registry}:
+      (Runtime.Loadout{sections,tools,skills,templates,runner,files,source,registry},runner)
 def currentRunner(loadout: R.Ref<Runtime.Loadout>) -> IO(Maybe<&2, ExtensionRunner.ExtensionRunner>):
-  do IO<Maybe<&2, ExtensionRunner.ExtensionRunner>>:
-    current : Runtime.Loadout <- R.read(Runtime.Loadout, loadout)
-    return runnerIn(current)
+  R.modify(Runtime.Loadout,Maybe<&2,ExtensionRunner.ExtensionRunner>,loadout,runnerSnapshot)
 
 def extensionsOf(state: Shared) -> R.Ref<Runtime.Loadout>:
   match state:
     case Shared{_, _, _, _, _, _, _, _, _, _, extensionsRef}: extensionsRef
 
+def extensionsSnapshot(state: Shared) -> Shared & R.Ref<Runtime.Loadout>:
+  match state:
+    case Shared{session,steering,followUp,listeners,runActive,lastAssistant,retry,compaction,bash,pending,+extensions}:
+      (Shared{session,steering,followUp,listeners,runActive,lastAssistant,retry,compaction,bash,pending,extensions},extensions)
 def sharedRunner(shared: R.Ref<Shared>) -> IO(Maybe<&2, ExtensionRunner.ExtensionRunner>):
   do IO<Maybe<&2, ExtensionRunner.ExtensionRunner>>:
-    state : Shared <- R.read(Shared, shared)
-    currentRunner(extensionsOf(state))
+    loadout : R.Ref<Runtime.Loadout> <- R.modify(Shared,R.Ref<Runtime.Loadout>,shared,extensionsSnapshot)
+    currentRunner(loadout)
 
 def emitIfRunner(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, event: ExtensionTypes.ExtensionEvent) -> IO(Unit):
   match runner:
@@ -1268,7 +1276,7 @@ def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -
 
 def executorsOf(tools: ExtensionTools) -> List<&2, Tools.Execute()>:
   match tools:
-    case ExtensionTools{_, executors, _}: executors
+    case ExtensionTools{_, executors, _, _}: executors
 
 def disposeExecutors(executors: List<&2, Tools.Execute()>) -> IO(Unit):
   match executors:
@@ -2082,7 +2090,7 @@ def sectionsPatchFor(sections: Prompt.SystemPromptSections(), messages: List<&2,
 # built from (sessions without a runtime source have none).
 def basePrompt(loadout: Runtime.Loadout, prompts: Runtime.ToolPrompts) -> Maybe<&2, RunPrompt>:
   match loadout:
-    case Runtime.Loadout{_, tools, skills, _, _, files, Some{Runtime.LoadoutSource{_, options, packageDir, _}}, _}:
+    case Runtime.Loadout{_, tools, skills, _, _, files, Some{Runtime.LoadoutSource{_, options, packageDir, _, _}}, _}:
       Some{RunPrompt{Prompt.normalizeBuildSystemPromptOptions(Runtime.promptOptionsWith(options, toolNamesOf(tools), files, skills, prompts)), Runtime.documentationPaths(packageDir)}}
     case _: None{}
 
@@ -2170,7 +2178,7 @@ def toolPromptsOf(loadout: Runtime.Loadout,sdk: List<&2, ExtensionTypes.ToolDefi
     registered : List<&2, ExtensionTypes.RegisteredTool> <- registeredOf(runnerIn(loadout))
     return toolPromptsFrom(withSdk(registered,sdk), Rec.new(String), Rec.new(List<&2, String>))
 def sdkOf(tools: ExtensionTools) -> List<&2, ExtensionTypes.ToolDefinition>:
-  match tools: case ExtensionTools{_,_,sdk}: sdk
+  match tools: case ExtensionTools{_,_,sdk,_}: sdk
 def sdkFromHooks(hooks: SessionHooks) -> IO(List<&2, ExtensionTypes.ToolDefinition>):
   match hooks:
     case SessionHooks{_,_,_,_,_,_,ExtensionBinding{_,_,_,_,tools,_},_,_,_}:
@@ -3440,7 +3448,7 @@ def flushPending(session: AgentSession) -> IO(Unit):
 # no package directory; their guidance names a relative docs directory.
 def loaderIn(loadout: Runtime.Loadout) -> Maybe<&2, Resources.ResourceLoader>:
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, _, _, loader}}, _}: loader
+    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, _, _, loader, _}}, _}: loader
     case _: None{}
 
 # upstream session.resourceLoader: the ResourceLoader a createAgentSession
@@ -3452,7 +3460,7 @@ def resourceLoader(session: AgentSession) -> IO(Maybe<&2, Resources.ResourceLoad
 
 def docsIn(loadout: Runtime.Loadout) -> String:
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, _, packageDir, _}}, _}: PosixPath.join(packageDir, "docs")
+    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, _, packageDir, _, _}}, _}: PosixPath.join(packageDir, "docs")
     case _: "docs"
 
 def docsPath(session: AgentSession) -> IO(String):
@@ -3542,9 +3550,8 @@ def runnerOf(loadout: Runtime.Loadout) -> Maybe<&2, ExtensionRunner.ExtensionRun
 # The session's extension runner (upstream session.extensionRunner); None for
 # sessions created without one.
 def extensionRunner(session: AgentSession) -> IO(Maybe<&2, ExtensionRunner.ExtensionRunner>):
-  do IO<Maybe<&2, ExtensionRunner.ExtensionRunner>>:
-    loadout : Runtime.Loadout <- loadoutOf(session)
-    return runnerOf(loadout)
+  match session:
+    case AgentSession{_,_,_,_,_,loadout,_,_}: currentRunner(loadout)
 
 type CommandText is Data:
   CommandText{name: String, args: String}
@@ -3740,8 +3747,8 @@ def emitStart(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, event: Extensi
 # it started when the runtime binds them.
 def bindExtensions(session: AgentSession, event: ExtensionTypes.SessionStartEvent) -> IO(Unit):
   do IO<Unit>:
-    loadout : Runtime.Loadout <- loadoutOf(session)
-    emitStart(runnerIn(loadout), event)
+    runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- extensionRunner(session)
+    emitStart(runner, event)
 
 def initialStartEvent(session: AgentSession) -> ExtensionTypes.SessionStartEvent:
   match session:
@@ -4784,7 +4791,7 @@ def newNames(names: List<&2, String>, +previous: List<&2, String>) -> List<&2, S
 
 def selectionIn(loadout: Runtime.Loadout) -> Runtime.ToolSelection:
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, Runtime.CreateOptions{_, _, _, _, _, _, _, _, _, _, _, selection, _, _, _, _}, _, _}}, _}: selection
+    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, Runtime.CreateOptions{_, _, _, _, _, _, _, _, _, _, _, selection, _, _, _, _}, _, _, _}}, _}: selection
     case _: Runtime.defaultToolSelection()
 
 # The names to activate after a refresh: the active tools that stay allowed,
@@ -4813,11 +4820,11 @@ def registryOf(loadout: Runtime.Loadout) -> List<&2, Tools.Tool()>:
 
 def recordedTools(tools: ExtensionTools, +names: List<&2, String>, created: List<&2, Tools.Execute()>) -> ExtensionTools:
   match tools:
-    case ExtensionTools{_, executors, sdk}: ExtensionTools{names, List.append(&2, Tools.Execute(), created, executors), sdk}
+    case ExtensionTools{_, executors, sdk, base}: ExtensionTools{names, List.append(&2, Tools.Execute(), created, executors), sdk, base}
 
-def previousExtensionNames(tools: ExtensionTools) -> List<&2, String>:
+def baseToolsOf(tools: ExtensionTools) -> List<&2,Tools.Tool()>:
   match tools:
-    case ExtensionTools{names, _, _}: names
+    case ExtensionTools{_,_,_,base}: base
 
 def refreshWith(+session: AgentSession, +runner: ExtensionRunner.ExtensionRunner, includeAll: Bool) -> IO(Unit):
   do IO<Unit>:
@@ -4830,7 +4837,7 @@ def refreshWith(+session: AgentSession, +runner: ExtensionRunner.ExtensionRunner
     +kept : List<&2, ExtensionTypes.RegisteredTool> = allowedRegistered(withSdk(registered,sdkOf(state)), allowed, excluded)
     +extensionNames : List<&2, String> = registeredNames(kept)
     +wrapped : List<&2, Tools.Tool()> <- wrappedTools(runner, kept)
-    +base : List<&2, Tools.Tool()> = withoutToolNames(withoutToolNames(registryOf(loadout), previousExtensionNames(state)), extensionNames)
+    +base : List<&2, Tools.Tool()> = withoutToolNames(baseToolsOf(state), extensionNames)
     +registry : List<&2, Tools.Tool()> = List.append(&2, Tools.Tool(), base, wrapped)
     R.write(ExtensionTools, extensionToolsOf(session), recordedTools(state, extensionNames, executorsIn(wrapped)))
     R.modify(Runtime.Loadout, Unit, loadoutRefOf(session), current => (withRegistry(current, registry), Unit{}))
@@ -4860,47 +4867,110 @@ def systemPrompt(session: AgentSession) -> IO(String):
     loadout : Runtime.Loadout <- loadoutOf(session)
     return Result.default(&2, &2, Prompt.Error, String, Prompt.promptText(Done{Prompt.SystemPromptState{"", Some{sectionsIn(loadout)}}}), "")
 
-# upstream AgentSession.reload without extensions: settings are reloaded from
-# their files, then skills, prompt templates, context files and the system
-# prompt are prepared again; the tools stay. The next request declares the new
-# system prompt (the loadout diff), as after any change.
-def reloadedLoadout(loadout: Runtime.Loadout, prepared: Result<&2, &2, String, Runtime.Prepared>) -> Result<&2, &2, String, Runtime.Loadout>:
-  match loadout prepared:
-    case _ Fail{message}: Fail{message}
-    case Runtime.Loadout{_, tools, _, _, context, _, source, registry} Done{Runtime.Prepared{sections, skills, templates, files}}: Done{Runtime.Loadout{sections, tools, skills, templates, context, files, source, registry}}
-def storeReloaded(+loadoutRef: R.Ref<Runtime.Loadout>, result: Result<&2, &2, String, Runtime.Loadout>) -> IO(Result<&2, &2, String, Unit>):
-  match result:
-    case Fail{message}: IO.pure(Result<&2, &2, String, Unit>, Fail{message})
-    case Done{next}:
-      do IO<Result<&2, &2, String, Unit>>:
-        R.write(Runtime.Loadout, loadoutRef, next)
-        return Done{Unit{}}
-def reloadFrom(+loadoutRef: R.Ref<Runtime.Loadout>, +loadout: Runtime.Loadout, settings: Settings.SettingsManager) -> IO(Result<&2, &2, String, Unit>):
-  match loadout:
-    case Runtime.Loadout{_, _, _, _, _, _, None{}, _}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
-    case Runtime.Loadout{_, tools, _, _, _, _, Some{source}, _}:
-      do IO<Result<&2, &2, String, Unit>>:
-        prepared : Result<&2, &2, String, Runtime.Prepared> <- Runtime.reprepare(source, settings, toolNamesOf(tools))
-        storeReloaded(loadoutRef, reloadedLoadout(loadout, prepared))
-# Registered tools' prompts join the reloaded system prompt.
-def reactivated(session: AgentSession, names: List<&2, String>, result: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, Unit>):
-  match result:
-    case Fail{message}: IO.pure(Result<&2, &2, String, Unit>, Fail{message})
-    case Done{_}:
-      do IO<Result<&2, &2, String, Unit>>:
-        setActiveToolsByName(session, names)
-        return Done{Unit{}}
-
-def reload(+session: AgentSession) -> IO(Result<&2, &2, String, Unit>):
+# Reload replaces the extension generation while session and mode callbacks
+# keep their owners. The mode refreshes shortcuts/UI before session_start.
+type ReloadOptions is Data:
+  ReloadOptions{beforeSessionStart: Maybe<&2,C.Callback<Unit,Unit>>}
+def callBeforeReload(options: Maybe<&2,ReloadOptions>) -> IO(Unit):
+  match options:
+    case Some{ReloadOptions{Some{callback}}}: C.call(Unit,Unit,callback,Unit{})
+    case _: IO.pure(Unit,Unit{})
+def reloadBindingsPresent(snapshot: ExtensionRunner.ReloadBinding) -> Bool:
+  match snapshot:
+    case ExtensionRunner.ReloadBinding{Ctx.Bindings{None{},_,_,None{}},ExtensionRunner.Listeners{_,Nil{}},_}: False{}
+    case _: True{}
+def captureForReload(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(Maybe<&2,ExtensionRunner.ReloadBinding>):
+  match runner:
+    case None{}: IO.pure(Maybe<&2,ExtensionRunner.ReloadBinding>,None{})
+    case Some{+old}:
+      do IO<Maybe<&2,ExtensionRunner.ReloadBinding>>:
+        snapshot : ExtensionRunner.ReloadBinding <- ExtensionRunner.captureReload(old)
+        ExtensionRunner.emit(old,ExtensionTypes.SessionShutdown{ExtensionTypes.SessionShutdownEvent{ExtensionTypes.ReloadShutdown{},None{}}})
+        ExtensionRunner.invalidate(old)
+        return Some{snapshot}
+def restoreRunner(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>,snapshot: Maybe<&2,ExtensionRunner.ReloadBinding>) -> IO(Unit):
+  match runner snapshot:
+    case Some{found} Some{previous}: ExtensionRunner.restoreReload(found,previous)
+    case _ _: IO.pure(Unit,Unit{})
+def publishRunner(source: Runtime.LoadoutSource,runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(Unit):
+  match source runner:
+    case Runtime.LoadoutSource{_,_,_,_,Some{Runtime.ExtensionOwner{current,_,_}}} Some{found}: R.write(ExtensionRunner.ExtensionRunner,current,found)
+    case _ _: IO.pure(Unit,Unit{})
+def sessionBinding(session: AgentSession) -> ExtensionBinding:
   match session:
-    case AgentSession{_, _, _, +settingsRef, _, +loadoutRef, _, _}:
-      do IO<Result<&2, &2, String, Unit>>:
-        current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsRef)
-        +reloaded : Settings.SettingsManager <- Settings.reloadFiles(current)
-        R.write(Settings.SettingsManager, settingsRef, reloaded)
-        +loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
-        result : Result<&2, &2, String, Unit> <- reloadFrom(loadoutRef, loadout, reloaded)
-        reactivated(session, activeNamesIn(loadout), result)
+    case AgentSession{_,_,SessionHooks{_,_,_,_,_,_,binding,_,_,_},_,_,_,_,_}: binding
+def restoreSessionActions(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>,actions: Maybe<&2,ExtensionTypes.ExtensionActions>) -> IO(Unit):
+  match actions:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{found}: bindActionsTo(runner,found)
+def hasShutdownHandler(handler: Maybe<&2,C.Callback<Unit,Unit>>) -> Bool:
+  match handler:
+    case None{}: False{}
+    case Some{_}: True{}
+def shutdownHandlerOf(session: AgentSession) -> R.Ref<Maybe<&2,C.Callback<Unit,Unit>>>:
+  match session:
+    case AgentSession{_,_,SessionHooks{_,_,_,_,_,_,ExtensionBinding{_,_,_,handler,_,_},_,_,_},_,_,_,_,_}: handler
+def reloadStartBound(+session: AgentSession,snapshot: Maybe<&2,ExtensionRunner.ReloadBinding>,options: Maybe<&2,ReloadOptions>) -> IO(Unit):
+  match snapshot:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{previous}:
+      do IO<Unit>:
+        shutdown : Maybe<&2,C.Callback<Unit,Unit>> <- R.read(Maybe<&2,C.Callback<Unit,Unit>>,shutdownHandlerOf(session))
+        Bool.pick(Unit -> IO(Unit),reloadBindingsPresent(previous) || hasShutdownHandler(shutdown),_ => do IO<Unit>:
+            callBeforeReload(options)
+            bindExtensions(session,ExtensionTypes.SessionStartEvent{ExtensionTypes.ReloadStart{},None{}}),_ => IO.pure(Unit,Unit{}))(Unit{})
+def replacementRunner(previous: Maybe<&2,ExtensionRunner.ExtensionRunner>,next: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> Maybe<&2,ExtensionRunner.ExtensionRunner>:
+  match next:
+    case None{}: previous
+    case Some{found}: Some{found}
+def reloadedLoadout(loadout: Runtime.Loadout,prepared: Runtime.Prepared,runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> Runtime.Loadout:
+  match loadout prepared:
+    case Runtime.Loadout{_,tools,_,_,previous,_,source,registry} Runtime.Prepared{sections,skills,templates,files}: Runtime.Loadout{sections,tools,skills,templates,replacementRunner(previous,runner),files,source,registry}
+def completeReload(+session: AgentSession,+loadout: Runtime.Loadout,+source: Runtime.LoadoutSource,prepared: Runtime.Prepared,+snapshot: Maybe<&2,ExtensionRunner.ReloadBinding>,options: Maybe<&2,ReloadOptions>,result: Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>) -> IO(Result<&2,&2,String,Unit>):
+  match result:
+    case Fail{message}: IO.pure(Result<&2,&2,String,Unit>,Fail{message})
+    case Done{+runner}:
+      do IO<Result<&2,&2,String,Unit>>:
+        restoreRunner(runner,snapshot)
+        publishRunner(source,runner)
+        +next : Runtime.Loadout = reloadedLoadout(loadout,prepared,runner)
+        R.write(Runtime.Loadout,loadoutRefOf(session),next)
+        bindContext(next,Some{sessionBinding(session)})
+        actions : Maybe<&2,ExtensionTypes.ExtensionActions> <- R.read(Maybe<&2,ExtensionTypes.ExtensionActions>,sessionActionsOf(session))
+        restoreSessionActions(runner,actions)
+        refreshToolRegistry(session,True{})
+        reloadStartBound(session,snapshot,options)
+        return Done{Unit{}}
+def rebuildReload(+session: AgentSession,loadout: Runtime.Loadout,+source: Runtime.LoadoutSource,snapshot: Maybe<&2,ExtensionRunner.ReloadBinding>,options: Maybe<&2,ReloadOptions>,prepared: Result<&2,&2,String,Runtime.Prepared>) -> IO(Result<&2,&2,String,Unit>):
+  match prepared:
+    case Fail{message}: IO.pure(Result<&2,&2,String,Unit>,Fail{message})
+    case Done{ready}:
+      do IO<Result<&2,&2,String,Unit>>:
+        runner : Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>> <- Runtime.rebuildExtensions(source,modelsOf(session))
+        completeReload(session,loadout,source,ready,snapshot,options,runner)
+def reloadSource(+session: AgentSession,+loadout: Runtime.Loadout,settings: Settings.SettingsManager,options: Maybe<&2,ReloadOptions>,snapshot: Maybe<&2,ExtensionRunner.ReloadBinding>) -> IO(Result<&2,&2,String,Unit>):
+  match loadout:
+    case Runtime.Loadout{_,_,_,_,_,_,None{},_}: IO.pure(Result<&2,&2,String,Unit>,Done{Unit{}})
+    case Runtime.Loadout{_,tools,_,_,_,_,Some{+source},_}:
+      do IO<Result<&2,&2,String,Unit>>:
+        prepared : Result<&2,&2,String,Runtime.Prepared> <- Runtime.reprepare(source,settings,toolNamesOf(tools))
+        rebuildReload(session,loadout,source,snapshot,options,prepared)
+def ownedReloadRunner(loadout: Runtime.Loadout) -> Maybe<&2,ExtensionRunner.ExtensionRunner>:
+  match loadout:
+    case Runtime.Loadout{_,_,_,_,runner,_,Some{Runtime.LoadoutSource{_,_,_,_,Some{_}}},_}: runner
+    case _: None{}
+def reload(+session: AgentSession,options: Maybe<&2,ReloadOptions>) -> IO(Result<&2,&2,String,Unit>):
+  match session:
+    case AgentSession{+agent,_,_,+settingsRef,_,+loadoutRef,_,_}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +loadout : Runtime.Loadout <- R.read(Runtime.Loadout,loadoutRef)
+        snapshot : Maybe<&2,ExtensionRunner.ReloadBinding> <- captureForReload(ownedReloadRunner(loadout))
+        current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
+        +settings : Settings.SettingsManager <- Settings.reloadFiles(current)
+        R.write(Settings.SettingsManager,settingsRef,settings)
+        Agent.setSteeringMode(V.Value,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent,Settings.getSteeringMode(settings))
+        Agent.setFollowUpMode(V.Value,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent,Settings.getFollowUpMode(settings))
+        reloadSource(session,loadout,settings,options,snapshot)
 
 # upstream getSessionStats: counts and billed usage over every stored entry,
 # with the current context usage.
@@ -5117,14 +5187,14 @@ def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
     manager : C.Callback<Unit, Ctx.ReadonlySessionManager()> <- C.create(~ContextEnv, ~Unit, ~Ctx.ReadonlySessionManager(), ~contextSessionManager, env)
     return Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager}
 
-def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime, sdk: List<&2, ExtensionTypes.ToolDefinition>, start: ExtensionTypes.SessionStartEvent) -> IO(ExtensionBinding):
+def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime, sdk: List<&2, ExtensionTypes.ToolDefinition>, base: List<&2,Tools.Tool()>, start: ExtensionTypes.SessionStartEvent) -> IO(ExtensionBinding):
   match env:
     case ContextEnv{+agent, shared, scoped, settings, handler}:
       do IO<ExtensionBinding>:
         actions : Ctx.ExtensionContextActions <- createContextActions(ContextEnv{agent, shared, scoped, settings, handler})
         changed : C.Callback<Unit, Unit> <- C.create(~ModelEnv, ~Unit, ~Unit, ~refreshCurrentModel, ModelEnv{agent, models})
         sessionActions : R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>> <- R.new(Maybe<&2, ExtensionTypes.ExtensionActions>, None{})
-        extensionTools : R.Ref<ExtensionTools> <- R.new(ExtensionTools, ExtensionTools{Nil{}, Nil{}, sdk})
+        extensionTools : R.Ref<ExtensionTools> <- R.new(ExtensionTools, ExtensionTools{Nil{}, Nil{}, sdk, base})
         return ExtensionBinding{actions, changed, sessionActions, handler, extensionTools, start}
 
 def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>,sdk: List<&2, ExtensionTypes.ToolDefinition>, start: ExtensionTypes.SessionStartEvent) -> IO(AgentSession):
@@ -5145,7 +5215,7 @@ def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settin
     +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
     Agent.setPrepareRequest(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
     shutdownHandler : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
-    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef, shutdownHandler}, models, sdk, start)
+    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef, shutdownHandler}, models, sdk, registryOf(loadout), start)
     bindContext(loadout, Some{context})
     inner : Runtime.Stream() <- Agent.getStreamFunction(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     warming : Warming <- createWarming(agent, shared, settingsRef, inner)

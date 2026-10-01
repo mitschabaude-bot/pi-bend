@@ -204,7 +204,7 @@ def harnessLoadout(+source: Runtime.LoadoutSource, +tools: List<&2, Tools.Tool()
     case DiscoveredPrompts{}: Runtime.Loadout{promptSections(source, tools), tools, Nil{}, Nil{}, runner, Nil{}, Some{source}, tools}
 
 def loadoutSource(+dir: String, +agentDir: String, +settings: Settings.SettingsManager) -> Runtime.LoadoutSource:
-  Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, Reg.toolOptions(dir, agentDir, Runtime.defaultToolSelection(), settings), "/pi", None{}}
+  Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, Reg.toolOptions(dir, agentDir, Runtime.defaultToolSelection(), settings), "/pi", None{}, None{}}
 
 # upstream createTestExtensionsResult: the inline extensions load into a
 # runtime whose runner shares the session's model runtime.
@@ -224,13 +224,14 @@ def loadErrorLines(errors: List<&2, Ext.LoadError>) -> IO(Unit):
         IO.print("{\"type\":\"load_error\",\"path\":" ++ Decode.quote(path) ++ ",\"error\":" ++ Decode.quote(error) ++ "}")
         loadErrorLines(rest)
 
-def loadedRuntime(extensions: List<&1, Ext.InlineExtension>) -> IO(Maybe<&2, Ext.ExtensionRuntime()>):
+def loadedRuntime(extensions: List<&2, Ext.InlineExtension>) -> IO(Maybe<&2, Ext.ExtensionRuntime()>):
   match extensions:
     case Nil{}: IO.pure(Maybe<&2, Ext.ExtensionRuntime()>, None{})
-    case more:
+    case +more:
       do IO<Maybe<&2, Ext.ExtensionRuntime()>>:
         +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
         errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, more)
+        Loader.disposeInlineExtensions(more)
         loadErrorLines(errors)
         return Some{runtime}
 
@@ -306,11 +307,11 @@ def splitOwners(split: BuiltinSet) -> Maybe<&2, BuiltinsHandle>:
 # loader without noPromptTemplates); skills stay off.
 def withDiscovery(resources: Resources, +source: Runtime.LoadoutSource) -> Runtime.LoadoutSource:
   match resources source:
-    case DiscoveredPrompts{} Runtime.LoadoutSource{environment, Runtime.CreateOptions{cwd, agentDir, auth, bundle, packageDir, provider, model, apiKey, thinking, systemPrompt, append, selection, contextFiles, seed, settings, Runtime.ResourceOptions{skillPaths, noSkills, promptPaths, _}}, root, loader}:
-      Runtime.LoadoutSource{environment, Runtime.CreateOptions{cwd, agentDir, auth, bundle, packageDir, provider, model, apiKey, thinking, systemPrompt, append, selection, contextFiles, seed, settings, Runtime.ResourceOptions{skillPaths, noSkills, promptPaths, False{}}}, root, loader}
+    case DiscoveredPrompts{} Runtime.LoadoutSource{environment, Runtime.CreateOptions{cwd, agentDir, auth, bundle, packageDir, provider, model, apiKey, thinking, systemPrompt, append, selection, contextFiles, seed, settings, Runtime.ResourceOptions{skillPaths, noSkills, promptPaths, _}}, root, loader, extensions}:
+      Runtime.LoadoutSource{environment, Runtime.CreateOptions{cwd, agentDir, auth, bundle, packageDir, provider, model, apiKey, thinking, systemPrompt, append, selection, contextFiles, seed, settings, Runtime.ResourceOptions{skillPaths, noSkills, promptPaths, False{}}}, root, loader, extensions}
     case _ other: other
 
-def createHarnessResources(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>, +resources: Resources) -> IO(Harness):
+def createHarnessResources(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&2, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>, +resources: Resources) -> IO(Harness):
   do IO<Harness>:
     +runtime : Maybe<&2, Ext.ExtensionRuntime()> <- loadedRuntime(extensions)
     +built : Built <- buildTools(ref, specsOf(tooling))
@@ -326,10 +327,10 @@ def createHarnessResources(+dir: String, +agentDir: String, +tooling: Tooling, s
     R.write(Maybe<&2, Session.AgentSession>, ref, Some{Reg.sessionOf(value)})
     return Harness{value, ref, builtExecutes(built), splitOwners(split)}
 
-def createHarnessFull(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>) -> IO(Harness):
+def createHarnessFull(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&2, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>) -> IO(Harness):
   createHarnessResources(dir, agentDir, tooling, setup, ref, extensions, seed, others, noResources())
 
-def createHarnessWith(+dir: String, agentDir: String, tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>) -> IO(Harness):
+def createHarnessWith(+dir: String, agentDir: String, tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&2, Ext.InlineExtension>) -> IO(Harness):
   createHarnessFull(dir, agentDir, tooling, setup, ref, extensions, Nil{}, Nil{})
 
 def createHarness(+dir: String, agentDir: String, tooling: Tooling, setup: Reg.Setup) -> IO(Harness):
@@ -595,7 +596,8 @@ def costFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
 def messageEndCost(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"hello"}]), ref, [inline("cost", costFactory)])
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => costFactory(api)), Unit{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"hello"}]), ref, [inline("cost", factory)])
     prompted(sessionOf(harness), "hi")
     H.reportMessages(sessionOf(harness))
     cleanup(harness)
@@ -623,7 +625,8 @@ def echoCalls(texts: List<&2, String>, +index: Nat) -> List<&2, Ai.ToolCall<V.Va
 def settledOrder(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"echo", Echo{""}}]}, setup([Reg.Calls{echoCalls(["one", "two"], 1n)}, Reg.Text{"done"}]), ref, [inline("slow-end", slowEndFactory)])
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => slowEndFactory(api)), Unit{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"echo", Echo{""}}]}, setup([Reg.Calls{echoCalls(["one", "two"], 1n)}, Reg.Text{"done"}]), ref, [inline("slow-end", factory)])
     prompted(sessionOf(harness), "run tools")
     reportBranch(sessionOf(harness))
     cleanup(harness)
@@ -652,7 +655,8 @@ def rolesFactory(ref: R.Ref<Maybe<&2, Session.AgentSession>>, api: Ext.Extension
 def toolCallSettled(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"echo", Echo{""}}]}, setup([echoCall("call_echo", "hello"), Reg.Text{"done"}]), ref, [inline("roles", api => rolesFactory(ref, api))])
+    +factory : Ext.ExtensionFactory() <- C.create(~R.Ref<Maybe<&2, Session.AgentSession>>, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => rolesFactory(environment, api)), ref)
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"echo", Echo{""}}]}, setup([echoCall("call_echo", "hello"), Reg.Text{"done"}]), ref, [inline("roles", factory)])
     prompted(sessionOf(harness), "run tool")
     cleanup(harness)
 
@@ -668,7 +672,8 @@ def blockFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
 def blockedTerminate(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"echo", Throws{"tool should have been blocked"}}]}, setup([echoCall("call_echo", "hello"), Reg.Text{"should not run"}]), ref, [inline("terminate", blockFactory)])
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => blockFactory(api)), Unit{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"echo", Throws{"tool should have been blocked"}}]}, setup([echoCall("call_echo", "hello"), Reg.Text{"should not run"}]), ref, [inline("terminate", factory)])
     prompted(sessionOf(harness), "hi")
     Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
     H.reportMessages(sessionOf(harness))
@@ -708,7 +713,8 @@ def writeCall(+id: String, +value: String) -> Ai.ToolCall<V.Value>:
 def preflightAbort(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"external_write", Records{}}]}, setup([Reg.Calls{[writeCall("call_first", "first"), writeCall("call_second", "second")]}]), ref, [inline("preflight", preflightFactory)])
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => preflightFactory(api)), Unit{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"external_write", Records{}}]}, setup([Reg.Calls{[writeCall("call_first", "first"), writeCall("call_second", "second")]}]), ref, [inline("preflight", factory)])
     prompted(sessionOf(harness), "run both writes")
     H.reportMessages(sessionOf(harness))
     cleanup(harness)
@@ -763,14 +769,16 @@ def followUpFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>): 
 def settledAfterRetry(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Failed{"overloaded_error"}, Reg.Text{"recovered"}]), ref, [inline("settled", settledFactory)])
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => settledFactory(api)), Unit{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Failed{"overloaded_error"}, Reg.Text{"recovered"}]), ref, [inline("settled", factory)])
     prompted(sessionOf(harness), "test")
     cleanup(harness)
 
 def settledAfterFollowUp(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"second"}]), ref, [inline("follow-up", followUpFactory)])
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => followUpFactory(api)), Unit{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"second"}]), ref, [inline("follow-up", factory)])
     prompted(sessionOf(harness), "hello")
     H.reportMessages(sessionOf(harness))
     cleanup(harness)
@@ -836,7 +844,8 @@ def commandWaitsForIdle(+dir: String, agentDir: String) -> IO(Unit):
     +commandStarted : Chan(Unit) <- Chan.new(Unit, 1)
     +promptDone : Chan(Unit) <- Chan.new(Unit, 1)
     +commandDone : Chan(Unit) <- Chan.new(Unit, 1)
-    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{toolStarted, release}}]}, setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]), ref, [inline("after-idle", api => afterIdleFactory(commandStarted, api))])
+    +factory : Ext.ExtensionFactory() <- C.create(~Chan(Unit), ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => afterIdleFactory(environment, api)), commandStarted)
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{toolStarted, release}}]}, setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]), ref, [inline("after-idle", factory)])
     actions : Ctx.ExtensionCommandContextActions <- commandActions(ref)
     runner : Maybe<&2, Runner.ExtensionRunner> <- Session.extensionRunner(sessionOf(harness))
     bindCommands(runner, actions)
@@ -878,7 +887,8 @@ def firstEntryId(+session: Session.AgentSession) -> IO(String):
 def treeCancelCompacting(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, setup(Nil{}), ref, [inline("cancel-tree", cancelTreeFactory)], [Reg.userMsg("first"), Reg.assistantAt("reply", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg("second")], Nil{})
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => cancelTreeFactory(api)), Unit{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, setup(Nil{}), ref, [inline("cancel-tree", factory)], [Reg.userMsg("first"), Reg.assistantAt("reply", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg("second")], Nil{})
     reportLeafValue("before", sessionOf(harness))
     +target : String <- firstEntryId(sessionOf(harness))
     result : Result<&2, &2, String, Session.TreeNavigation> <- Session.navigateTreeWith(sessionOf(harness), target, Session.noSummary())
@@ -915,7 +925,8 @@ def treeWaiting(+dir: String, agentDir: String) -> IO(Unit):
     +release : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Reg.Navigated) <- Chan.new(Reg.Navigated, 1)
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, setup(Nil{}), ref, [inline("waiting-tree", api => waitingTreeFactory(H.Gate{started, release}, api))], [Reg.userMsg("first user"), Reg.assistantAt("first assistant", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg("second user"), Reg.assistantAt("second assistant", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero())], Nil{})
+    +factory : Ext.ExtensionFactory() <- C.create(~H.Gate, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => waitingTreeFactory(environment, api)), H.Gate{started, release})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, setup(Nil{}), ref, [inline("waiting-tree", factory)], [Reg.userMsg("first user"), Reg.assistantAt("first assistant", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg("second user"), Reg.assistantAt("second assistant", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero())], Nil{})
     reportLeafValue("original", sessionOf(harness))
     +firstTarget : String <- assistantIdAt(sessionOf(harness), 1n)
     +secondTarget : String <- firstEntryId(sessionOf(harness))
@@ -1006,7 +1017,8 @@ def compactionOverride(+dir: String, agentDir: String, +path: String) -> IO(Unit
   do IO<Unit>:
     +now : F64 <- Date.now()
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessFull(dir, agentDir, Scripted{Nil{}}, Reg.Setup{overrideReplies(path), Nil{}, Reg.sizedModel(4000, 16384)}, ref, [inline("supply", api => supplyFactory("compacted history", api))], seedHistory(Bool.pick(U32, String.eq(path, "pre-prompt"), 2500, 650), now), Nil{})
+    +factory : Ext.ExtensionFactory() <- C.create(~String, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => supplyFactory(environment, api)), "compacted history")
+    +harness : Harness <- createHarnessFull(dir, agentDir, Scripted{Nil{}}, Reg.Setup{overrideReplies(path), Nil{}, Reg.sizedModel(4000, 16384)}, ref, [inline("supply", factory)], seedHistory(Bool.pick(U32, String.eq(path, "pre-prompt"), 2500, 650), now), Nil{})
     reportSeeded(sessionOf(harness))
     compactOrPrompt(path, sessionOf(harness))
     Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
@@ -1056,7 +1068,8 @@ def compactionModelSwitch(+dir: String, agentDir: String) -> IO(Unit):
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
     +small : Ai.Model<Ai.JsonValue> = Reg.namedModel("small", 4000, 16384)
     +big : Ai.Model<Ai.JsonValue> = Reg.namedModel("big", 10000, 16384)
-    +harness : Harness <- createHarnessFull(dir, agentDir, Scripted{Nil{}}, Reg.Setup{[Reg.Text{"small response"}, Reg.Text{"big response"}], Nil{}, small}, ref, [inline("supply", api => supplyFactory("big model summary", api))], seedHistory(2500, now), [big])
+    +factory : Ext.ExtensionFactory() <- C.create(~String, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => supplyFactory(environment, api)), "big model summary")
+    +harness : Harness <- createHarnessFull(dir, agentDir, Scripted{Nil{}}, Reg.Setup{[Reg.Text{"small response"}, Reg.Text{"big response"}], Nil{}, small}, ref, [inline("supply", factory)], seedHistory(2500, now), [big])
     prompted(sessionOf(harness), "continue on small")
     print("small_done", Nil{})
     reseed(sessionOf(harness), now)
@@ -1111,7 +1124,8 @@ def laxContent(+dir: String, agentDir: String, +kind: String) -> IO(Unit):
     case "message_end":
       do IO<Unit>:
         +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-        +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"hello"}]), ref, [inline("empty-end", emptyEndFactory)])
+        +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => emptyEndFactory(api)), Unit{})
+        +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"hello"}]), ref, [inline("empty-end", factory)])
         prompted(sessionOf(harness), "hi")
         H.reportMessages(sessionOf(harness))
         cleanup(harness)
@@ -1152,7 +1166,8 @@ def queuedSlashFollowUp(+dir: String, agentDir: String) -> IO(Unit):
     +toolStarted : Chan(Unit) <- Chan.new(Unit, 1)
     +release : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Unit) <- Chan.new(Unit, 1)
-    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{toolStarted, release}}]}, setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"first turn complete"}, Reg.Text{"queued follow-up handled by model"}]), ref, [inline("testcmd", api => testCommandFactory(apiRef, api))])
+    +factory : Ext.ExtensionFactory() <- C.create(~R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => testCommandFactory(environment, api)), apiRef)
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{toolStarted, release}}]}, setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"first turn complete"}, Reg.Text{"queued follow-up handled by model"}]), ref, [inline("testcmd", factory)])
     IO.spawn(Unit, promptInBackground(sessionOf(harness), "start", done))
     began : Maybe<&1, Unit> <- Chan.recv(Unit, toolStarted)
     found : Maybe<&2, Ext.ExtensionAPI> <- R.read(Maybe<&2, Ext.ExtensionAPI>, apiRef)
@@ -1388,6 +1403,13 @@ def scriptFactoryWith(+ref: R.Ref<Maybe<&2, Session.AgentSession>>, script: Boun
 
 def scriptFactory(ref: R.Ref<Maybe<&2, Session.AgentSession>>, script: BoundaryScript, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>): scriptFactoryWith(ref, script, api)
 
+type BoundaryEnv is Data:
+  BoundaryEnv{ref: R.Ref<Maybe<&2, Session.AgentSession>>, script: BoundaryScript}
+
+def scriptFrom(env: BoundaryEnv, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match env:
+    case BoundaryEnv{ref, script}: scriptFactory(ref, script, api)
+
 def noScript() -> BoundaryScript: BoundaryScript{None{}, None{}, Nil{}, None{}, None{}, None{}}
 
 def withTurnEnd(action: Action) -> BoundaryScript: BoundaryScript{Some{action}, None{}, Nil{}, None{}, None{}, None{}}
@@ -1426,7 +1448,8 @@ def reportUsage(+session: Session.AgentSession) -> IO(Unit):
 def boundaryRun(+dir: String, agentDir: String, tooling: Tooling, setupValue: Reg.Setup, script: BoundaryScript, seed: List<&2, Session.Message()>, +text: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessFull(dir, agentDir, tooling, setupValue, ref, [inline("boundary", api => scriptFactory(ref, script, api))], seed, Nil{})
+    +factory : Ext.ExtensionFactory() <- C.create(~BoundaryEnv, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~scriptFrom, BoundaryEnv{ref, script})
+    +harness : Harness <- createHarnessFull(dir, agentDir, tooling, setupValue, ref, [inline("boundary", factory)], seed, Nil{})
     prompted(sessionOf(harness), text)
     reportSessionEntries(sessionOf(harness))
     Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
@@ -1466,7 +1489,8 @@ def settleAbort(+dir: String, agentDir: String) -> IO(Unit):
     +prompted : Chan(Unit) <- Chan.new(Unit, 1)
     +aborted : Chan(Unit) <- Chan.new(Unit, 1)
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"must not run"}]), ref, [inline("gated-settle", api => gatedSettleFactory(H.Gate{started, release}, api))])
+    +factory : Ext.ExtensionFactory() <- C.create(~H.Gate, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => gatedSettleFactory(environment, api)), H.Gate{started, release})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"must not run"}]), ref, [inline("gated-settle", factory)])
     IO.spawn(Unit, promptInBackground(sessionOf(harness), "start", prompted))
     began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
     IO.spawn(Unit, abortLater(sessionOf(harness), aborted))
@@ -1500,7 +1524,8 @@ def snapshotOnAppend(env: R.Ref<Maybe<&2, Session.AgentSession>>, event: Session
 def refreshNotifications(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"done"}]), ref, [inline("boundary", api => scriptFactory(ref, withTurnEnd(Action{True{}, None{}, Nil{}, Literal{[Ext.CustomEntryDraft{"metadata", Some{V.Boolean{True{}}}}, Ext.CustomMessageEntryDraft{"visible-context", Ai.UserText{"committed context"}, True{}, None{}}]}, None{}}), api))])
+    +factory : Ext.ExtensionFactory() <- C.create(~BoundaryEnv, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~scriptFrom, BoundaryEnv{ref, withTurnEnd(Action{True{}, None{}, Nil{}, Literal{[Ext.CustomEntryDraft{"metadata", Some{V.Boolean{True{}}}}, Ext.CustomMessageEntryDraft{"visible-context", Ai.UserText{"committed context"}, True{}, None{}}]}, None{}})})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"done"}]), ref, [inline("boundary", factory)])
     +listener : Session.Listener() <- C.create(~R.Ref<Maybe<&2, Session.AgentSession>>, ~Session.AgentSessionEvent, ~Unit, ~snapshotOnAppend, ref)
     Session.subscribe(sessionOf(harness), listener)
     prompted(sessionOf(harness), "start")
@@ -1644,6 +1669,13 @@ def contextFactoryWith(context: Maybe<&2, ContextKind>, withSystem: Maybe<&2, Co
 
 def contextFactory(context: Maybe<&2, ContextKind>, withSystem: Maybe<&2, ContextKind>, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>): contextFactoryWith(context, withSystem, api)
 
+type ContextSpec is Data:
+  ContextSpec{context: Maybe<&2, ContextKind>, withSystem: Maybe<&2, ContextKind>}
+
+def contextFrom(spec: ContextSpec, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match spec:
+    case ContextSpec{context, withSystem}: contextFactory(context, withSystem, api)
+
 def printError(env: Unit, error: Ext.ExtensionError) -> IO(Unit):
   match error:
     case Ext.ExtensionError{_, event, text, _}: print("extension_error", Json.field("event", Json.text(event), Json.field("error", Json.text(text), Nil{})))
@@ -1686,10 +1718,17 @@ def withSystemKindOf(+name: String) -> Maybe<&2, ContextKind>:
     case "with_system_drop": Some{DropSystem{}}
     case _: None{}
 
-def contextExtensions(compacting: Bool, context: Maybe<&2, ContextKind>, withSystem: Maybe<&2, ContextKind>) -> List<&1, Ext.InlineExtension>:
+def contextExtensions(compacting: Bool, context: Maybe<&2, ContextKind>, withSystem: Maybe<&2, ContextKind>) -> IO(List<&2, Ext.InlineExtension>):
   match compacting:
-    case True{}: [inline("compact-via-hook", api => supplyFactory("extension summary", api)), inline("context", api => contextFactory(context, withSystem, api))]
-    case False{}: [inline("context", api => contextFactory(context, withSystem, api))]
+    case True{}:
+      do IO<List<&2, Ext.InlineExtension>>:
+        compact : Ext.ExtensionFactory() <- C.create(~String, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~supplyFactory, "extension summary")
+        current : Ext.ExtensionFactory() <- C.create(~ContextSpec, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~contextFrom, ContextSpec{context, withSystem})
+        return [inline("compact-via-hook", compact), inline("context", current)]
+    case False{}:
+      do IO<List<&2, Ext.InlineExtension>>:
+        current : Ext.ExtensionFactory() <- C.create(~ContextSpec, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~contextFrom, ContextSpec{context, withSystem})
+        return [inline("context", current)]
 
 def contextScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
   do IO<Unit>:
@@ -1698,7 +1737,8 @@ def contextScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
     +context : Maybe<&2, ContextKind> = contextKindOf(name)
     +withSystem : Maybe<&2, ContextKind> = withSystemKindOf(name)
     +replies : List<&2, Reg.Reply> = Bool.pick(List<&2, Reg.Reply>, compacting, [Reg.Text{"one"}, Reg.Text{"two"}, Reg.Text{"after compaction"}], [Reg.Text{"done"}])
-    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup(replies), ref, contextExtensions(compacting, context, withSystem))
+    extensions : List<&2, Ext.InlineExtension> <- contextExtensions(compacting, context, withSystem)
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup(replies), ref, extensions)
     runner : Maybe<&2, Runner.ExtensionRunner> <- Session.extensionRunner(sessionOf(harness))
     listenErrors(runner)
     Bool.pick(Unit -> IO(Unit), compacting, _ => compactSession(sessionOf(harness)), _ => IO.pure(Unit, Unit{}))(Unit{})
@@ -1739,7 +1779,7 @@ def testSkill(+dir: String) -> Skills.Skill:
   +path = dir ++ "/test-skill.md"
   Skills.Skill{"test", "Test skill", path, dir, syntheticSource(path, Skills.Project{}, Some{dir}), False{}}
 
-def resourceHarness(+dir: String, agentDir: String, setupValue: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, resources: Resources) -> IO(Harness):
+def resourceHarness(+dir: String, agentDir: String, setupValue: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&2, Ext.InlineExtension>, resources: Resources) -> IO(Harness):
   createHarnessResources(dir, agentDir, Builtins{}, setupValue, ref, extensions, Nil{}, Nil{}, resources)
 
 def reportFauxRemaining(harness: Harness) -> IO(Unit): Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
@@ -1793,7 +1833,8 @@ def promptCommand(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
     +apiRef : R.Ref<Maybe<&2, Ext.ExtensionAPI>> <- R.new(Maybe<&2, Ext.ExtensionAPI>, None{})
-    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"should stay queued"}]), ref, [inline("testcmd", api => testCommandFactory(apiRef, api))], noResources())
+    +factory : Ext.ExtensionFactory() <- C.create(~R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => testCommandFactory(environment, api)), apiRef)
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"should stay queued"}]), ref, [inline("testcmd", factory)], noResources())
     prompted(sessionOf(harness), "/testcmd hello world")
     H.reportMessages(sessionOf(harness))
     reportFauxRemaining(harness)
@@ -1831,12 +1872,20 @@ def markingCommandFactory(apiRef: R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ran: R.Ref
     handler : Ext.CommandHandler() <- C.create(~R.Ref<Bool>, ~Ext.CommandCall, ~Result<&2, &2, String, Unit>, ~markCommand, ran)
     Loader.registerCommand(api, "testcmd", Ext.CommandOptions{Some{"Test command"}, None{}, handler})
 
+type MarkEnv is Data:
+  MarkEnv{apiRef: R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ran: R.Ref<Bool>}
+
+def markingFrom(env: MarkEnv, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match env:
+    case MarkEnv{apiRef, ran}: markingCommandFactory(apiRef, ran, api)
+
 def extensionSendCommand(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
     +apiRef : R.Ref<Maybe<&2, Ext.ExtensionAPI>> <- R.new(Maybe<&2, Ext.ExtensionAPI>, None{})
     +ran : R.Ref<Bool> <- R.new(Bool, False{})
-    +harness : Harness <- resourceHarness(dir, agentDir, setup(Nil{}), ref, [inline("testcmd", api => markingCommandFactory(apiRef, ran, api))], noResources())
+    +factory : Ext.ExtensionFactory() <- C.create(~MarkEnv, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~markingFrom, MarkEnv{apiRef, ran})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup(Nil{}), ref, [inline("testcmd", factory)], noResources())
     found : Maybe<&2, Ext.ExtensionAPI> <- R.read(Maybe<&2, Ext.ExtensionAPI>, apiRef)
     sendCommand(found)
     untilCommandRan(1000n, ran)
@@ -1874,7 +1923,8 @@ def promptDuringCompaction(+dir: String, agentDir: String) -> IO(Unit):
     +started : Chan(Unit) <- Chan.new(Unit, 1)
     +release : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Reg.Compacted) <- Chan.new(Reg.Compacted, 1)
-    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"one"}, Reg.Text{"two"}]), ref, [inline("held", api => heldCompactionFactory(H.Gate{started, release}, api))], noResources())
+    +factory : Ext.ExtensionFactory() <- C.create(~H.Gate, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => heldCompactionFactory(environment, api)), H.Gate{started, release})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"one"}, Reg.Text{"two"}]), ref, [inline("held", factory)], noResources())
     prompted(sessionOf(harness), "first")
     prompted(sessionOf(harness), "second")
     IO.spawn(Unit, Reg.compactInBackground(sessionOf(harness), done))
@@ -1915,7 +1965,8 @@ def inputFactory(transform: Bool, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, St
 def inputIdle(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"ok"}]), ref, [inline("input", api => inputFactory(False{}, api))], noResources())
+    +factory : Ext.ExtensionFactory() <- C.create(~Bool, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => inputFactory(environment, api)), False{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"ok"}]), ref, [inline("input", factory)], noResources())
     result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(harness), "idle", Nil{}, Some{Session.FollowUp{}})
     H.reportOutcome("prompted", result)
     cleanup(harness)
@@ -1927,7 +1978,8 @@ def inputStreaming(+dir: String, agentDir: String) -> IO(Unit):
     +toolStarted : Chan(Unit) <- Chan.new(Unit, 1)
     +release : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Unit) <- Chan.new(Unit, 1)
-    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{toolStarted, release}}]}, setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]), ref, [inline("input", api => inputFactory(False{}, api))])
+    +factory : Ext.ExtensionFactory() <- C.create(~Bool, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => inputFactory(environment, api)), False{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{toolStarted, release}}]}, setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]), ref, [inline("input", factory)])
     IO.spawn(Unit, promptInBackground(sessionOf(harness), "start", done))
     began : Maybe<&1, Unit> <- Chan.recv(Unit, toolStarted)
     queued : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(harness), "queued", Nil{}, Some{Session.FollowUp{}})
@@ -1941,7 +1993,8 @@ def inputStreaming(+dir: String, agentDir: String) -> IO(Unit):
 def inputTransform(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"done"}]), ref, [inline("input", api => inputFactory(True{}, api))], noResources())
+    +factory : Ext.ExtensionFactory() <- C.create(~Bool, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => inputFactory(environment, api)), True{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"done"}]), ref, [inline("input", factory)], noResources())
     prompted(sessionOf(harness), "hello")
     prompted(sessionOf(harness), "ping")
     H.reportMessages(sessionOf(harness))
@@ -2000,7 +2053,8 @@ def reportModel(+session: Session.AgentSession) -> IO(Unit):
 def beforeStartImage(+dir: String, agentDir: String, +image: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, Reg.Setup{[Reg.Text{"done"}], Nil{}, H.wideModel()}, ref, [inline("switch", api => startFactory(SwitchModel{H.strictModel()}, api))], Nil{}, [H.strictModel()])
+    +factory : Ext.ExtensionFactory() <- C.create(~StartKind, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => startFactory(environment, api)), SwitchModel{H.strictModel()})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, Reg.Setup{[Reg.Text{"done"}], Nil{}, H.wideModel()}, ref, [inline("switch", factory)], Nil{}, [H.strictModel()])
     result : Result<&2, &2, String, Unit> <- Session.promptWith(sessionOf(harness), "inspect", Session.PromptOptions{True{}, [Ai.ImageContent{image, "image/png"}], None{}, Ext.InteractiveSource{}, None{}})
     H.reportOutcome("prompted", result)
     reportModel(sessionOf(harness))
@@ -2012,7 +2066,8 @@ def beforeStartImage(+dir: String, agentDir: String, +image: String) -> IO(Unit)
 def beforeStartInject(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"done"}]), ref, [inline("inject", api => startFactory(Inject{}, api))], noResources())
+    +factory : Ext.ExtensionFactory() <- C.create(~StartKind, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => startFactory(environment, api)), Inject{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"done"}]), ref, [inline("inject", factory)], noResources())
     prompted(sessionOf(harness), "hello")
     H.reportMessages(sessionOf(harness))
     cleanup(harness)
@@ -2024,7 +2079,9 @@ def planSectionScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
     +turns : R.Ref<Nat> <- R.new(Nat, 0n)
-    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"one"}, Reg.Text{"two"}]), ref, [inline("plan", api => startFactory(PlanSection{turns}, api)), inline("context", api => contextFactory(Some{Unchanged{}}, None{}, api))])
+    plan : Ext.ExtensionFactory() <- C.create(~StartKind, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => startFactory(environment, api)), PlanSection{turns})
+    context : Ext.ExtensionFactory() <- C.create(~ContextSpec, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~contextFrom, ContextSpec{Some{Unchanged{}}, None{}})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"one"}, Reg.Text{"two"}]), ref, [inline("plan", plan), inline("context", context)])
     prompted(sessionOf(harness), "first")
     prompted(sessionOf(harness), "second")
     cleanup(harness)
@@ -2083,6 +2140,13 @@ def switchFactory(ref: R.Ref<Maybe<&2, Session.AgentSession>>, kind: String, +ap
     overridden : Result<&2, &2, String, Unit> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), String.eq(kind, "override"), _ => subscribe(api, Ext.OnBeforeAgentStart{start}), _ => IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}}))(Unit{})
     return both(both(registered, watched), overridden)
 
+type SwitchFactoryEnv is Data:
+  SwitchFactoryEnv{ref: R.Ref<Maybe<&2, Session.AgentSession>>, kind: String}
+
+def switchFrom(env: SwitchFactoryEnv, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match env:
+    case SwitchFactoryEnv{ref, kind}: switchFactory(ref, kind, api)
+
 def textValues(names: List<&2, String>) -> List<&2, V.Value>:
   match names:
     case Nil{}: Nil{}
@@ -2097,7 +2161,8 @@ def reportActiveTools(+label: String, +session: Session.AgentSession) -> IO(Unit
 def switchScenario(+dir: String, agentDir: String, +kind: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Call{"call_switch", "switch_tools", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]), ref, [inline("switch", api => switchFactory(ref, kind, api))], noResources())
+    +factory : Ext.ExtensionFactory() <- C.create(~SwitchFactoryEnv, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~switchFrom, SwitchFactoryEnv{ref, kind})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Call{"call_switch", "switch_tools", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]), ref, [inline("switch", factory)], noResources())
     Session.setActiveToolsByName(sessionOf(harness), ["switch_tools"])
     reportActiveTools("before", sessionOf(harness))
     prompted(sessionOf(harness), "start")
@@ -2149,7 +2214,8 @@ def reportTools(+label: String, +session: Session.AgentSession) -> IO(Unit):
 def dynamicScenario(+dir: String, agentDir: String, hidden: Bool) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- resourceHarness(dir, agentDir, setup(Nil{}), ref, [inline("dynamic", api => dynamicFactory(hidden, api))], noResources())
+    +factory : Ext.ExtensionFactory() <- C.create(~Bool, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => dynamicFactory(environment, api)), hidden)
+    +harness : Harness <- resourceHarness(dir, agentDir, setup(Nil{}), ref, [inline("dynamic", factory)], noResources())
     reportTools("before_bind", sessionOf(harness))
     Session.bindExtensions(sessionOf(harness), Ext.SessionStartEvent{Ext.StartupStart{}, None{}})
     reportTools("after_bind", sessionOf(harness))
@@ -2178,6 +2244,11 @@ def bashFactory(first: Ext.ToolDefinition,second: Ext.ToolDefinition,+api: Ext.E
     a : Result<&2,&2,String,Unit> <- Loader.registerTool(api,first)
     b : Result<&2,&2,String,Unit> <- Loader.registerTool(api,second)
     return both(a,b)
+type BashFactoryEnv is Data:
+  BashFactoryEnv{first: Ext.ToolDefinition, second: Ext.ToolDefinition}
+def bashFrom(env: BashFactoryEnv, api: Ext.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
+  match env:
+    case BashFactoryEnv{first, second}: bashFactory(first, second, api)
 def activeToolName(tool: Tools.Tool()) -> String:
   match tool: case T.AgentTool{name,_,_,_,_,_,_,_,_}: name
 def namedTool(tools: List<&2,Tools.Tool()>,+name: String) -> Maybe<&2,Tools.Tool()>:
@@ -2216,7 +2287,8 @@ def bashDefinitionScenario(+dir: String,agentDir: String) -> IO(Unit):
     +firstExec : Ext.ToolExecute() = bashDefinitionExecute(first)
     +secondExec : Ext.ToolExecute() = bashDefinitionExecute(second)
     +ref : R.Ref<Maybe<&2,Session.AgentSession>> <- R.new(Maybe<&2,Session.AgentSession>,None{})
-    +harness : Harness <- resourceHarness(dir,agentDir,setup(Nil{}),ref,[inline("bash-hook",api => bashFactory(first,bashDefinitionName(second,"bash_without_session_env","bash without session env"),api))],noResources())
+    +factory : Ext.ExtensionFactory() <- C.create(~BashFactoryEnv, ~Ext.ExtensionAPI, ~Result<&2,&2,String,Unit>, ~bashFrom, BashFactoryEnv{first,bashDefinitionName(second,"bash_without_session_env","bash without session env")})
+    +harness : Harness <- resourceHarness(dir,agentDir,setup(Nil{}),ref,[inline("bash-hook",factory)],noResources())
     +session : Session.AgentSession = sessionOf(harness)
     +record : Session.Session() <- Session.sessionOf(session)
     print("bash_expected",Json.field("PI_SESSION_ID",Json.text(Sessions.getSessionId(Unit,Tools.ToolDetails,V.Value,record)),Json.field("PI_SESSION_FILE",Json.text("<missing>"),Json.field("PI_PROVIDER",Json.text("faux"),Json.field("PI_MODEL",Json.text("faux-model"),Json.field("PI_REASONING_LEVEL",Json.text("off"),Nil{}))))))
@@ -2248,11 +2320,11 @@ def reloadSettingsScenario(+dir: String, +agentDir: String) -> IO(Unit):
     written : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(agentDir ++ "/prompts/test.md", "Echo test prompt\n")
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
     +harness : Harness <- resourceHarness(dir, agentDir, setup(Nil{}), ref, Nil{}, DiscoveredPrompts{})
-    first : Result<&2, &2, String, Unit> <- Session.reload(sessionOf(harness))
+    first : Result<&2, &2, String, Unit> <- Session.reload(sessionOf(harness), None{})
     H.reportOutcome("reload", first)
     reportTemplates("startup", sessionOf(harness))
     changed : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(agentDir ++ "/settings.json", "{\n  \"prompts\": [\n    \"-prompts/test.md\"\n  ]\n}\n")
-    second : Result<&2, &2, String, Unit> <- Session.reload(sessionOf(harness))
+    second : Result<&2, &2, String, Unit> <- Session.reload(sessionOf(harness), None{})
     H.reportOutcome("reload", second)
     reportTemplates("reloaded", sessionOf(harness))
     cleanup(harness)
@@ -2308,15 +2380,27 @@ def compactFactory(+label: String, mode: String, +api: Ext.ExtensionAPI) -> IO(R
     second : Result<&2, &2, String, Unit> <- subscribe(api, Ext.OnSessionCompact{after})
     return both(first, second)
 
-def compactExtensions(+mode: String) -> List<&1, Ext.InlineExtension>:
+def compactFrom(spec: CompactMode, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match spec:
+    case CompactMode{label, mode}: compactFactory(label, mode, api)
+
+def compactExtensions(+mode: String) -> IO(List<&2, Ext.InlineExtension>):
   match mode:
-    case "ordered": [inline("extension1", api => compactFactory("extension1", "none", api)), inline("extension2", api => compactFactory("extension2", "none", api))]
-    case other: [inline("test-extension", api => compactFactory("test-extension", other, api))]
+    case "ordered":
+      do IO<List<&2, Ext.InlineExtension>>:
+        first : Ext.ExtensionFactory() <- C.create(~CompactMode, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~compactFrom, CompactMode{"extension1", "none"})
+        second : Ext.ExtensionFactory() <- C.create(~CompactMode, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~compactFrom, CompactMode{"extension2", "none"})
+        return [inline("extension1", first), inline("extension2", second)]
+    case other:
+      do IO<List<&2, Ext.InlineExtension>>:
+        +factory : Ext.ExtensionFactory() <- C.create(~CompactMode, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~compactFrom, CompactMode{"test-extension", other})
+        return [inline("test-extension", factory)]
 
 def compactionExtensionsScenario(+dir: String, agentDir: String, +mode: String, +prompts: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"4"}, Reg.Text{"6"}, Reg.Text{"history summary"}, Reg.Text{"prefix summary"}]), ref, compactExtensions(mode), noResources())
+    extensions : List<&2, Ext.InlineExtension> <- compactExtensions(mode)
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"4"}, Reg.Text{"6"}, Reg.Text{"history summary"}, Reg.Text{"prefix summary"}]), ref, extensions, noResources())
     prompted(sessionOf(harness), "What is 2+2? Reply with just the number.")
     Bool.pick(Unit -> IO(Unit), String.eq(prompts, "two"), _ => prompted(sessionOf(harness), "What is 3+3? Reply with just the number."), _ => IO.pure(Unit, Unit{}))(Unit{})
     result : Result<&2, &2, String, Compaction.CompactionResult> <- Session.compact(sessionOf(harness), None{})
@@ -2391,12 +2475,21 @@ def usageObserver(totals: R.Ref<List<&2, U32>>, +done: Chan(Unit), +api: Ext.Ext
     fourth : Result<&2, &2, String, Unit> <- subscribe(api, Ext.OnSessionCompactFailed{failed})
     return both(first, both(second, both(third, fourth)))
 
+type UsageEnv is Data:
+  UsageEnv{totals: R.Ref<List<&2, U32>>, done: Chan(Unit)}
+
+def usageFrom(env: UsageEnv, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match env:
+    case UsageEnv{totals, done}: usageObserver(totals, done, api)
+
 def triggerCompactScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
     +totals : R.Ref<List<&2, U32>> <- R.new(List<&2, U32>, [110000, 120000, 95000, 105000])
     +done : Chan(Unit) <- Chan.new(Unit, 1)
-    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"one"}, Reg.Text{"two"}, Reg.Text{"three"}, Reg.Text{"four"}, Reg.Text{"compacted summary"}, Reg.Text{"turn prefix"}]), ref, [inline("trigger-compact", TriggerCompact.triggerCompact), inline("observer", api => usageObserver(totals, done, api))], noResources())
+    trigger : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => TriggerCompact.triggerCompact(api)), Unit{})
+    observer : Ext.ExtensionFactory() <- C.create(~UsageEnv, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~usageFrom, UsageEnv{totals, done})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"one"}, Reg.Text{"two"}, Reg.Text{"three"}, Reg.Text{"four"}, Reg.Text{"compacted summary"}, Reg.Text{"turn prefix"}]), ref, [inline("trigger-compact", trigger), inline("observer", observer)], noResources())
     prompted(sessionOf(harness), "first")
     prompted(sessionOf(harness), "second")
     prompted(sessionOf(harness), "third")
@@ -2441,7 +2534,8 @@ def totalsJson(stats: Result<&2, &2, S.Error, Stats.Stats>) -> V.Value:
 def branchSummaryExtensionScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, setup(Nil{}), ref, [inline("summary", summaryFactory)], [Reg.userMsg("first branch"), Reg.assistantAt("first reply", Ai.Stop{}, Reg.totalUsage(1, 1), Reg.zero()), Reg.userMsg("abandoned branch work"), Reg.assistantAt("abandoned reply", Ai.Stop{}, Reg.totalUsage(1, 1), Reg.zero())], Nil{})
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => summaryFactory(api)), Unit{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, setup(Nil{}), ref, [inline("summary", factory)], [Reg.userMsg("first branch"), Reg.assistantAt("first reply", Ai.Stop{}, Reg.totalUsage(1, 1), Reg.zero()), Reg.userMsg("abandoned branch work"), Reg.assistantAt("abandoned reply", Ai.Stop{}, Reg.totalUsage(1, 1), Reg.zero())], Nil{})
     +target : String <- firstEntryId(sessionOf(harness))
     source : Maybe<&2, String> <- currentLeaf(sessionOf(harness))
     result : Result<&2, &2, String, Session.TreeNavigation> <- Session.navigateTreeWith(sessionOf(harness), target, Session.NavigateTreeOptions{True{}, None{}, None{}, None{}})

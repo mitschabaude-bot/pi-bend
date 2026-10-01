@@ -10,6 +10,7 @@ import ../../../agent/src/agent-loop.bend as Loop
 import ../../../agent/src/providers.bend as Providers
 import ../../../agent/src/stream-fn.bend as StreamFn
 import ../../../runtime/src/callback.bend as C
+import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/schema-value.bend as V
@@ -21,6 +22,7 @@ import ./agent-session.bend as Session
 import ./auth-guidance.bend as AuthGuidance
 import ./auth-storage.bend as Storage
 import ./extensions/runner.bend as ExtensionRunner
+import ./extensions/tool-context.bend as ToolContext
 import ./extensions/types.bend as ExtensionTypes
 import ./model-runtime.bend as Models
 import ./provider-composer.bend as Composer
@@ -58,7 +60,7 @@ type OwnedLoader is Type:
 
 # Everything the session runs on that the SDK owns.
 type Services is Type:
-  Services{transport: Runtime.Transport, models: Models.ModelRuntime, ownedModels: OwnedModels, loader: OwnedLoader, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Runtime.Stream(), registry: StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()), validator: Loop.Validator(Runtime.Error()), keys: C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>>, converter: Runtime.Converter(), runner: ExtensionRunner.ExtensionRunner}
+  Services{transport: Runtime.Transport, models: Models.ModelRuntime, ownedModels: OwnedModels, loader: OwnedLoader, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Runtime.Stream(), registry: StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()), validator: Loop.Validator(Runtime.Error()), keys: C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>>, converter: Runtime.Converter(), extensions: Runtime.ExtensionOwner}
 
 # upstream CreateAgentSessionResult.
 type CreateAgentSessionResult is Type:
@@ -95,9 +97,9 @@ def disposeLoader(loader: OwnedLoader) -> IO(Unit):
 
 def disposeServices(services: Services) -> IO(Unit):
   match services:
-    case Services{transport, models, owned, loader, queue, tools, stream, registry, validator, keys, converter, runner}:
+    case Services{transport, models, owned, loader, queue, tools, stream, registry, validator, keys, converter, owner}:
       do IO<Unit>:
-        ExtensionRunner.dispose(runner)
+        Runtime.disposeExtensionOwner(Some{owner}, None{})
         Runtime.disposeConverter(converter)
         C.dispose(String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>, keys)
         Loop.disposeValidation(Runtime.Error(), validator)
@@ -379,31 +381,36 @@ def extensionsRuntime(result: Resources.LoadExtensionsResult) -> ExtensionTypes.
 type Assembly is Data:
   Assembly{environment: Paths.Environment, cwd: String, agentDir: String, packageDir: String, settings: Settings.SettingsManager, options: CreateAgentSessionOptions}
 
-def failedAgent(transport: Runtime.Transport, choice: ModelsChoice, loader: OwnedLoader, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Runtime.Stream(), registry: StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()), validator: Loop.Validator(Runtime.Error()), keys: C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>>, converter: Runtime.Converter(), runner: ExtensionRunner.ExtensionRunner, message: String) -> IO(Outcome()):
+def extensionCurrent(owner: Runtime.ExtensionOwner) -> Ref.Ref<ExtensionRunner.ExtensionRunner>:
+  match owner: case Runtime.ExtensionOwner{current,_,_}: current
+def extensionContext(owner: Runtime.ExtensionOwner) -> ToolContext.ContextSource():
+  match owner: case Runtime.ExtensionOwner{_,_,context}: context
+def failedAgent(transport: Runtime.Transport, choice: ModelsChoice, loader: OwnedLoader, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Runtime.Stream(), registry: StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()), validator: Loop.Validator(Runtime.Error()), keys: C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>>, converter: Runtime.Converter(), owner: Runtime.ExtensionOwner, message: String) -> IO(Outcome()):
   match choice:
     case ModelsChoice{models, owned}:
       do IO<Outcome()>:
-        disposeServices(Services{transport, models, owned, loader, queue, tools, stream, registry, validator, keys, converter, runner})
+        disposeServices(Services{transport, models, owned, loader, queue, tools, stream, registry, validator, keys, converter, owner})
         return Fail{message}
 
-def withAgent(+assembly: Assembly, transport: Runtime.Transport, choice: ModelsChoice, loaderChoice: LoaderChoice, +extensions: Resources.LoadExtensionsResult, +session: Session.Session(), +seed: Runtime.SessionSeed, +selection: ModelSelection, +thinking: Ai.ModelThinkingLevel, +options: Runtime.CreateOptions, prepared: Result<&2, &2, String, Runtime.Prepared>, queue: Queue.Owner, created: List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>, +stream: Runtime.Stream(), +registry: StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()), +validator: Loop.Validator(Runtime.Error()), +keys: C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>>, +converter: Runtime.Converter(), +runner: ExtensionRunner.ExtensionRunner, agent: Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()>) -> IO(Outcome()):
+def withAgent(+assembly: Assembly, transport: Runtime.Transport, choice: ModelsChoice, loaderChoice: LoaderChoice, +extensions: Resources.LoadExtensionsResult, +session: Session.Session(), +seed: Runtime.SessionSeed, +selection: ModelSelection, +thinking: Ai.ModelThinkingLevel, +options: Runtime.CreateOptions, prepared: Result<&2, &2, String, Runtime.Prepared>, queue: Queue.Owner, created: List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>, +stream: Runtime.Stream(), +registry: StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()), +validator: Loop.Validator(Runtime.Error()), +keys: C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>>, +converter: Runtime.Converter(), +owner: Runtime.ExtensionOwner, agent: Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()>) -> IO(Outcome()):
   match assembly choice loaderChoice created prepared agent:
     case Assembly{environment, +cwd, _, +packageDir, +settings, +sdkOptions} ModelsChoice{+models, owned} LoaderChoice{+loader, ownedLoader} Tuple{owners, tools} Done{prepared} Done{+agent}:
       do IO<Outcome()>:
         recorded : Session.Session() <- recordStartup(session, seed, selectionModel(selection), thinking)
-        +loadout : Runtime.Loadout = Runtime.loadoutFrom(prepared, tools, runner, Runtime.LoadoutSource{environment, options, packageDir, Some{loader}})
+        +runner : ExtensionRunner.ExtensionRunner <- Ref.read(ExtensionRunner.ExtensionRunner, extensionCurrent(owner))
+        +loadout : Runtime.Loadout = Runtime.loadoutFrom(prepared, tools, runner, Runtime.LoadoutSource{environment, options, packageDir, Some{loader}, Some{owner}})
         +live : Session.AgentSession <- Session.createWithTools(agent, recorded, settings, cwd, loadout, models, scopedOf(sdkOptions), customToolsOf(sdkOptions), sessionStartOf(sdkOptions))
         dynamicConverter : Runtime.Converter() <- Runtime.installSettingsConverter(agent, converter, Session.settingsOf(live))
-        return Done{CreateAgentSessionResult{live, extensions, selectionMessage(selection), Services{transport, models, owned, ownedLoader, queue, owners, stream, registry, validator, keys, dynamicConverter, runner}}}
+        return Done{CreateAgentSessionResult{live, extensions, selectionMessage(selection), Services{transport, models, owned, ownedLoader, queue, owners, stream, registry, validator, keys, dynamicConverter, owner}}}
     case _ ModelsChoice{models, owned} LoaderChoice{_, ownedLoader} Tuple{owners, _} Fail{message} Done{agent}:
       do IO<Outcome()>:
         Agent.dispose(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        failedAgent(transport, ModelsChoice{models, owned}, ownedLoader, queue, owners, stream, registry, validator, keys, converter, runner, message)
-    case _ ModelsChoice{models, owned} LoaderChoice{_, ownedLoader} Tuple{owners, _} _ Fail{error}: failedAgent(transport, ModelsChoice{models, owned}, ownedLoader, queue, owners, stream, registry, validator, keys, converter, runner, StreamFn.errorMessage(error))
+        failedAgent(transport, ModelsChoice{models, owned}, ownedLoader, queue, owners, stream, registry, validator, keys, converter, owner, message)
+    case _ ModelsChoice{models, owned} LoaderChoice{_, ownedLoader} Tuple{owners, _} _ Fail{error}: failedAgent(transport, ModelsChoice{models, owned}, ownedLoader, queue, owners, stream, registry, validator, keys, converter, owner, StreamFn.errorMessage(error))
 
-def withAgentCreated(+assembly: Assembly, transport: Runtime.Transport, choice: ModelsChoice, loaderChoice: LoaderChoice, +extensions: Resources.LoadExtensionsResult, +session: Session.Session(), +seed: Runtime.SessionSeed, +selection: ModelSelection, +thinking: Ai.ModelThinkingLevel, +options: Runtime.CreateOptions, prepared: Result<&2, &2, String, Runtime.Prepared>, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Runtime.Stream(), +registry: StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()), +validator: Loop.Validator(Runtime.Error()), +keys: C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>>, +converter: Runtime.Converter(), +runner: ExtensionRunner.ExtensionRunner, agent: Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()>) -> IO(Outcome()):
+def withAgentCreated(+assembly: Assembly, transport: Runtime.Transport, choice: ModelsChoice, loaderChoice: LoaderChoice, +extensions: Resources.LoadExtensionsResult, +session: Session.Session(), +seed: Runtime.SessionSeed, +selection: ModelSelection, +thinking: Ai.ModelThinkingLevel, +options: Runtime.CreateOptions, prepared: Result<&2, &2, String, Runtime.Prepared>, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Runtime.Stream(), +registry: StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()), +validator: Loop.Validator(Runtime.Error()), +keys: C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>>, +converter: Runtime.Converter(), +owner: Runtime.ExtensionOwner, agent: Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()>) -> IO(Outcome()):
   match created:
-    case Tuple{queue, pair}: withAgent(assembly, transport, choice, loaderChoice, extensions, session, seed, selection, thinking, options, prepared, queue, pair, stream, registry, validator, keys, converter, runner, agent)
+    case Tuple{queue, pair}: withAgent(assembly, transport, choice, loaderChoice, extensions, session, seed, selection, thinking, options, prepared, queue, pair, stream, registry, validator, keys, converter, owner, agent)
 
 def withResources(+assembly: Assembly, transport: Runtime.Transport, choice: ModelsChoice, loaderChoice: LoaderChoice, +session: Session.Session()) -> IO(Outcome()):
   match assembly transport choice loaderChoice:
@@ -411,6 +418,7 @@ def withResources(+assembly: Assembly, transport: Runtime.Transport, choice: Mod
       do IO<Outcome()>:
         +extensions : Resources.LoadExtensionsResult <- Resources.getExtensions(loader)
         +runner : ExtensionRunner.ExtensionRunner <- ExtensionRunner.create(extensionsRuntime(extensions), cwd, models)
+        +owner : Runtime.ExtensionOwner <- Runtime.createExtensionOwner(runner,Nil{})
         +seed : Runtime.SessionSeed = seedOf(session)
         +selection : ModelSelection <- selectModel(Path.join(packageDir, "docs"), models, settings, seed, requestedModel(sdkOptions))
         +thinking : Ai.ModelThinkingLevel = Runtime.thinkingForSelection(requestedThinking(sdkOptions), seed, settings, selectionModel(selection))
@@ -421,7 +429,7 @@ def withResources(+assembly: Assembly, transport: Runtime.Transport, choice: Mod
         +options : Runtime.CreateOptions = Runtime.withLoadedPrompt(createOptionsFor(cwd, agentDir, packageDir, "", Some{thinking}, toolSelection, seed, settings), system, append)
         prepared : Result<&2, &2, String, Runtime.Prepared> <- Runtime.preparedFromLoader(loader, options, packageDir, Runtime.activeNamesOf(setup))
         queue : Queue.Owner <- Queue.create()
-        created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- Runtime.createToolList(Runtime.registryOf(setup), Runtime.toolsOptionsFor(Runtime.builtinsOf(toolSelection), settings, environment), environment, cwd, agentDir, packageDir, fetch, ExtensionRunner.toolContext(runner), Queue.borrow(queue))
+        created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- Runtime.createToolList(Runtime.registryOf(setup), Runtime.toolsOptionsFor(Runtime.builtinsOf(toolSelection), settings, environment), environment, cwd, agentDir, packageDir, fetch, extensionContext(owner), Queue.borrow(queue))
         +apiStream : Composer.ProviderStream() <- Runtime.createApiStream(codexSessions, authorizer, fetch)
         +stream : Runtime.Stream() <- Runtime.createStream(fetch, Runtime.requestDefaults(settings), Runtime.KeySource{models, None{}}, Models.RequestTransforms{None{}, Some{apiStream}})
         +registry : StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()) <- StreamFn.create(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error())
@@ -429,7 +437,7 @@ def withResources(+assembly: Assembly, transport: Runtime.Transport, choice: Mod
         +keys : C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>> <- C.create(~Runtime.KeySource, ~String, ~Result<&2, &2, Runtime.Error(), Maybe<&2, String>>, ~Runtime.resolveKey, Runtime.KeySource{models, None{}})
         +converter : Runtime.Converter() <- Runtime.createConverter(Settings.getBlockImages(settings))
         agent : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~V.Value, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, Runtime.agentOptions(selectionModel(selection), thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
-        withAgentCreated(Assembly{environment, cwd, agentDir, packageDir, settings, sdkOptions}, Runtime.Transport{authorizer, network, fetch, codexSessions}, ModelsChoice{models, withApiStream(owned, apiStream)}, LoaderChoice{loader, ownedLoader}, extensions, session, seed, selection, thinking, options, prepared, created, stream, registry, validator, keys, converter, runner, agent)
+        withAgentCreated(Assembly{environment, cwd, agentDir, packageDir, settings, sdkOptions}, Runtime.Transport{authorizer, network, fetch, codexSessions}, ModelsChoice{models, withApiStream(owned, apiStream)}, LoaderChoice{loader, ownedLoader}, extensions, session, seed, selection, thinking, options, prepared, created, stream, registry, validator, keys, converter, owner, agent)
 
 def failedSession(transport: Runtime.Transport, choice: ModelsChoice, message: String) -> IO(Outcome()):
   match choice:

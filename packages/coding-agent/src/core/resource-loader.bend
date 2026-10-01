@@ -622,9 +622,8 @@ def disposeResourceLoader(loader: ResourceLoader) -> IO(Unit):
 
 # upstream DefaultResourceLoaderOptions without the event bus, extension
 # paths (JavaScript extensions are excluded) and the override hooks.
-# `extensionFactories` load when the loader is created: they are Bend
-# closures, consumed by loading, so a reload keeps the extensions loaded
-# then (upstream's reload runs the factories again).
+# `extensionFactories` load on each reload. The loader owns their reusable
+# callback handles.
 type DefaultResourceLoaderOptions is Data:
   DefaultResourceLoaderOptions{cwd: String, agentDir: String, settingsManager: Settings.SettingsManager, additionalSkillPaths: List<&2, String>, additionalPromptTemplatePaths: List<&2, String>, additionalThemePaths: List<&2, String>, noExtensions: Bool, noSkills: Bool, noPromptTemplates: Bool, noThemes: Bool, noContextFiles: Bool, systemPrompt: Maybe<&2, String>, appendSystemPrompt: Maybe<&2, List<&2, String>>}
 
@@ -639,7 +638,7 @@ def emptyLoaded() -> Loaded:
   Loaded{SkillsResult{Nil{}, Nil{}}, PromptsResult{Nil{}, Nil{}}, ThemesResult{Nil{}, Nil{}}, AgentsFilesResult{Nil{}}, None{}, None{}, Nil{}, Nil{}, ResourceExtensionPaths{Nil{}, Nil{}, Nil{}}}
 
 type LoaderState is Data:
-  LoaderState{environment: Paths.Environment, options: DefaultResourceLoaderOptions, extensions: LoadExtensionsResult, loaded: Loaded, mode: Color.Mode}
+  LoaderState{environment: Paths.Environment, options: DefaultResourceLoaderOptions, extensions: LoadExtensionsResult, loaded: Loaded, mode: Color.Mode, factories: List<&2, ExtensionTypes.InlineExtension>}
 
 def withSettingsOption(options: DefaultResourceLoaderOptions, settings: Maybe<&2, Settings.SettingsManager>) -> DefaultResourceLoaderOptions:
   match options settings:
@@ -689,11 +688,11 @@ def reloaded(+environment: Paths.Environment, options: DefaultResourceLoaderOpti
 
 def loadedOf(state: LoaderState) -> Loaded:
   match state:
-    case LoaderState{_, _, _, loaded, _}: loaded
+    case LoaderState{_, _, _, loaded, _, _}: loaded
 
 def extensionsOf(state: LoaderState) -> LoadExtensionsResult:
   match state:
-    case LoaderState{_, _, extensions, _, _}: extensions
+    case LoaderState{_, _, extensions, _, _, _}: extensions
 
 def skillsIn(loaded: Loaded) -> SkillsResult:
   match loaded:
@@ -757,22 +756,40 @@ def extensionPathsIn(loaded: Loaded) -> ResourceExtensionPaths:
 
 def reloadFrom(+state: R.Ref<LoaderState>, settings: Maybe<&2, Settings.SettingsManager>, +extra: Maybe<&2, ResourceExtensionPaths>, current: LoaderState) -> IO(Unit):
   match current:
-    case LoaderState{+environment, options, extensions, previous, +mode}:
+    case LoaderState{+environment, options, extensions, previous, +mode, factories}:
       do IO<Unit>:
         +chosen : DefaultResourceLoaderOptions = withSettingsOption(options, settings)
         loaded : Loaded <- reloaded(environment, chosen, Maybe.default(&2, ResourceExtensionPaths, extra, extensionPathsIn(previous)), mode)
-        R.write(LoaderState, state, LoaderState{environment, chosen, extensions, loaded, mode})
+        R.write(LoaderState, state, LoaderState{environment, chosen, extensions, loaded, mode, factories})
 
 def reloadState(+state: R.Ref<LoaderState>, settings: Maybe<&2, Settings.SettingsManager>, +extra: Maybe<&2, ResourceExtensionPaths>) -> IO(Unit):
   do IO<Unit>:
     current : LoaderState <- R.read(LoaderState, state)
     reloadFrom(state, settings, extra, current)
 
+def reloadFactories(+state: R.Ref<LoaderState>, settings: Maybe<&2, Settings.SettingsManager>, current: LoaderState) -> IO(Unit):
+  match current:
+    case LoaderState{+environment, options, _, _, +mode, +factories}:
+      do IO<Unit>:
+        +chosen : DefaultResourceLoaderOptions = withSettingsOption(options, settings)
+        +runtime : ExtensionTypes.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
+        errors : List<&2, ExtensionTypes.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime, factories)
+        runtimeState : ExtensionTypes.ExtensionRuntimeState <- R.read(ExtensionTypes.ExtensionRuntimeState, runtime)
+        +extensions : LoadExtensionsResult = LoadExtensionsResult{ExtensionLoader.activeExtensions(ExtensionLoader.extensionsOf(runtimeState)), errors, runtime}
+        loaded : Loaded <- reloaded(environment, chosen, ResourceExtensionPaths{Nil{}, Nil{}, Nil{}}, mode)
+        R.write(LoaderState, state, LoaderState{environment, chosen, extensions, loaded, mode, factories})
+
 # upstream reload(): extension resource paths from resources_discover start
 # over (upstream resets them before its extensions discover again).
-def loaderReload(state: R.Ref<LoaderState>, options: ResourceLoaderReloadOptions) -> IO(Unit):
+def reloadWith(+state: R.Ref<LoaderState>, options: ResourceLoaderReloadOptions) -> IO(Unit):
   match options:
-    case ResourceLoaderReloadOptions{settings}: reloadState(state, settings, Some{ResourceExtensionPaths{Nil{}, Nil{}, Nil{}}})
+    case ResourceLoaderReloadOptions{settings}:
+      do IO<Unit>:
+        current : LoaderState <- R.read(LoaderState, state)
+        reloadFactories(state, settings, current)
+
+def loaderReload(state: R.Ref<LoaderState>, options: ResourceLoaderReloadOptions) -> IO(Unit):
+  reloadWith(state, options)
 
 def mergedPaths(previous: ResourceExtensionPaths, added: ResourceExtensionPaths) -> ResourceExtensionPaths:
   match previous added:
@@ -805,15 +822,14 @@ def loadedExtensions(+runtime: ExtensionTypes.ExtensionRuntime(), errors: List<&
     state : ExtensionTypes.ExtensionRuntimeState <- R.read(ExtensionTypes.ExtensionRuntimeState, runtime)
     return LoadExtensionsResult{ExtensionLoader.activeExtensions(ExtensionLoader.extensionsOf(state)), errors, runtime}
 
-# upstream new DefaultResourceLoader(options): nothing is discovered until
-# reload(); the inline extension factories load now (see the options).
-def createDefaultResourceLoader(+environment: Paths.Environment, options: DefaultResourceLoaderOptions, extensionFactories: List<&1, ExtensionTypes.InlineExtension>) -> IO(DefaultResourceLoader):
+# upstream new DefaultResourceLoader(options): nothing is discovered and no
+# inline factory runs until the first reload().
+def createDefaultResourceLoader(+environment: Paths.Environment, options: DefaultResourceLoaderOptions, extensionFactories: List<&2, ExtensionTypes.InlineExtension>) -> IO(DefaultResourceLoader):
   do IO<DefaultResourceLoader>:
     +runtime : ExtensionTypes.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
-    errors : List<&2, ExtensionTypes.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime, extensionFactories)
-    extensions : LoadExtensionsResult <- loadedExtensions(runtime, errors)
+    extensions : LoadExtensionsResult <- loadedExtensions(runtime, Nil{})
     colorTerm : Result<&1, &1, U32 & String, String> <- IO.get_env("COLORTERM")
-    +state : R.Ref<LoaderState> <- R.new(LoaderState, LoaderState{environment, options, extensions, emptyLoaded(), colorMode(colorTerm)})
+    +state : R.Ref<LoaderState> <- R.new(LoaderState, LoaderState{environment, options, extensions, emptyLoaded(), colorMode(colorTerm), extensionFactories})
     a : C.Callback<Unit, LoadExtensionsResult> <- C.create(~R.Ref<LoaderState>, ~Unit, ~LoadExtensionsResult, ~loaderExtensions, state)
     b : C.Callback<Unit, SkillsResult> <- C.create(~R.Ref<LoaderState>, ~Unit, ~SkillsResult, ~loaderSkills, state)
     c : C.Callback<Unit, PromptsResult> <- C.create(~R.Ref<LoaderState>, ~Unit, ~PromptsResult, ~loaderPrompts, state)
@@ -827,12 +843,16 @@ def createDefaultResourceLoader(+environment: Paths.Environment, options: Defaul
     k : C.Callback<ResourceLoaderReloadOptions, Unit> <- C.create(~R.Ref<LoaderState>, ~ResourceLoaderReloadOptions, ~Unit, ~loaderReload, state)
     return DefaultResourceLoader{state, ResourceLoader{a, b, c, d, e, f, g, h, i, j, k}}
 
-# The loader's callbacks and state; its extension runtime goes with the
+# The loader owns its factory handles. Each extension runtime goes with the
 # runner the session creates for it.
+def disposeLoaderState(previous: LoaderState) -> IO(Unit):
+  match previous:
+    case LoaderState{_, _, _, _, _, factories}: ExtensionLoader.disposeInlineExtensions(factories)
+
 def disposeDefaultResourceLoader(loader: DefaultResourceLoader) -> IO(Unit):
   match loader:
     case DefaultResourceLoader{state, callbacks}:
       do IO<Unit>:
         disposeResourceLoader(callbacks)
         previous : LoaderState <- R.dispose(LoaderState, state)
-        return Unit{}
+        disposeLoaderState(previous)

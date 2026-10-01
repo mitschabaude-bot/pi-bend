@@ -218,7 +218,9 @@ def setup(options: Options) -> IO(Setup):
         +recorded : R.Ref<Recorded> <- R.new(Recorded, Recorded{active, Nil{}, Nil{}, Nil{}, Nil{}, 0n})
         +env : Env = Env{recorded, Options{active, choice, text}}
         +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
-        errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, T.InlineExtension{"plan-mode", PlanMode.planModeExtension, False{}} <> Nil{})
+        +factory : T.ExtensionFactory() <- C.create(~Unit, ~T.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => PlanMode.planModeExtension(api)), Unit{})
+        errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, [T.InlineExtension{"plan-mode", factory, False{}}])
+        Loader.disposeInlineExtensions([T.InlineExtension{"plan-mode", factory, False{}}])
         models : Models.ModelRuntime <- Fixture.create(Nil{})
         +runner : Runner.ExtensionRunner <- Runner.create(runtime, "/tmp/pi-plan-mode-test", models)
         bound : T.ExtensionActions <- actions(env)

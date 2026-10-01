@@ -22,11 +22,15 @@ def register(+key: String,api: T.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
   do IO<Result<&2,&2,String,Unit>>:
     handler : T.ShortcutHandler() <- C.create(~Unit,~Ctx.ExtensionContext,~Result<&2,&2,String,Unit>,~noop,Unit{})
     Loader.registerShortcut(api,key,T.ShortcutOptions{None{},handler})
-def extension(path: String,+key: String) -> T.InlineExtension: T.InlineExtension{path,api => register(key,api),False{}}
-def loaded(extensions: List<&1,T.InlineExtension>) -> IO(Runner.ExtensionRunner):
+def extension(path: String,+key: String) -> IO(T.InlineExtension):
+  do IO<T.InlineExtension>:
+    +factory : T.ExtensionFactory() <- C.create(~String,~T.ExtensionAPI,~Result<&2,&2,String,Unit>,~(environment => api => register(environment,api)),key)
+    return T.InlineExtension{path,factory,False{}}
+def loaded(+extensions: List<&2,T.InlineExtension>) -> IO(Runner.ExtensionRunner):
   do IO<Runner.ExtensionRunner>:
     +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
     errors : List<&2,T.LoadError> <- Loader.loadExtensionFactories(runtime,extensions)
+    Loader.disposeInlineExtensions(extensions)
     models : ModelRuntime.ModelRuntime <- Models.create(Nil{})
     Runner.create(runtime,"/tmp/pi-shortcuts",models)
 def key(value: Maybe<&2,K.KeyId>) -> K.KeyId:
@@ -45,7 +49,8 @@ def warningText(values: List<&2,D.ResourceDiagnostic>) -> String:
   match values: case Nil{}: "" case D.ResourceDiagnostic{_,text,_,_} <> rest: text ++ "\n" ++ warningText(rest)
 def assertion(+shortcut: String,config: B.KeybindingsConfig(),expected: Bool,+needle: String,name: String) -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded([extension("test",shortcut)])
+    first : T.InlineExtension <- extension("test",shortcut)
+    +runner : Runner.ExtensionRunner <- loaded([first])
     +result : R.Record<T.ExtensionShortcut> <- Runner.getShortcuts(runner,config)
     +warnings : List<&2,D.ResourceDiagnostic> <- Runner.getShortcutDiagnostics(runner)
     check(Bool.pick(Bool,expected,present(R.get(T.ExtensionShortcut,result,Runner.shortcutName(shortcut))),Bool.not(present(R.get(T.ExtensionShortcut,result,Runner.shortcutName(shortcut))))) && Bool.pick(Bool,String.is_empty(needle),Bool.not(String.contains(warningText(warnings),"conflicts with built-in")),String.contains(warningText(warnings),needle)),name)
@@ -54,7 +59,9 @@ def winner(value: Maybe<&2,T.ExtensionShortcut>) -> String:
   match value: case None{}: "" case Some{shortcut}: Runner.shortcutPath(shortcut)
 def duplicateShortcuts() -> IO(Unit):
   do IO<Unit>:
-    +runner : Runner.ExtensionRunner <- loaded([extension("first","ctrl+shift+x"),extension("last","CTRL+SHIFT+X")])
+    first : T.InlineExtension <- extension("first","ctrl+shift+x")
+    last : T.InlineExtension <- extension("last","CTRL+SHIFT+X")
+    +runner : Runner.ExtensionRunner <- loaded([first,last])
     selected : R.Record<T.ExtensionShortcut> <- Runner.getShortcuts(runner,R.new(List<&2,K.KeyId>))
     +warnings : List<&2,D.ResourceDiagnostic> <- Runner.getShortcutDiagnostics(runner)
     check(String.eq(winner(R.get(T.ExtensionShortcut,selected,Runner.shortcutName("ctrl+shift+x"))),"<inline:last>") && String.contains(warningText(warnings),"registered by both"),"warns when two extensions register same shortcut")

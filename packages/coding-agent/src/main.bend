@@ -636,20 +636,23 @@ def discoveredExtensionPaths(resolved: Maybe<&2, PackageManager.ResolvedPaths>) 
   match resolved:
     case None{}: Nil{}
     case Some{PackageManager.ResolvedPaths{extensions, _, _, _}}: enabledExtensionPaths(extensions)
-def chosenExtensions(parsed: Args.Args, settings: Settings.SettingsManager, +resolved: Maybe<&2, PackageManager.ResolvedPaths>, cwd: String) -> Runtime.ExtensionLoadout:
+def chosenExtensions(parsed: Args.Args, settings: Settings.SettingsManager, +resolved: Maybe<&2, PackageManager.ResolvedPaths>, cwd: String) -> IO(Runtime.ExtensionLoadout):
   match parsed:
     case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, extensions, noExtensions, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       +explicit = Maybe.default(&2, List<&2, String>, extensions, Nil{})
       +configured = Bool.pick(List<&2, String>, Maybe.default(&2, Bool, noExtensions, False{}), Nil{}, List.append(&2, String, literalExtensionNames(Settings.getExtensionPaths(settings)), discoveredExtensionPaths(resolved)))
       +names = uniqueExtensionNames(List.append(&2, String, explicit, configured), Nil{}, cwd)
-      Runtime.ExtensionLoadout{List.append(&1, ExtensionTypes.InlineExtension, LinkedExtensions.builtInExtensions(), LinkedExtensions.selected(names)), LinkedExtensions.unlinked(names), resolved}
+      do IO<Runtime.ExtensionLoadout>:
+        builtins : List<&2, ExtensionTypes.InlineExtension> <- LinkedExtensions.builtInExtensions()
+        selected : List<&2, ExtensionTypes.InlineExtension> <- LinkedExtensions.selected(names)
+        return Runtime.ExtensionLoadout{List.append(&2, ExtensionTypes.InlineExtension, builtins, selected), LinkedExtensions.unlinked(names), resolved}
 def resolvedLoadout(parsed: Args.Args, +settings: Settings.SettingsManager, +cwd: String, +agentDir: String, environment: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Runtime.ExtensionLoadout):
   match environment:
-    case Fail{_}: IO.pure(Runtime.ExtensionLoadout, chosenExtensions(parsed, settings, None{}, cwd))
+    case Fail{_}: chosenExtensions(parsed, settings, None{}, cwd)
     case Done{paths}:
       do IO<Runtime.ExtensionLoadout>:
         resolved : PackageManager.ResolvedPaths <- PackageManager.resolve(paths, settings, cwd, agentDir)
-        return chosenExtensions(parsed, settings, Some{resolved}, cwd)
+        chosenExtensions(parsed, settings, Some{resolved}, cwd)
 def extensionLoadout(parsed: Args.Args, settings: Settings.SettingsManager, cwd: String, agentDir: String) -> IO(Runtime.ExtensionLoadout):
   do IO<Runtime.ExtensionLoadout>:
     environment : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(Runtime.urlContext())

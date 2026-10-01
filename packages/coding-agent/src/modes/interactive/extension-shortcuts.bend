@@ -16,7 +16,7 @@ import ../../core/skills.bend as Skills
 # actions read the live session through the runner's existing bindings.
 type Shortcut is Data: Shortcut{key: Keys.KeyId,handler: T.ShortcutHandler(),context: Ctx.ExtensionContext}
 type State is Data: State{active: Bool,shortcuts: List<&2,Shortcut>}
-type Host is Data: Host{state: R.Ref<State>,input: C.Callback<String,Bool>,bindings: R.Ref<Bindings.KeybindingsManager>,header: Maybe<&2,Header.Handle>}
+type Host is Data: Host{state: R.Ref<State>,input: C.Callback<String,Bool>,bindings: R.Ref<Bindings.KeybindingsManager>,header: Maybe<&2,Header.Handle>,observer: R.Ref<Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>>>}
 type Owner is Type: Owner{host: Host}
 type Input is Data: Input{state: R.Ref<State>,keyboard: Keys.Context,transcript: Transcript.Handle,redraw: R.Ref<Maybe<&2,C.Callback<Unit,Unit>>>}
 type Task is Data: Task{shortcut: Shortcut,state: R.Ref<State>,transcript: Transcript.Handle,redraw: R.Ref<Maybe<&2,C.Callback<Unit,Unit>>>}
@@ -44,13 +44,25 @@ def publish(header: Maybe<&2,Header.Handle>,issues: List<&2,Header.ExtensionIssu
   match header:
     case None{}: IO.pure(Unit,Unit{})
     case Some{header}: Header.setExtensionIssues(header,issues)
+def notifyRunner(observer: Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>>,runner: Maybe<&2,Runner.ExtensionRunner>) -> IO(Unit):
+  match observer:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{callback}: C.call(Maybe<&2,Runner.ExtensionRunner>,Unit,callback,runner)
+def runnerChanged(reference: R.Ref<Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>>>,runner: Maybe<&2,Runner.ExtensionRunner>) -> IO(Unit):
+  do IO<Unit>:
+    observer : Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>> <- R.read(Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>>,reference)
+    notifyRunner(observer,runner)
+def setRunnerObserver(host: Host,callback: Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>>) -> IO(Unit):
+  match host:
+    case Host{_,_,_,_,observer}: R.write(Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>>,observer,callback)
 def bind(host: Host,runner: Maybe<&2,Runner.ExtensionRunner>) -> IO(Unit):
   match host runner:
-    case Host{state,_,_,header} None{}:
+    case Host{state,_,_,header,observer} None{}:
       do IO<Unit>:
         R.write(State,state,State{True{},Nil{}})
         publish(header,Nil{})
-    case Host{state,_,bindings,header} Some{+runner}:
+        runnerChanged(observer,None{})
+    case Host{state,_,bindings,header,observer} Some{+runner}:
       do IO<Unit>:
         config : Bindings.KeybindingsManager <- R.read(Bindings.KeybindingsManager,bindings)
         shortcuts : Record.Record<T.ExtensionShortcut> <- Runner.getShortcuts(runner,Bindings.getResolvedBindings(config))
@@ -58,6 +70,7 @@ def bind(host: Host,runner: Maybe<&2,Runner.ExtensionRunner>) -> IO(Unit):
         diagnostics : List<&2,Diagnostics.ResourceDiagnostic> <- Runner.getShortcutDiagnostics(runner)
         extensions : List<&2,T.Extension> <- Runner.extensions(runner)
         publish(header,issues(diagnostics,extensions))
+        runnerChanged(observer,Some{runner})
 def matchesShortcut(shortcut: Shortcut,keyboard: Keys.Context,data: String) -> Bool:
   match shortcut: case Shortcut{key,_,_}: Keys.matchesKey(keyboard,data,key)
 def matching(values: List<&2,Shortcut>,+keyboard: Keys.Context,+data: String) -> Maybe<&2,Shortcut>:
@@ -115,17 +128,19 @@ def create(+bindings: R.Ref<Bindings.KeybindingsManager>,keyboard: Keys.Context,
   do IO<Owner>:
     +state : R.Ref<State> <- R.new(State,State{True{},Nil{}})
     callback : C.Callback<String,Bool> <- C.create(~Input,~String,~Bool,~input,Input{state,keyboard,transcript,redraw})
-    return Owner{Host{state,callback,bindings,header}}
+    observer : R.Ref<Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>>> <- R.new(Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>>,None{})
+    return Owner{Host{state,callback,bindings,header,observer}}
 def borrow(owner: Owner) -> Owner & Host:
   match owner: case Owner{+host}: (Owner{host},host)
 def inputCallback(host: Host) -> C.Callback<String,Bool>:
-  match host: case Host{_,input,_,_}: input
+  match host: case Host{_,input,_,_,_}: input
 def clear(host: Host) -> IO(Unit):
-  match host: case Host{state,_,_,_}: R.write(State,state,State{False{},Nil{}})
+  match host: case Host{state,_,_,_,_}: R.write(State,state,State{False{},Nil{}})
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Host{state,input,_,_}}:
+    case Owner{Host{state,input,_,_,observer}}:
       do IO<Unit>:
         C.dispose(String,Bool,input)
+        callback : Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>> <- R.dispose(Maybe<&2,C.Callback<Maybe<&2,Runner.ExtensionRunner>,Unit>>,observer)
         old : State <- R.dispose(State,state)
         return Unit{}

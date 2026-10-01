@@ -536,7 +536,7 @@ def actionSwitch(env: ActionEnv,request: Ctx.SwitchSessionRequest) -> IO(Ctx.Ses
       IO.bind(Result<&2,&2,String,Ctx.SessionChange>,Ctx.SessionChange,Callback.call(String,Result<&2,&2,String,Ctx.SessionChange>,switching,path),result => IO.pure(Ctx.SessionChange,changed(result)))
 def reloaded(result: Result<&2,&2,String,Unit>) -> IO(Unit): IO.pure(Unit,Unit{})
 def actionReload(env: ActionEnv,unit: Unit) -> IO(Unit):
-  IO.bind(Session.AgentSession,Unit,currentOf(env),session => IO.bind(Result<&2,&2,String,Unit>,Unit,Session.reload(session),reloaded))
+  IO.bind(Session.AgentSession,Unit,currentOf(env),session => IO.bind(Result<&2,&2,String,Unit>,Unit,Session.reload(session,None{}),reloaded))
 def createActions(+env: ActionEnv) -> IO(Ctx.ExtensionCommandContextActions):
   do IO<Ctx.ExtensionCommandContextActions>:
     wait : Callback.Callback<Unit,Unit> <- Callback.create(~ActionEnv,~Unit,~Unit,~actionWait,env)
@@ -656,6 +656,17 @@ def answered(dialogs: Ref.Ref<Dialogs>,decoded: Types.Decoded(Types.RpcExtension
         found : Maybe<&2,Dialog> <- Ref.modify(Dialogs,Maybe<&2,Dialog>,dialogs,value => takeDialog(value,Types.uiResponseId(response)))
         answerDialog(found,response)
 
+def initialExtensionStart(+session: Session.AgentSession) -> IO(Unit):
+  Session.bindExtensions(session,Session.initialStartEvent(session))
+# The input reader must be able to answer a startup extension's UI request.
+# Disposal closes dialogs and joins these tasks before releasing callbacks.
+def startInitialExtensions(extensions: Extensions,session: Session.AgentSession) -> IO(Unit):
+  match extensions:
+    case Extensions{_,_,_,_,_,tasks,_,_}:
+      do IO<Unit>:
+        task : Chan(Unit) <- IO.fork(Unit,initialExtensionStart(session))
+        Ref.modify(List<&2,Chan(Unit)>,Unit,tasks,previous => (task <> previous,Unit{}))
+
 def startWithTheme(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,theme: Maybe<&2,Ref.Ref<Theme.Theme>>,+host: Host) -> IO(Owner & Handle):
   do IO<Owner & Handle>:
     +current : Ref.Ref<Session.AgentSession> <- Ref.new(Session.AgentSession,session)
@@ -668,6 +679,7 @@ def startWithTheme(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe
     Session.subscribe(session,listener)
     +handle : Handle <- IO.pure(Handle,Handle{current,sink,buffer,busy,jobs,assetsDir,host,listener,extensions})
     task : Chan(Unit) <- IO.fork(Unit,worker(handle,Check{}))
+    startInitialExtensions(extensions,session)
     return (Owner{handle,task},handle)
 def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,+host: Host) -> IO(Owner & Handle):
   startWithTheme(session,sink,assetsDir,None{},host)

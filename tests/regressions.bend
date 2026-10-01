@@ -684,7 +684,7 @@ def reportSettings(+label: String, +manager: Settings.SettingsManager) -> IO(Uni
 
 def reloadSettings(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
-    result : Result<&2, &2, String, Unit> <- Session.reload(session)
+    result : Result<&2, &2, String, Unit> <- Session.reload(session, None{})
     H.reportOutcome("reload", result)
     manager : Settings.SettingsManager <- Session.getSettings(session)
     reportSettings("settings", manager)
@@ -1038,15 +1038,18 @@ def toolExtension(ask: Bool, static: Bool, +api: Ext.ExtensionAPI) -> IO(Result<
     subscribed : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, Ext.OnSessionStart{handler})
     return Result.map(&2, &2, String, Loader.Unsubscribe, Unit, done => Unit{}, subscribed)
 
+def toolExtensionFor(kind: String, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  toolExtension(String.eq(kind, "extensions"), String.eq(kind, "static"), api)
+
 def toolRunner(+extensions: String, +cwd: String) -> IO(Maybe<&2, Runner.ExtensionRunner>):
   match extensions:
     case "none": IO.pure(Maybe<&2, Runner.ExtensionRunner>, None{})
     case other:
-      +ask = String.eq(other, "extensions")
-      +static = String.eq(other, "static")
       do IO<Maybe<&2, Runner.ExtensionRunner>>:
         +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
-        errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.InlineExtension{"tools", api => toolExtension(ask, static, api), False{}}])
+        +factory : Ext.ExtensionFactory() <- C.create(~String, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~toolExtensionFor, other)
+        errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.InlineExtension{"tools", factory, False{}}])
+        C.dispose(Ext.ExtensionAPI, Result<&2, &2, String, Unit>, factory)
         models : Models.ModelRuntime <- ModelFixture.create(Nil{})
         runner : Runner.ExtensionRunner <- Runner.create(runtime, cwd, models)
         return Some{runner}
@@ -1086,7 +1089,7 @@ def toolsWith(+dir: String, +agentDir: String, selection: Runtime.ToolSelection,
     +execute : Tools.Execute() <- C.create(~Unit, ~Tools.Input(), ~Tools.Output(), ~stubExecute, Unit{})
     +options : Runtime.CreateOptions = toolOptions(dir, agentDir, selection, settings)
     +runner : Maybe<&2, Runner.ExtensionRunner> <- toolRunner(extensions, dir)
-    +loadout : Runtime.Loadout = toolLoadout(Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, options, "/pi", None{}}, Runtime.toolSetupOf(options), execute, runner)
+    +loadout : Runtime.Loadout = toolLoadout(Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, options, "/pi", None{}, None{}}, Runtime.toolSetupOf(options), execute, runner)
     uuids : Uuid.Generator <- Uuid.generator()
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- H.requireSession(created)
@@ -1349,12 +1352,28 @@ def queuedThresholdScenario(+dir: String, agentDir: String) -> IO(Unit):
 # ones as <inline:name> (hidden kept).
 def noopExtension(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>): IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
 
-def namingCase(+kind: String) -> List<&1, Ext.InlineExtension>:
+def namingCase(+kind: String) -> IO(List<&2, Ext.InlineExtension>):
   match kind:
-    case "bare": [Ext.BareExtension{noopExtension}, Ext.BareExtension{noopExtension}]
-    case "named": [Ext.InlineExtension{"my-provider", noopExtension, False{}}, Ext.InlineExtension{"my-commands", noopExtension, False{}}]
-    case "hidden": [Ext.InlineExtension{"built-in", noopExtension, True{}}]
-    case _: [Ext.BareExtension{noopExtension}, Ext.InlineExtension{"named-ext", noopExtension, False{}}, Ext.BareExtension{noopExtension}]
+    case "bare":
+      do IO<List<&2, Ext.InlineExtension>>:
+        first : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => noopExtension(api)), Unit{})
+        second : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => noopExtension(api)), Unit{})
+        return [Ext.BareExtension{first}, Ext.BareExtension{second}]
+    case "named":
+      do IO<List<&2, Ext.InlineExtension>>:
+        first : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => noopExtension(api)), Unit{})
+        second : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => noopExtension(api)), Unit{})
+        return [Ext.InlineExtension{"my-provider", first, False{}}, Ext.InlineExtension{"my-commands", second, False{}}]
+    case "hidden":
+      do IO<List<&2, Ext.InlineExtension>>:
+        +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => noopExtension(api)), Unit{})
+        return [Ext.InlineExtension{"built-in", factory, True{}}]
+    case _:
+      do IO<List<&2, Ext.InlineExtension>>:
+        first : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => noopExtension(api)), Unit{})
+        second : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => noopExtension(api)), Unit{})
+        third : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => noopExtension(api)), Unit{})
+        return [Ext.BareExtension{first}, Ext.InlineExtension{"named-ext", second, False{}}, Ext.BareExtension{third}]
 
 def extensionShapes(extensions: List<&2, Ext.Extension>) -> List<&2, String>:
   match extensions:
@@ -1364,7 +1383,9 @@ def extensionShapes(extensions: List<&2, Ext.Extension>) -> List<&2, String>:
 def inlineNamingScenario(+kind: String) -> IO(Unit):
   do IO<Unit>:
     +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, namingCase(kind))
+    +factories : List<&2, Ext.InlineExtension> <- namingCase(kind)
+    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, factories)
+    Loader.disposeInlineExtensions(factories)
     state : Ext.ExtensionRuntimeState <- R.read(Ext.ExtensionRuntimeState, runtime)
     IO.print("{\"type\":\"extensions\",\"extensions\":[" ++ String.join(extensionShapes(Loader.extensionsOf(state)), ",") ++ "]}")
 
@@ -1418,10 +1439,14 @@ def inputExtension(kind: String, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, St
     subscribed : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, Ext.OnInput{handler})
     return Result.map(&2, &2, String, Loader.Unsubscribe, Unit, done => Unit{}, subscribed)
 
-def inputExtensions(kinds: List<String>) -> List<&1, Ext.InlineExtension>:
+def inputExtensions(kinds: List<String>) -> IO(List<&2, Ext.InlineExtension>):
   match kinds:
-    case Nil{}: Nil{}
-    case kind <> rest: Ext.BareExtension{api => inputExtension(kind, api)} <> inputExtensions(rest)
+    case Nil{}: IO.pure(List<&2, Ext.InlineExtension>, Nil{})
+    case kind <> rest:
+      do IO<List<&2, Ext.InlineExtension>>:
+        +factory : Ext.ExtensionFactory() <- C.create(~String, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(environment => api => inputExtension(environment, api)), kind)
+        others : List<&2, Ext.InlineExtension> <- inputExtensions(rest)
+        return Ext.BareExtension{factory} <> others
 
 def imagesJson(images: List<&2, Ai.ImageContent>) -> List<&2, String>:
   match images:
@@ -1469,7 +1494,9 @@ def emitMode(+runner: Runner.ExtensionRunner, mode: String) -> IO(Unit):
 def inputEventScenario(+cwd: String, +mode: String, kinds: List<String>) -> IO(Unit):
   do IO<Unit>:
     +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, inputExtensions(kinds))
+    +factories : List<&2, Ext.InlineExtension> <- inputExtensions(kinds)
+    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, factories)
+    Loader.disposeInlineExtensions(factories)
     models : Models.ModelRuntime <- ModelFixture.create(Nil{})
     +runner : Runner.ExtensionRunner <- Runner.create(runtime, cwd, models)
     listener : C.Callback<Ext.ExtensionError, Unit> <- C.create(~Unit, ~Ext.ExtensionError, ~Unit, ~printError, Unit{})
@@ -1489,7 +1516,9 @@ def behaviorNamed(+name: String) -> Maybe<&2, Ext.UserDelivery>:
 def exampleInputScenario(+cwd: String, +text: String, +behavior: String) -> IO(Unit):
   do IO<Unit>:
     +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.BareExtension{InputTransformStreaming.inputTransformStreaming}])
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => InputTransformStreaming.inputTransformStreaming(api)), Unit{})
+    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.BareExtension{factory}])
+    C.dispose(Ext.ExtensionAPI, Result<&2, &2, String, Unit>, factory)
     models : Models.ModelRuntime <- ModelFixture.create(Nil{})
     +runner : Runner.ExtensionRunner <- Runner.create(runtime, cwd, models)
     emitted(runner, text, Nil{}, Ext.InteractiveSource{}, behaviorNamed(behavior))
@@ -1525,7 +1554,9 @@ def recordingActions() -> IO(Ext.ExtensionActions):
 def gitMergeScenario(+cwd: String) -> IO(Unit):
   do IO<Unit>:
     +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
-    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.BareExtension{GitMergeAndResolve.gitMergeAndResolve}])
+    +factory : Ext.ExtensionFactory() <- C.create(~Unit, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(_ => api => GitMergeAndResolve.gitMergeAndResolve(api)), Unit{})
+    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.BareExtension{factory}])
+    C.dispose(Ext.ExtensionAPI, Result<&2, &2, String, Unit>, factory)
     actions : Ext.ExtensionActions <- recordingActions()
     Loader.bindActions(runtime, Some{actions})
     models : Models.ModelRuntime <- ModelFixture.create(Nil{})
