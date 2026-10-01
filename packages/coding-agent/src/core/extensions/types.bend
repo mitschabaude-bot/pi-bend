@@ -4,6 +4,7 @@ import ../../../../ai/src/types.bend as Ai
 import ../../../../agent/src/types.bend as Agent
 import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/ref.bend as R
+import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/schema-value.bend as V
 import ../../../../tui/src/autocomplete.bend as AC
 import ../messages.bend as Messages
@@ -305,6 +306,12 @@ type ToolResultEvent is Data:
 type ToolResultEventResult is Data:
   ToolResultEventResult{content: Maybe<&2, List<&2, Ai.TextImageContent>>, details: Maybe<&2, Tools.ToolDetails>, isError: Maybe<&2, Bool>, usage: Maybe<&2, Ai.Usage>}
 
+type BeforeProviderRequestEvent is Data:
+  BeforeProviderRequestEvent{payload: Ai.JsonValue}
+
+type AfterProviderResponseEvent is Data:
+  AfterProviderResponseEvent{status: F64, headers: Record.Record<String>}
+
 # Native handlers return updated headers instead of mutating the event.
 type BeforeProviderHeadersEvent is Data:
   BeforeProviderHeadersEvent{headers: Ai.ProviderHeaders()}
@@ -337,6 +344,8 @@ type EventHandler is Data:
   OnSessionCompact{handler: ExtensionHandler(SessionCompactEvent, Unit)}
   OnSessionCompactFailed{handler: ExtensionHandler(SessionCompactFailedEvent, Unit)}
   OnTurnEnd{handler: ExtensionHandler(TurnEndEvent, BoundaryResult)}
+  OnBeforeProviderRequest{handler: ExtensionHandler(BeforeProviderRequestEvent, Ai.JsonValue)}
+  OnAfterProviderResponse{handler: ExtensionHandler(AfterProviderResponseEvent, Unit)}
   OnBeforeProviderHeaders{handler: ExtensionHandler(BeforeProviderHeadersEvent, Ai.ProviderHeaders())}
   OnContext{handler: ExtensionHandler(ContextEvent, ContextEventResult)}
   OnContextWithSystem{handler: ExtensionHandler(ContextWithSystemEvent, ContextEventResult)}
@@ -352,6 +361,7 @@ type EventHandler is Data:
 # Events dispatched without a result (upstream emit). Events with results
 # have their own emitters in the runner.
 type ExtensionEvent is Data:
+  AfterProviderResponse{event: AfterProviderResponseEvent}
   AgentStart{event: AgentStartEvent}
   AgentEnd{event: AgentEndEvent}
   AgentSettled{event: AgentSettledEvent}
@@ -387,6 +397,8 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnSessionCompact{_}: "session_compact"
     case OnSessionCompactFailed{_}: "session_compact_failed"
     case OnTurnEnd{_}: "turn_end"
+    case OnBeforeProviderRequest{_}: "before_provider_request"
+    case OnAfterProviderResponse{_}: "after_provider_response"
     case OnBeforeProviderHeaders{_}: "before_provider_headers"
     case OnContext{_}: "context"
     case OnContextWithSystem{_}: "context_with_system"
@@ -401,6 +413,7 @@ def handlerEventType(handler: EventHandler) -> String:
 
 def eventType(event: ExtensionEvent) -> String:
   match event:
+    case AfterProviderResponse{_}: "after_provider_response"
     case AgentStart{_}: "agent_start"
     case AgentEnd{_}: "agent_end"
     case AgentSettled{_}: "agent_settled"

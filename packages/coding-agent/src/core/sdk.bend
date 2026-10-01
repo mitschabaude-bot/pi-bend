@@ -382,9 +382,9 @@ type Assembly is Data:
   Assembly{environment: Paths.Environment, cwd: String, agentDir: String, packageDir: String, settings: Settings.SettingsManager, options: CreateAgentSessionOptions}
 
 def extensionCurrent(owner: Runtime.ExtensionOwner) -> Ref.Ref<ExtensionRunner.ExtensionRunner>:
-  match owner: case Runtime.ExtensionOwner{current,_,_}: current
+  match owner: case Runtime.ExtensionOwner{current,_,_,_}: current
 def extensionContext(owner: Runtime.ExtensionOwner) -> ToolContext.ContextSource():
-  match owner: case Runtime.ExtensionOwner{_,_,context}: context
+  match owner: case Runtime.ExtensionOwner{_,_,context,_}: context
 def failedAgent(transport: Runtime.Transport, choice: ModelsChoice, loader: OwnedLoader, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Runtime.Stream(), registry: StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()), validator: Loop.Validator(Runtime.Error()), keys: C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>>, converter: Runtime.Converter(), owner: Runtime.ExtensionOwner, message: String) -> IO(Outcome()):
   match choice:
     case ModelsChoice{models, owned}:
@@ -436,7 +436,7 @@ def withResources(+assembly: Assembly, transport: Runtime.Transport, choice: Mod
         +validator : Loop.Validator(Runtime.Error()) <- Loop.createPlain(~Runtime.Error(), ~Runtime.validationError)
         +keys : C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>> <- C.create(~Runtime.KeySource, ~String, ~Result<&2, &2, Runtime.Error(), Maybe<&2, String>>, ~Runtime.resolveKey, Runtime.KeySource{models, None{}})
         +converter : Runtime.Converter() <- Runtime.createConverter(Settings.getBlockImages(settings))
-        agent : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~V.Value, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, Runtime.agentOptions(selectionModel(selection), thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
+        agent : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~V.Value, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, Runtime.agentOptions(selectionModel(selection), thinking, stream, keys, converter, seed, settings, Some{Runtime.providerHooksOf(owner)}), registry, validator, Tools.emptyDetails())
         withAgentCreated(Assembly{environment, cwd, agentDir, packageDir, settings, sdkOptions}, Runtime.Transport{authorizer, network, fetch, codexSessions}, ModelsChoice{models, withApiStream(owned, apiStream)}, LoaderChoice{loader, ownedLoader}, extensions, session, seed, selection, thinking, options, prepared, created, stream, registry, validator, keys, converter, owner, agent)
 
 def failedSession(transport: Runtime.Transport, choice: ModelsChoice, message: String) -> IO(Outcome()):

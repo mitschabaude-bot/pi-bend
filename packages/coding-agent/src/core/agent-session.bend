@@ -4894,7 +4894,7 @@ def restoreRunner(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>,snapshot: Ma
     case _ _: IO.pure(Unit,Unit{})
 def publishRunner(source: Runtime.LoadoutSource,runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(Unit):
   match source runner:
-    case Runtime.LoadoutSource{_,_,_,_,Some{Runtime.ExtensionOwner{current,_,_}}} Some{found}: R.write(ExtensionRunner.ExtensionRunner,current,found)
+    case Runtime.LoadoutSource{_,_,_,_,Some{Runtime.ExtensionOwner{current,_,_,_}}} Some{found}: R.write(ExtensionRunner.ExtensionRunner,current,found)
     case _ _: IO.pure(Unit,Unit{})
 def sessionBinding(session: AgentSession) -> ExtensionBinding:
   match session:

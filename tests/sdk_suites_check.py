@@ -55,6 +55,19 @@ SUITES = {
         'schedules cache warming after a completed session request',
         'waits for the next request instead of restoring cache warming',
     ], True, set()),
+    'sdk-provider-events': ([
+        'payload handlers replace in order, retain None, and continue after failure',
+        'payload failure emits exactly one extension error',
+        'response handler keeps status and headers after an earlier handler fails',
+        'response failure emits exactly one extension error',
+        'session reload creates a new extension generation',
+        'reusable factory runs once on reload',
+        'payload handlers replace in order, retain None, and continue after failure',
+        'payload failure emits exactly one extension error',
+        'response handler keeps status and headers after an earlier handler fails',
+        'response failure emits exactly one extension error',
+        'SDK provider hooks follow the reloaded runner and dispose',
+    ], True, set()),
 }
 
 

@@ -496,8 +496,17 @@ type Selection is Data:
 # `resourceLoader` is the injected ResourceLoader of an SDK session (upstream
 # AgentSession.resourceLoader); without one the resources come from the
 # options (the CLI path).
+type ProviderHooks is Data:
+  ProviderHooks{onPayload: Ai.PayloadCallback(Ai.JsonValue, Models.Model(), Error()), onResponse: Ai.ResponseCallback(Models.Model(), Error())}
+
+def payloadHook(hooks: ProviderHooks) -> Ai.PayloadCallback(Ai.JsonValue, Models.Model(), Error()):
+  match hooks: case ProviderHooks{payload, _}: payload
+
+def responseHook(hooks: ProviderHooks) -> Ai.ResponseCallback(Models.Model(), Error()):
+  match hooks: case ProviderHooks{_, response}: response
+
 type ExtensionOwner is Data:
-  ExtensionOwner{current: Ref.Ref<ExtensionRunner.ExtensionRunner>, factories: List<&2, ExtensionTypes.InlineExtension>, context: ToolContext.ContextSource()}
+  ExtensionOwner{current: Ref.Ref<ExtensionRunner.ExtensionRunner>, factories: List<&2, ExtensionTypes.InlineExtension>, context: ToolContext.ContextSource(), providerHooks: ProviderHooks}
 type LoadoutSource is Data: LoadoutSource{environment: Paths.Environment, options: CreateOptions, packageDir: String, resourceLoader: Maybe<&2, Resources.ResourceLoader>, extensions: Maybe<&2, ExtensionOwner>}
 
 # `source` rebuilds the prompt resources on reload (upstream AgentSession.reload).
@@ -934,8 +943,8 @@ def seedSessionId(seed: SessionSeed) -> String:
 # upstream createAgentSession's Agent options: no prompt or tools yet (the
 # session declares its loadout with each prompt), the session id, the settings'
 # steering/follow-up modes, transport, thinking budgets and retry delay.
-def agentOptions(model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, stream: Stream(), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), +seed: SessionSeed, +settings: Settings.SettingsManager) -> Agent.AgentOptions<V.Value, Details(), Custom(), Error(), Unit>:
-  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, model, Some{thinking}, Some{Nil{}}, seededMessages(seed)}}, Some{converter}, None{}, Some{stream}, Some{keys}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Settings.getSteeringMode(settings)}, Some{Settings.getFollowUpMode(settings)}, Some{seedSessionId(seed)}, thinkingBudgets(Settings.getThinkingBudgets(settings)), Some{Settings.getTransport(settings)}, Some{maxRetryDelay(Settings.getProviderRetrySettings(settings))}, None{}}
+def agentOptions(model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, stream: Stream(), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), +seed: SessionSeed, +settings: Settings.SettingsManager, +hooks: Maybe<&2, ProviderHooks>) -> Agent.AgentOptions<V.Value, Details(), Custom(), Error(), Unit>:
+  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, model, Some{thinking}, Some{Nil{}}, seededMessages(seed)}}, Some{converter}, None{}, Some{stream}, Some{keys}, Maybe.map(&2, ProviderHooks, Ai.PayloadCallback(Ai.JsonValue, Models.Model(), Error()), payloadHook, hooks), Maybe.map(&2, ProviderHooks, Ai.ResponseCallback(Models.Model(), Error()), responseHook, hooks), None{}, None{}, None{}, None{}, None{}, None{}, Some{Settings.getSteeringMode(settings)}, Some{Settings.getFollowUpMode(settings)}, Some{seedSessionId(seed)}, thinkingBudgets(Settings.getThinkingBudgets(settings)), Some{Settings.getTransport(settings)}, Some{maxRetryDelay(Settings.getProviderRetrySettings(settings))}, None{}}
 
 # The tools download fd and rg through the agent's own fetch.
 def environment(paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), queue: Queue.Queue, context: ToolContext.ContextSource()) -> Tools.Environment:
@@ -961,14 +970,40 @@ def currentToolContext(current: Ref.Ref<ExtensionRunner.ExtensionRunner>,unit: U
   do IO<Maybe<&2,ToolContext.ContextView>>:
     runner : ExtensionRunner.ExtensionRunner <- Ref.read(ExtensionRunner.ExtensionRunner,current)
     ToolContext.current(ExtensionRunner.toolContext(runner))
+def providerPayloadWith(enabled: Bool, runner: ExtensionRunner.ExtensionRunner, payload: Ai.JsonValue) -> IO(Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>):
+  match enabled:
+    case False{}: IO.pure(Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>, Done{None{}})
+    case True{}:
+      do IO<Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>>:
+        updated : Ai.JsonValue <- ExtensionRunner.emitBeforeProviderRequest(runner, payload)
+        return Done{Some{updated}}
+
+def providerPayload(current: Ref.Ref<ExtensionRunner.ExtensionRunner>, input: Ai.PayloadInput<Ai.JsonValue, Models.Model()>) -> IO(Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>):
+  match input:
+    case Ai.PayloadInput{payload, _}:
+      do IO<Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>>:
+        +runner : ExtensionRunner.ExtensionRunner <- Ref.read(ExtensionRunner.ExtensionRunner, current)
+        enabled : Bool <- ExtensionRunner.hasHandlers(runner, "before_provider_request")
+        providerPayloadWith(enabled, runner, payload)
+
+def providerResponse(current: Ref.Ref<ExtensionRunner.ExtensionRunner>, input: Ai.ResponseInput<Models.Model()>) -> IO(Result<&2, &2, Error(), Unit>):
+  match input:
+    case Ai.ResponseInput{Ai.ProviderResponse{status, headers}, _}:
+      do IO<Result<&2, &2, Error(), Unit>>:
+        runner : ExtensionRunner.ExtensionRunner <- Ref.read(ExtensionRunner.ExtensionRunner, current)
+        ExtensionRunner.emit(runner, ExtensionTypes.AfterProviderResponse{ExtensionTypes.AfterProviderResponseEvent{status, headers}})
+        return Done{Unit{}}
+
 def createExtensionOwner(runner: ExtensionRunner.ExtensionRunner,factories: List<&2,ExtensionTypes.InlineExtension>) -> IO(ExtensionOwner):
   do IO<ExtensionOwner>:
     +current : Ref.Ref<ExtensionRunner.ExtensionRunner> <- Ref.new(ExtensionRunner.ExtensionRunner,runner)
     reader : C.Callback<Unit,Maybe<&2,ToolContext.ContextView>> <- C.create(~Ref.Ref<ExtensionRunner.ExtensionRunner>,~Unit,~Maybe<&2,ToolContext.ContextView>,~currentToolContext,current)
-    return ExtensionOwner{current,factories,Some{reader}}
+    payload : Ai.PayloadCallback(Ai.JsonValue, Models.Model(), Error()) <- C.create(~Ref.Ref<ExtensionRunner.ExtensionRunner>, ~Ai.PayloadInput<Ai.JsonValue, Models.Model()>, ~Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>, ~providerPayload, current)
+    response : Ai.ResponseCallback(Models.Model(), Error()) <- C.create(~Ref.Ref<ExtensionRunner.ExtensionRunner>, ~Ai.ResponseInput<Models.Model()>, ~Result<&2, &2, Error(), Unit>, ~providerResponse, current)
+    return ExtensionOwner{current,factories,Some{reader},ProviderHooks{payload,response}}
 def toolContextFrom(source: LoadoutSource,runner: ExtensionRunner.ExtensionRunner) -> ToolContext.ContextSource():
   match source:
-    case LoadoutSource{_,_,_,_,Some{ExtensionOwner{_,_,context}}}: context
+    case LoadoutSource{_,_,_,_,Some{ExtensionOwner{_,_,context,_}}}: context
     case _: ExtensionRunner.toolContext(runner)
 def disposeContext(context: ToolContext.ContextSource()) -> IO(Unit):
   match context:
@@ -976,8 +1011,10 @@ def disposeContext(context: ToolContext.ContextSource()) -> IO(Unit):
     case Some{reader}: C.dispose(Unit,Maybe<&2,ToolContext.ContextView>,reader)
 def disposeExtensionOwner(owner: Maybe<&2, ExtensionOwner>, runner: Maybe<&2, ExtensionRunner.ExtensionRunner>) -> IO(Unit):
   match owner runner:
-    case Some{ExtensionOwner{current, factories, context}} _:
+    case Some{ExtensionOwner{current, factories, context, ProviderHooks{payload, response}}} _:
       do IO<Unit>:
+        C.dispose(Ai.PayloadInput<Ai.JsonValue, Models.Model()>, Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>, payload)
+        C.dispose(Ai.ResponseInput<Models.Model()>, Result<&2, &2, Error(), Unit>, response)
         disposeContext(context)
         live : ExtensionRunner.ExtensionRunner <- Ref.dispose(ExtensionRunner.ExtensionRunner, current)
         ExtensionRunner.dispose(live)
@@ -1039,16 +1076,24 @@ def loadoutFrom(prepared: Prepared, +registry: List<&2, Tools.Tool()>, extension
   match prepared source:
     case Prepared{sections, skills, templates, agentsFiles} LoadoutSource{paths, +options, packageDir, loader, owner}: Loadout{sections, activeTools(registry, activeNamesOf(toolSetupOf(options))), skills, templates, Some{extensions}, agentsFiles, Some{LoadoutSource{paths, options, packageDir, loader, owner}}, registry}
 
-def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(V.Value, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
+def providerHooksOf(owner: ExtensionOwner) -> ProviderHooks:
+  match owner: case ExtensionOwner{_, _, _, hooks}: hooks
+
+def hooksFrom(source: LoadoutSource) -> Maybe<&2, ProviderHooks>:
+  match source:
+    case LoadoutSource{_, _, _, _, Some{owner}}: Some{providerHooksOf(owner)}
+    case _: None{}
+
+def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(V.Value, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, extensions: ExtensionRunner.ExtensionRunner, +source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
   match created:
     case Tuple{queue, Tuple{owners, tools}}:
       do IO<Outcome(AgentRuntime)>:
-        result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~V.Value, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
+        result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~V.Value, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings, hooksFrom(source)), registry, validator, Tools.emptyDetails())
         constructed(transport, storage, storageStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, extensions, source), result)
 
 def runnerRef(owner: Maybe<&2, ExtensionOwner>) -> Maybe<&2, Ref.Ref<ExtensionRunner.ExtensionRunner>>:
   match owner:
-    case Some{ExtensionOwner{current, _, _}}: Some{current}
+    case Some{ExtensionOwner{current, _, _, _}}: Some{current}
     case None{}: None{}
 
 def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, +models: Models.ModelRuntime, +paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, +source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
@@ -1169,7 +1214,7 @@ def acceptedExtensions(+extensions: Extensions,error: Maybe<&2,String>) -> IO(Re
 def rebuildExtensions(source: LoadoutSource,models: Models.ModelRuntime) -> IO(Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>):
   match source:
     case LoadoutSource{_,_,_,_,None{}}: IO.pure(Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>,Done{None{}})
-    case LoadoutSource{_,options,_,None{},Some{ExtensionOwner{_,factories,_}}}:
+    case LoadoutSource{_,options,_,None{},Some{ExtensionOwner{_,factories,_,_}}}:
       do IO<Result<&2,&2,String,Maybe<&2,ExtensionRunner.ExtensionRunner>>>:
         +extensions : Extensions <- loadExtensions(cwdOf(options),models,factories,Nil{})
         acceptedExtensions(extensions,extensionFailure(extensions))

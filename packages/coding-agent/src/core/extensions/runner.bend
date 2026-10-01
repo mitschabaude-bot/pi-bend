@@ -396,6 +396,7 @@ def called(-E: Data, callback: T.ExtensionHandler(E, Unit), event: E, ctx: Ctx.E
 # cannot occur.
 def handled(handler: T.EventHandler, event: T.ExtensionEvent, ctx: Ctx.ExtensionContext) -> IO(Result<&2, &2, String, Unit>):
   match handler event:
+    case T.OnAfterProviderResponse{callback} T.AfterProviderResponse{value}: called(T.AfterProviderResponseEvent, callback, value, ctx)
     case T.OnAgentStart{callback} T.AgentStart{value}: called(T.AgentStartEvent, callback, value, ctx)
     case T.OnAgentEnd{callback} T.AgentEnd{value}: called(T.AgentEndEvent, callback, value, ctx)
     case T.OnAgentSettled{callback} T.AgentSettled{value}: called(T.AgentSettledEvent, callback, value, ctx)
@@ -794,6 +795,31 @@ def emitBoundary(+runner: ExtensionRunner, +base: T.BoundaryBase, +build: Bounda
     dispatches : List<&2, Dispatch> <- snapshot(runner, boundaryType(base))
     final : BoundaryState <- boundaryDispatches(runner, dispatches, base, build, BoundaryState{Nil{}, False{}, initial, True{}})
     return boundaryResult(final)
+
+# Each handler sees the last successful replacement. None leaves it intact.
+def providerRequestStep(+runner: ExtensionRunner, path: String, payload: Ai.JsonValue, result: Result<&2, &2, String, Maybe<&2, Ai.JsonValue>>) -> IO(Ai.JsonValue):
+  match result:
+    case Fail{error}:
+      do IO<Ai.JsonValue>:
+        emitError(runner, T.ExtensionError{path, "before_provider_request", error, None{}})
+        return payload
+    case Done{Some{updated}}: IO.pure(Ai.JsonValue, updated)
+    case Done{None{}}: IO.pure(Ai.JsonValue, payload)
+
+def providerRequestHandlers(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +payload: Ai.JsonValue) -> IO(Ai.JsonValue):
+  match dispatches:
+    case Nil{}: IO.pure(Ai.JsonValue, payload)
+    case Dispatch{path, T.OnBeforeProviderRequest{callback}} <> rest:
+      do IO<Ai.JsonValue>:
+        result : Result<&2, &2, String, Maybe<&2, Ai.JsonValue>> <- C.call(T.HandlerCall<T.BeforeProviderRequestEvent>, Result<&2, &2, String, Maybe<&2, Ai.JsonValue>>, callback, T.HandlerCall{T.BeforeProviderRequestEvent{payload}, createContext(runner)})
+        updated : Ai.JsonValue <- providerRequestStep(runner, path, payload, result)
+        providerRequestHandlers(runner, rest, updated)
+    case _ <> rest: providerRequestHandlers(runner, rest, payload)
+
+def emitBeforeProviderRequest(+runner: ExtensionRunner, payload: Ai.JsonValue) -> IO(Ai.JsonValue):
+  do IO<Ai.JsonValue>:
+    handlers : List<&2, Dispatch> <- snapshot(runner, "before_provider_request")
+    providerRequestHandlers(runner, handlers, payload)
 
 # Provider headers are transformed in registration order. A failed handler
 # reports its error and leaves the last successful headers available to the next.

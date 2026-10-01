@@ -75,7 +75,7 @@ def flagValue(settings: List<&2, Ext.FlagSetting>) -> Bool:
 
 def stableContext(loadout: Runtime.Loadout) -> ToolContext.ContextSource():
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, _, _, _, Some{Runtime.ExtensionOwner{_, _, context}}}}, _}: context
+    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, _, _, _, Some{Runtime.ExtensionOwner{_, _, context, _}}}}, _}: context
     case _: None{}
 
 def present(view: Maybe<&2, ToolContext.ContextView>) -> Bool:
