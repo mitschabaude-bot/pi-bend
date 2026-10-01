@@ -609,6 +609,9 @@ def googleThinking(value: Maybe<&2, V.Value>) -> Maybe<&2, Gemini.GoogleThinking
 def responsesOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Fetch.Fetch(Unit)) -> Responses.OpenAIResponsesOptions<Unit, Unit, Error()>:
   Responses.OpenAIResponsesOptions{Some{signal}, None{}, text(field(options, "apiKey")), Some{fetch}, None{}, None{}, None{}, headersOf(field(options, "headers")), None{}, None{}, None{}, number(field(options, "temperature")), None{}, number(field(options, "maxTokens")), transportOf(text(field(options, "transport"))), retentionOf(text(field(options, "cacheRetention"))), text(field(options, "sessionId")), None{}, None{}, levelOf(text(field(options, "reasoningEffort"))), None{}, tierOf(text(field(options, "serviceTier"))), Maybe.map(&2, V.Value, J(), Convert.toJson, field(options, "toolChoice"))}
 
+def codexOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Fetch.Fetch(Unit)) -> Codex.OpenAICodexResponsesOptions<Unit, Unit, Error()>:
+  Codex.OpenAICodexResponsesOptions{Responses.toStreamOptions(Unit, Unit, Error(), responsesOptions(options, signal, fetch)), Maybe.map(&2, Ai.ThinkingLevel, Ai.ModelThinkingLevel, level => Ai.Thinking{level}, levelOf(text(field(options, "reasoningEffort")))), None{}, tierOf(text(field(options, "serviceTier"))), None{}, Codex.choiceFromJson(Maybe.map(&2, V.Value, J(), Convert.toJson, field(options, "toolChoice")))}
+
 # Opening the stream
 # ------------------
 def render(error: Error()) -> String: Tools.errorMessage(error)
@@ -669,7 +672,7 @@ def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api
         return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), owner))
     case Ai.OpenAICodexResponsesApi{}:
       do IO<Output()>:
-        owner : Responses.Run<Unit, V.Value, Error()> <- Codex.stream(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, configFor(agent), model, context, responsesOptions(options, signal, fetch))
+        owner : Responses.Run<Unit, V.Value, Error()> <- Codex.stream(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, configFor(agent), model, context, codexOptions(options, signal, fetch))
         return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), owner))
     case _:
       do IO<Output()>:

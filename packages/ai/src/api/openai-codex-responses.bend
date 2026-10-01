@@ -1,6 +1,7 @@
 import Base
 import ../types.bend as T
 import ../utils/event-stream.bend as Events
+import ../utils/thinking-levels.bend as Thinking
 import ../utils/headers.bend as ProviderHeaders
 import ../utils/json.bend as Wire
 import ../utils/provider-retry.bend as Retry
@@ -96,6 +97,121 @@ def releaseEvents(-G: Data, events: EventStream(G)) -> IO(Events.AssistantMessag
       do IO<Events.AssistantMessageEventStream(V.Value, G)>:
         wasAnnounced : Bool <- Ref.dispose(Bool, announced)
         return stream
+
+# Raw options remain distinct from simple reasoning preferences. Off represents
+# the wire effort "none"; an absent effort uses the model's off mapping.
+type ReasoningSummary is Data:
+  SummaryAuto{}
+  SummaryConcise{}
+  SummaryDetailed{}
+  SummaryOff{}
+  SummaryOn{}
+
+type TextVerbosity is Data:
+  VerbosityLow{}
+  VerbosityMedium{}
+  VerbosityHigh{}
+
+type ToolChoice is Data:
+  ChoiceAuto{}
+  ChoiceNone{}
+  ChoiceRequired{}
+
+type OpenAICodexResponsesOptions<-Reason: Data, -Telemetry: Data, -E: Data> is Data:
+  OpenAICodexResponsesOptions{base: Responses.StreamOptions(Reason, Telemetry, E), reasoningEffort: Maybe<&2, T.ModelThinkingLevel>, reasoningSummary: Maybe<&2, T.Nullable<ReasoningSummary>>, serviceTier: Maybe<&2, T.Nullable<Responses.ServiceTier>>, textVerbosity: Maybe<&2, TextVerbosity>, toolChoice: Maybe<&2, ToolChoice>}
+
+def summaryName(value: ReasoningSummary) -> String:
+  match value:
+    case SummaryAuto{}: "auto"
+    case SummaryConcise{}: "concise"
+    case SummaryDetailed{}: "detailed"
+    case SummaryOff{}: "off"
+    case SummaryOn{}: "on"
+
+def verbosityName(value: TextVerbosity) -> String:
+  match value:
+    case VerbosityLow{}: "low"
+    case VerbosityMedium{}: "medium"
+    case VerbosityHigh{}: "high"
+
+def choiceName(value: ToolChoice) -> String:
+  match value:
+    case ChoiceAuto{}: "auto"
+    case ChoiceNone{}: "none"
+    case ChoiceRequired{}: "required"
+
+def choiceFromJson(value: Maybe<&2, J()>) -> Maybe<&2, ToolChoice>:
+  match value:
+    case Some{T.JsonString{"auto"}}: Some{ChoiceAuto{}}
+    case Some{T.JsonString{"none"}}: Some{ChoiceNone{}}
+    case Some{T.JsonString{"required"}}: Some{ChoiceRequired{}}
+    case _: None{}
+
+def baseOf(-Reason: Data, -Telemetry: Data, -E: Data, options: OpenAICodexResponsesOptions<Reason, Telemetry, E>) -> Responses.StreamOptions(Reason, Telemetry, E):
+  match options:
+    case OpenAICodexResponsesOptions{base, _, _, _, _, _}: base
+
+# Share transcript/tool/auth preparation, then apply the Codex-only options.
+def sharedOptions(-Reason: Data, -Telemetry: Data, -E: Data, options: OpenAICodexResponsesOptions<Reason, Telemetry, E>) -> Responses.OpenAIResponsesOptions<Reason, Telemetry, E>:
+  match options:
+    case OpenAICodexResponsesOptions{base, _, _, tier, _, choice}:
+      Responses.fromStreamOptions(Reason, Telemetry, E, base, Responses.ResponsesSettings{None{}, None{}, tier, Maybe.map(&2, ToolChoice, J(), value => T.JsonString{choiceName(value)}, choice)})
+
+def summaryText(value: Maybe<&2, T.Nullable<ReasoningSummary>>) -> String:
+  match value:
+    case Some{T.PresentValue{summary}}: summaryName(summary)
+    case _: "auto"
+
+def effortName(level: T.ModelThinkingLevel) -> String:
+  match level:
+    case T.Off{}: "none"
+    case other: Thinking.name(other)
+
+def reasoningFields(fields: R.Record<J()>, mapping: Maybe<&2, T.Nullable<String>>, fallback: String, summary: Maybe<&2, String>) -> R.Record<J()>:
+  match mapping:
+    case Some{T.NullValue{}}: fields
+    case value:
+      R.set(J(), fields, "reasoning", T.JsonObject{Responses.optionalString(R.set(J(), R.new(J()), "effort", T.JsonString{Responses.mappedEffort(value, fallback)}), "summary", summary)})
+
+# Raw effort is an explicit request. Only "none" honors a null off mapping;
+# null mappings for other requested levels fall back to the requested value.
+def rawEffortMapping(level: T.ModelThinkingLevel, mapping: Maybe<&2, T.Nullable<String>>) -> Maybe<&2, T.Nullable<String>>:
+  match level mapping:
+    case T.Thinking{_} Some{T.NullValue{}}: None{}
+    case _ value: value
+
+def requestedReasoning(fields: R.Record<J()>, model: T.Model<J()>, effort: Maybe<&2, T.ModelThinkingLevel>, summary: Maybe<&2, T.Nullable<ReasoningSummary>>) -> R.Record<J()>:
+  match model effort:
+    case T.Model{_, _, _, _, _, reasoning, mapping, _, _, _, _, _, _, _, _, _} Some{+level}:
+      reasoningFields(fields, rawEffortMapping(level, Thinking.mapped(mapping, level)), effortName(level), Some{summaryText(summary)})
+    case T.Model{_, _, _, _, _, True{}, mapping, _, _, _, _, _, _, _, _, _} None{}:
+      reasoningFields(fields, Thinking.mapped(mapping, T.Off{}), "none", None{})
+    case _ None{}: fields
+
+def requestBody(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<J()>, options: OpenAICodexResponsesOptions<Reason, Telemetry, E>, body: J()) -> J():
+  match options body:
+    case OpenAICodexResponsesOptions{_, effort, summary, _, verbosity, _} T.JsonObject{fields}:
+      selected = R.set(J(), R.remove(J(), fields, "reasoning"), "text", T.JsonObject{R.set(J(), R.new(J()), "verbosity", T.JsonString{verbosityName(Maybe.default(&2, TextVerbosity, verbosity, VerbosityLow{}))})})
+      T.JsonObject{requestedReasoning(selected, model, effort, summary)}
+    case _ other: other
+
+def configuredRequest(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<J()>, options: OpenAICodexResponsesOptions<Reason, Telemetry, E>, result: Result<&2, &2, Responses.PreparationError, Responses.ProviderRequest>) -> Result<&2, &2, Responses.PreparationError, Responses.ProviderRequest>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{Responses.ProviderRequest{key, url, headers, body, target, processing}}:
+      Done{Responses.ProviderRequest{key, url, headers, requestBody(Reason, Telemetry, E, model, options, body), target, processing}}
+
+def prepare(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, config: Responses.Config, +model: T.Model<J()>, context: Responses.Context(G, D), +options: OpenAICodexResponsesOptions<Reason, Telemetry, E>) -> IO(Result<&2, &2, Responses.PreparationError, Responses.ProviderRequest>):
+  do IO<Result<&2, &2, Responses.PreparationError, Responses.ProviderRequest>>:
+    request : Result<&2, &2, Responses.PreparationError, Responses.ProviderRequest> <- Responses.responsesPreparation(~Reason, ~Telemetry, ~G, ~D, ~E, config, model, context, sharedOptions(Reason, Telemetry, E, options))
+    return configuredRequest(Reason, Telemetry, E, model, options, request)
+
+# Simple options use the same clamping and base defaults as other Responses
+# providers, without inventing raw-only preferences.
+def fromSimpleSettings(-Reason: Data, -Telemetry: Data, -E: Data, base: Responses.StreamOptions(Reason, Telemetry, E), settings: Responses.ResponsesSettings) -> OpenAICodexResponsesOptions<Reason, Telemetry, E>:
+  match settings:
+    case Responses.ResponsesSettings{effort, _, tier, choice}:
+      OpenAICodexResponsesOptions{base, Maybe.map(&2, T.ThinkingLevel, T.ModelThinkingLevel, level => T.Thinking{level}, effort), None{}, tier, None{}, choiceFromJson(choice)}
 
 def DEFAULT_MAX_RETRIES() -> Nat: 0n
 
@@ -1534,7 +1650,7 @@ def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, ~render: E 
 # Entry points
 # ------------
 
-def startStream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, pool: Maybe<&2, Sessions.Pool<Reason>>, +config: Responses.Config, +model: T.Model<J()>, context: Responses.Context(G, D), +options: Responses.OpenAIResponsesOptions<Reason, Telemetry, E>, +base: Responses.StreamOptions(Reason, Telemetry, E)) -> IO(Responses.Run<Reason, G, E>):
+def startStream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, pool: Maybe<&2, Sessions.Pool<Reason>>, +config: Responses.Config, +model: T.Model<J()>, context: Responses.Context(G, D), +options: OpenAICodexResponsesOptions<Reason, Telemetry, E>, +base: Responses.StreamOptions(Reason, Telemetry, E)) -> IO(Responses.Run<Reason, G, E>):
   match base:
     case T.StreamOptions{requestedSignal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, maxTokens, transport, cache, session, ws, metadata}:
       do IO<Responses.Run<Reason, G, E>>:
@@ -1542,20 +1658,20 @@ def startStream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~
         +events : Events.AssistantMessageEventStream(V.Value, G) <- Events.createAssistantMessageEventStream(~V.Value, ~G)
         announced : Ref.Ref<Bool> <- Ref.new(Bool, False{})
         timestamp : F64 <- Date.now()
-        task : Chan(Responses.RunResult<Reason, G, E>) <- IO.fork(Responses.RunResult<Reason, G, E>, produceWith(~Reason, ~Telemetry, ~G, ~E, ~render, pool, config, model, T.StreamOptions{requestedSignal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, maxTokens, transport, cache, session, ws, metadata}, RunEvents{events, announced}, timestamp, Responses.responsesPreparation(~Reason, ~Telemetry, ~G, ~D, ~E, config, model, context, options), Responses.ownedSignal(Reason, signal)))
+        task : Chan(Responses.RunResult<Reason, G, E>) <- IO.fork(Responses.RunResult<Reason, G, E>, produceWith(~Reason, ~Telemetry, ~G, ~E, ~render, pool, config, model, T.StreamOptions{requestedSignal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, maxTokens, transport, cache, session, ws, metadata}, RunEvents{events, announced}, timestamp, prepare(~Reason, ~Telemetry, ~G, ~D, ~E, config, model, context, options), Responses.ownedSignal(Reason, signal)))
         return Responses.Running{events, task}
 
 # Borrow the session owner until the returned run is disposed. Callers close
 # the pool after all runs finish; no process-global cache hides ownership.
-def streamWithSessions(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, pool: Maybe<&2, Sessions.Pool<Reason>>, config: Responses.Config, +model: T.Model<J()>, context: Responses.Context(G, D), +options: Responses.OpenAIResponsesOptions<Reason, Telemetry, E>) -> IO(Responses.Run<Reason, G, E>):
-  startStream(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, pool, config, model, context, options, Responses.toStreamOptions(Reason, Telemetry, E, options))
+def streamWithSessions(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, pool: Maybe<&2, Sessions.Pool<Reason>>, config: Responses.Config, +model: T.Model<J()>, context: Responses.Context(G, D), +options: OpenAICodexResponsesOptions<Reason, Telemetry, E>) -> IO(Responses.Run<Reason, G, E>):
+  startStream(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, pool, config, model, context, options, baseOf(Reason, Telemetry, E, options))
 
 def codexRun(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, pool: Maybe<&2, Sessions.Pool<Reason>>, auth: Result<&2, &2, Responses.PreparationError, Unit>, config: Responses.Config, +model: T.Model<J()>, +context: Responses.Context(G, D), +options: Maybe<&2, Responses.SimpleStreamOptions(Reason, Telemetry, E)>) -> IO(Responses.SimpleRun(Reason, G, E)):
   match auth:
     case Fail{cause}: IO.pure(Responses.SimpleRun(Reason, G, E), Fail{cause})
     case Done{_}:
       do IO<Responses.SimpleRun(Reason, G, E)>:
-        owner : Responses.Run<Reason, G, E> <- streamWithSessions(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, pool, config, model, context, Responses.fromStreamOptions(Reason, Telemetry, E, Simple.buildBaseOptionsWith(~V.Value, ~V.Value, ~G, ~D, ~J(), ~(Signal(Reason)), ~Telemetry, ~(Fetch.Fetch(Reason)), ~E, ~Schema.toJson, ~Schema.toJson, model, context, options, Responses.simpleApiKey(Reason, Telemetry, E, options)), Responses.simpleSettings(Reason, Telemetry, E, model, options)))
+        owner : Responses.Run<Reason, G, E> <- streamWithSessions(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, pool, config, model, context, fromSimpleSettings(Reason, Telemetry, E, Simple.buildBaseOptionsWith(~V.Value, ~V.Value, ~G, ~D, ~J(), ~(Signal(Reason)), ~Telemetry, ~(Fetch.Fetch(Reason)), ~E, ~Schema.toJson, ~Schema.toJson, model, context, options, Responses.simpleApiKey(Reason, Telemetry, E, options)), Responses.simpleSettings(Reason, Telemetry, E, model, options)))
         return Done{owner}
 
 # upstream streamSimple: a missing API key fails before a stream exists.
@@ -1563,7 +1679,7 @@ def streamSimpleWithSessions(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data
   codexRun(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, pool, Responses.presentKey(T.modelProvider(model), Responses.simpleApiKey(Reason, Telemetry, E, options)), config, model, context, options)
 
 # Without a session owner, requests remain one-shot.
-def stream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Responses.Config, model: T.Model<J()>, context: Responses.Context(G, D), options: Responses.OpenAIResponsesOptions<Reason, Telemetry, E>) -> IO(Responses.Run<Reason, G, E>):
+def stream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Responses.Config, model: T.Model<J()>, context: Responses.Context(G, D), options: OpenAICodexResponsesOptions<Reason, Telemetry, E>) -> IO(Responses.Run<Reason, G, E>):
   streamWithSessions(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, None{}, config, model, context, options)
 
 def streamSimple(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Responses.Config, model: T.Model<J()>, context: Responses.Context(G, D), options: Maybe<&2, Responses.SimpleStreamOptions(Reason, Telemetry, E)>) -> IO(Responses.SimpleRun(Reason, G, E)):
