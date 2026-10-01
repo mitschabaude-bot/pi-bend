@@ -74,7 +74,7 @@ note pointing here. Everything not listed here is in scope.
 
 These are approved behavior and API choices, not implementation-completion claims.
 
-- **Immutable values and explicit updates** (2026-09-18): typed records, optional fields and returned updates replace JavaScript reflection, prototypes, symbols, sparse arrays and object identity. Dictionaries retain insertion order without numeric-key sorting; ordinary property names have no special behavior. Hooks return argument/context updates, and cost calculation returns a value rather than mutating an alias.
+- **Immutable values and explicit updates** (2026-09-18): typed records, optional fields and returned updates replace JavaScript reflection, prototypes, symbols, sparse arrays and object identity. Dictionaries retain insertion order without numeric-key sorting; ordinary property names have no special behavior. Hooks return argument/context updates, and cost calculation returns a value rather than mutating an alias. The before_provider_headers handler returns an optional replacement header record; a failed handler leaves the last successful record intact.
 - **Structural tool equality** (2026-09-18): dictionary field order does not affect declaration equality; list order and values do. Reordering schema fields alone does not cause a tool redefinition or provider fallback.
 - **Signed zero** (2026-09-18): `0` and `-0` compare equal, including in nested values. Schema `uniqueItems` rejects `[0, -0]`.
 - **Immutable event snapshots** (2026-09-18): a retained event keeps the content it had when emitted; subsequent events carry subsequent values.

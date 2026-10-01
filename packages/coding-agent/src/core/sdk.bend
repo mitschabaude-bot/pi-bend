@@ -431,7 +431,7 @@ def withResources(+assembly: Assembly, transport: Runtime.Transport, choice: Mod
         queue : Queue.Owner <- Queue.create()
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- Runtime.createToolList(Runtime.registryOf(setup), Runtime.toolsOptionsFor(Runtime.builtinsOf(toolSelection), settings, environment), environment, cwd, agentDir, packageDir, fetch, extensionContext(owner), Queue.borrow(queue))
         +apiStream : Composer.ProviderStream() <- Runtime.createApiStream(codexSessions, authorizer, fetch)
-        +stream : Runtime.Stream() <- Runtime.createStream(fetch, Runtime.requestDefaults(settings), Runtime.KeySource{models, None{}}, Models.RequestTransforms{None{}, Some{apiStream}})
+        +stream : Runtime.Stream() <- Runtime.createStream(fetch, Runtime.requestDefaults(settings), Runtime.KeySource{models, None{}}, Runtime.runnerRef(Some{owner}), Some{apiStream})
         +registry : StreamFn.Registry(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error()) <- StreamFn.create(V.Value, Runtime.Details(), Runtime.LoopConfig(), Runtime.Error())
         +validator : Loop.Validator(Runtime.Error()) <- Loop.createPlain(~Runtime.Error(), ~Runtime.validationError)
         +keys : C.Callback<String, Result<&2, &2, Runtime.Error(), Maybe<&2, String>>> <- C.create(~Runtime.KeySource, ~String, ~Result<&2, &2, Runtime.Error(), Maybe<&2, String>>, ~Runtime.resolveKey, Runtime.KeySource{models, None{}})

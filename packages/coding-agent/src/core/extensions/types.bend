@@ -305,6 +305,10 @@ type ToolResultEvent is Data:
 type ToolResultEventResult is Data:
   ToolResultEventResult{content: Maybe<&2, List<&2, Ai.TextImageContent>>, details: Maybe<&2, Tools.ToolDetails>, isError: Maybe<&2, Bool>, usage: Maybe<&2, Ai.Usage>}
 
+# Native handlers return updated headers instead of mutating the event.
+type BeforeProviderHeadersEvent is Data:
+  BeforeProviderHeadersEvent{headers: Ai.ProviderHeaders()}
+
 type HandlerCall<-E: Data> is Data:
   HandlerCall{event: E, ctx: Ctx.ExtensionContext}
 
@@ -333,6 +337,7 @@ type EventHandler is Data:
   OnSessionCompact{handler: ExtensionHandler(SessionCompactEvent, Unit)}
   OnSessionCompactFailed{handler: ExtensionHandler(SessionCompactFailedEvent, Unit)}
   OnTurnEnd{handler: ExtensionHandler(TurnEndEvent, BoundaryResult)}
+  OnBeforeProviderHeaders{handler: ExtensionHandler(BeforeProviderHeadersEvent, Ai.ProviderHeaders())}
   OnContext{handler: ExtensionHandler(ContextEvent, ContextEventResult)}
   OnContextWithSystem{handler: ExtensionHandler(ContextWithSystemEvent, ContextEventResult)}
   OnAgentBeforeSettle{handler: ExtensionHandler(AgentBeforeSettleEvent, BoundaryResult)}
@@ -382,6 +387,7 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnSessionCompact{_}: "session_compact"
     case OnSessionCompactFailed{_}: "session_compact_failed"
     case OnTurnEnd{_}: "turn_end"
+    case OnBeforeProviderHeaders{_}: "before_provider_headers"
     case OnContext{_}: "context"
     case OnContextWithSystem{_}: "context_with_system"
     case OnAgentBeforeSettle{_}: "agent_before_settle"

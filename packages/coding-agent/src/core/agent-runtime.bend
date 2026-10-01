@@ -227,7 +227,7 @@ type KeySource is Data:
 # its auth and dispatches it to its provider. `headers` runs
 # before_provider_headers on the assembled headers.
 type ProviderStreams is Data:
-  ProviderStreams{fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, headers: Models.RequestTransforms}
+  ProviderStreams{fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, current: Maybe<&2, Ref.Ref<ExtensionRunner.ExtensionRunner>>, fallback: Maybe<&2, Composer.ProviderStream()>}
 
 def selectedOptions(options: Maybe<&2, Composer.StreamOptions()>) -> Maybe<&2, Composer.StreamOptions()>: options
 
@@ -279,13 +279,41 @@ def withKey(apiKey: Maybe<&2, String>, options: Composer.StreamOptions()) -> Com
     case Ai.SimpleStreamOptions{signal, telemetry, key, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
       Ai.SimpleStreamOptions{signal, telemetry, Maybe.or(&2, String, key, apiKey), shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}
 
+def matchHeaders(enabled: Bool, runner: ExtensionRunner.ExtensionRunner, fallback: Maybe<&2, Composer.ProviderStream()>) -> IO(Models.RequestTransforms):
+  match enabled:
+    case False{}: IO.pure(Models.RequestTransforms, Models.RequestTransforms{None{}, fallback})
+    case True{}:
+      do IO<Models.RequestTransforms>:
+        callback : C.Callback<Ai.ProviderHeaders(), Ai.ProviderHeaders()> <- C.create(~ExtensionRunner.ExtensionRunner, ~Ai.ProviderHeaders(), ~Ai.ProviderHeaders(), ~(env => headers => ExtensionRunner.emitBeforeProviderHeaders(env, headers)), runner)
+        return Models.RequestTransforms{Some{callback}, fallback}
+
+# Capture the runner at request start, so a later reload affects the next
+# request. The temporary header callback is released after provider opening.
+def headerTransforms(current: Maybe<&2, Ref.Ref<ExtensionRunner.ExtensionRunner>>, fallback: Maybe<&2, Composer.ProviderStream()>) -> IO(Models.RequestTransforms):
+  match current:
+    case None{}: IO.pure(Models.RequestTransforms, Models.RequestTransforms{None{}, fallback})
+    case Some{ref}:
+      do IO<Models.RequestTransforms>:
+        +runner : ExtensionRunner.ExtensionRunner <- Ref.read(ExtensionRunner.ExtensionRunner, ref)
+        enabled : Bool <- ExtensionRunner.hasHandlers(runner, "before_provider_headers")
+        matchHeaders(enabled, runner, fallback)
+
+def disposeHeaderTransform(transforms: Models.RequestTransforms) -> IO(Unit):
+  match transforms:
+    case Models.RequestTransforms{None{}, _}: IO.pure(Unit, Unit{})
+    case Models.RequestTransforms{Some{callback}, _}: C.dispose(Ai.ProviderHeaders(), Ai.ProviderHeaders(), callback)
+
 def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), V.Value, Details())) -> IO(Providers.Output(V.Value, Error())):
   match config input:
-    case ProviderStreams{+fetch, defaults, KeySource{+models, apiKey}, headers} T.StreamInput{model, context, options}:
-      Models.streamSimple(models, T.StreamInput{model, context, Maybe.map(&2, LoopConfig(), Composer.StreamOptions(), value => withKey(apiKey, withRequest(fetch, defaults, project(value))), options)}, headers)
+    case ProviderStreams{+fetch, defaults, KeySource{+models, apiKey}, current, fallback} T.StreamInput{model, context, options}:
+      do IO<Providers.Output(V.Value, Error())>:
+        +transforms : Models.RequestTransforms <- headerTransforms(current, fallback)
+        result : Providers.Output(V.Value, Error()) <- Models.streamSimple(models, T.StreamInput{model, context, Maybe.map(&2, LoopConfig(), Composer.StreamOptions(), value => withKey(apiKey, withRequest(fetch, defaults, project(value))), options)}, transforms)
+        disposeHeaderTransform(transforms)
+        return result
 
-def createStream(fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, headers: Models.RequestTransforms) -> IO(Stream()):
-  C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), V.Value, Details()), ~Providers.Output(V.Value, Error()), ~openProvider, ProviderStreams{fetch, defaults, keys, headers})
+def createStream(fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, current: Maybe<&2, Ref.Ref<ExtensionRunner.ExtensionRunner>>, fallback: Maybe<&2, Composer.ProviderStream()>) -> IO(Stream()):
+  C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), V.Value, Details()), ~Providers.Output(V.Value, Error()), ~openProvider, ProviderStreams{fetch, defaults, keys, current, fallback})
 
 # Request auth
 # ------------
@@ -1018,6 +1046,11 @@ def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageSt
         result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~V.Value, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
         constructed(transport, storage, storageStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, extensions, source), result)
 
+def runnerRef(owner: Maybe<&2, ExtensionOwner>) -> Maybe<&2, Ref.Ref<ExtensionRunner.ExtensionRunner>>:
+  match owner:
+    case Some{ExtensionOwner{current, _, _}}: Some{current}
+    case None{}: None{}
+
 def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, +models: Models.ModelRuntime, +paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, +source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, +fetch, +codexSessions} Done{prompt} Done{+model}:
@@ -1027,7 +1060,7 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, toolsOptionsFor(builtins, settings, paths), paths, cwd, agentDir, packageDir, fetch, context, Queue.borrow(queue))
         apiStream : Composer.ProviderStream() <- createApiStream(codexSessions, authorizer, fetch)
         Models.setApiStreams(models, Some{apiStream})
-        +stream : Stream() <- createStream(fetch, requestDefaults(settings), KeySource{models, apiKey}, Models.noTransforms())
+        +stream : Stream() <- createStream(fetch, requestDefaults(settings), KeySource{models, apiKey}, runnerRef(extensionOwner(Some{source})), None{})
         +registry : StreamFn.Registry(V.Value, Details(), LoopConfig(), Error()) <- StreamFn.create(V.Value, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})

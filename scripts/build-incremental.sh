@@ -25,7 +25,7 @@ CC=${CC:-clang}
 FLAGS="-fbracket-depth=2048 ${BEND_CFLAGS:-} -std=c11 ${PI_BEND_OPT:--O1} -DBEND_TUS=$UNITS"
 SALT=$("$CC" --version | head -1)
 export CC FLAGS SALT CACHE OUTPUT
-seq 0 $((UNITS - 1)) | xargs -P "$(nproc)" -I{} sh -c '
+seq 0 $((UNITS - 1)) | xargs -P 8 -I{} sh -c '
   k={}; i="$OUTPUT.$k.i"
   $CC $FLAGS -DBEND_TU=$k -E -P "$OUTPUT.c" -o "$i"
   h=$( { printf "%s\n%s\n" "$SALT" "$FLAGS"; cat "$i"; } | sha256sum | cut -c1-40)

@@ -795,6 +795,32 @@ def emitBoundary(+runner: ExtensionRunner, +base: T.BoundaryBase, +build: Bounda
     final : BoundaryState <- boundaryDispatches(runner, dispatches, base, build, BoundaryState{Nil{}, False{}, initial, True{}})
     return boundaryResult(final)
 
+# Provider headers are transformed in registration order. A failed handler
+# reports its error and leaves the last successful headers available to the next.
+def providerHeadersStep(+runner: ExtensionRunner, path: String, headers: Ai.ProviderHeaders(), result: Result<&2, &2, String, Maybe<&2, Ai.ProviderHeaders()>>) -> IO(Ai.ProviderHeaders()):
+  match result:
+    case Fail{error}:
+      do IO<Ai.ProviderHeaders()>:
+        emitError(runner, T.ExtensionError{path, "before_provider_headers", error, None{}})
+        return headers
+    case Done{Some{updated}}: IO.pure(Ai.ProviderHeaders(), updated)
+    case Done{None{}}: IO.pure(Ai.ProviderHeaders(), headers)
+
+def providerHeadersHandlers(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +headers: Ai.ProviderHeaders()) -> IO(Ai.ProviderHeaders()):
+  match dispatches:
+    case Nil{}: IO.pure(Ai.ProviderHeaders(), headers)
+    case Dispatch{path, T.OnBeforeProviderHeaders{callback}} <> rest:
+      do IO<Ai.ProviderHeaders()>:
+        result : Result<&2, &2, String, Maybe<&2, Ai.ProviderHeaders()>> <- C.call(T.HandlerCall<T.BeforeProviderHeadersEvent>, Result<&2, &2, String, Maybe<&2, Ai.ProviderHeaders()>>, callback, T.HandlerCall{T.BeforeProviderHeadersEvent{headers}, createContext(runner)})
+        updated : Ai.ProviderHeaders() <- providerHeadersStep(runner, path, headers, result)
+        providerHeadersHandlers(runner, rest, updated)
+    case _ <> rest: providerHeadersHandlers(runner, rest, headers)
+
+def emitBeforeProviderHeaders(+runner: ExtensionRunner, headers: Ai.ProviderHeaders()) -> IO(Ai.ProviderHeaders()):
+  do IO<Ai.ProviderHeaders()>:
+    handlers : List<&2, Dispatch> <- snapshot(runner, "before_provider_headers")
+    providerHeadersHandlers(runner, handlers, headers)
+
 # Request context (upstream emitContext)
 # --------------------------------------
 
