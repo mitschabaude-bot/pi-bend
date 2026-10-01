@@ -1,4 +1,5 @@
 import Base
+import ./slash-commands.bend as Slash
 import ../../../agent/src/agent.bend as Agent
 import ../../../agent/src/agent-loop.bend as Loop
 import ../../../agent/src/types.bend as T
@@ -1263,7 +1264,7 @@ def refreshCurrentModel(env: ModelEnv, unit: Unit) -> IO(Unit):
 def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -> IO(Unit):
   match actions:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, ExtensionTypes.ToolActions{active, all, set, refresh}, appender, thinking, setThinking}}:
+    case Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, ExtensionTypes.ToolActions{active, all, set, refresh}, appender, thinking, setThinking, setName, getName, label, commands}}:
       do IO<Unit>:
         C.dispose(ExtensionTypes.SendMessage, Unit, send)
         C.dispose(ExtensionTypes.SendUserMessage, Unit, sendUser)
@@ -1275,6 +1276,10 @@ def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -
         C.dispose(ExtensionTypes.AppendEntry, Unit, appender)
         C.dispose(Unit, Ai.ModelThinkingLevel, thinking)
         C.dispose(Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>, setThinking)
+        C.dispose(String, Result<&2,&2,String,Unit>, setName)
+        C.dispose(Unit, Maybe<&2,String>, getName)
+        C.dispose(ExtensionTypes.LabelChange, Result<&2,&2,String,Unit>, label)
+        C.dispose(Unit, List<&2,Slash.SlashCommandInfo>, commands)
 
 def executorsOf(tools: ExtensionTools) -> List<&2, Tools.Execute()>:
   match tools:
@@ -4635,14 +4640,32 @@ def cycleModel(+session: AgentSession, direction: CycleDirection, options: Model
 def sessionName(state: Shared) -> Maybe<&2, String>:
   S.getSessionName(V.Value, Tools.ToolDetails, V.Value, stateOf(sharedSession(state)))
 
-def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, String, Unit>):
+def emitName(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>, event: ExtensionTypes.SessionInfoChangedEvent) -> IO(Unit):
+  match runner:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{runner}: ExtensionRunner.emitDetached(runner,ExtensionTypes.SessionInfoChanged{event})
+def nameRecorded(+shared: R.Ref<Shared>, result: Result<&2,&2,String,Unit>) -> IO(Result<&2,&2,String,Unit>):
+  match result:
+    case Fail{message}: IO.pure(Result<&2,&2,String,Unit>,Fail{message})
+    case Done{_}:
+      do IO<Result<&2,&2,String,Unit>>:
+        state : Shared <- R.read(Shared,shared)
+        +name : Maybe<&2,String> = sessionName(state)
+        emit(shared,SessionInfoChanged{name})
+        runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- sharedRunner(shared)
+        emitName(runner,ExtensionTypes.SessionInfoChangedEvent{name})
+        return Done{Unit{}}
+
+def setSessionName(session: AgentSession, name: String) -> IO(Result<&2,&2,String,Unit>):
   match session:
-    case AgentSession{_, +shared, _, _, _, _, _, _}:
-      do IO<Result<&2, &2, String, Unit>>:
-        result : Result<&2, &2, String, Unit> <- recorded(shared, target => recordName(target, name))
-        state : Shared <- R.read(Shared, shared)
-        emit(shared, SessionInfoChanged{sessionName(state)})
-        return result
+    case AgentSession{_,+shared,_,_,_,_,_,_}:
+      do IO<Result<&2,&2,String,Unit>>:
+        result : Result<&2,&2,String,Unit> <- recorded(shared,target => recordName(target,name))
+        nameRecorded(shared,result)
+def getSessionName(session: AgentSession) -> IO(Maybe<&2,String>):
+  do IO<Maybe<&2,String>>:
+    current : Shared <- R.read(Shared,sharedOf(session))
+    return sessionName(current)
 
 # Functional access to the session manager's persistent label mutation.
 def appendLabelChange(session: AgentSession,+entryId: String,+label: Maybe<&2,String>) -> IO(Result<&2,&2,String,Unit>):
@@ -4659,14 +4682,59 @@ def skillsOf(loadout: Runtime.Loadout) -> List<&2, Skills.Skill>:
 def agentsFilesOf(loadout: Runtime.Loadout) -> List<&2, Prompt.ContextFile>:
   match loadout:
     case Runtime.Loadout{_, _, _, _, _, agentsFiles, _, _}: agentsFiles
-def promptTemplates(session: AgentSession) -> IO(List<&2, Templates.PromptTemplate>):
-  do IO<List<&2, Templates.PromptTemplate>>:
-    loadout : Runtime.Loadout <- loadoutOf(session)
-    return templatesOf(loadout)
-def getSkills(session: AgentSession) -> IO(List<&2, Skills.Skill>):
-  do IO<List<&2, Skills.Skill>>:
-    loadout : Runtime.Loadout <- loadoutOf(session)
-    return skillsOf(loadout)
+def templatesFromLoader(loaded: Runtime.Loadout, source: Maybe<&2,Resources.ResourceLoader>) -> IO(List<&2,Templates.PromptTemplate>):
+  match source:
+    case None{}: IO.pure(List<&2,Templates.PromptTemplate>,templatesOf(loaded))
+    case Some{loader}:
+      do IO<List<&2,Templates.PromptTemplate>>:
+        result : Resources.PromptsResult <- Resources.getPrompts(loader)
+        return Resources.promptsOf(result)
+def skillsFromLoader(loaded: Runtime.Loadout, source: Maybe<&2,Resources.ResourceLoader>) -> IO(List<&2,Skills.Skill>):
+  match source:
+    case None{}: IO.pure(List<&2,Skills.Skill>,skillsOf(loaded))
+    case Some{loader}:
+      do IO<List<&2,Skills.Skill>>:
+        result : Resources.SkillsResult <- Resources.getSkills(loader)
+        return Resources.skillsOf(result)
+def promptTemplates(session: AgentSession) -> IO(List<&2,Templates.PromptTemplate>):
+  do IO<List<&2,Templates.PromptTemplate>>:
+    +loaded : Runtime.Loadout <- loadoutOf(session)
+    templatesFromLoader(loaded,loaderIn(loaded))
+def getSkills(session: AgentSession) -> IO(List<&2,Skills.Skill>):
+  do IO<List<&2,Skills.Skill>>:
+    +loaded : Runtime.Loadout <- loadoutOf(session)
+    skillsFromLoader(loaded,loaderIn(loaded))
+
+def extensionCommands(commands: List<&2,ExtensionTypes.ResolvedCommand>) -> List<&2,Slash.SlashCommandInfo>:
+  match commands:
+    case Nil{}: Nil{}
+    case ExtensionTypes.ResolvedCommand{_,name,source,description,_,_} <> rest:
+      Slash.SlashCommandInfo{name,description,Slash.Extension{},source} <> extensionCommands(rest)
+def promptCommands(templates: List<&2,Templates.PromptTemplate>) -> List<&2,Slash.SlashCommandInfo>:
+  match templates:
+    case Nil{}: Nil{}
+    case Templates.PromptTemplate{name,description,_,_,source,_} <> rest:
+      Slash.SlashCommandInfo{name,Some{description},Slash.Prompt{},source} <> promptCommands(rest)
+def skillCommands(skills: List<&2,Skills.Skill>) -> List<&2,Slash.SlashCommandInfo>:
+  match skills:
+    case Nil{}: Nil{}
+    case Skills.Skill{name,description,_,_,source,_} <> rest:
+      Slash.SlashCommandInfo{"skill:" ++ name,Some{description},Slash.Skill{},source} <> skillCommands(rest)
+def registeredCommands(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(List<&2,Slash.SlashCommandInfo>):
+  match runner:
+    case None{}: IO.pure(List<&2,Slash.SlashCommandInfo>,Nil{})
+    case Some{runner}:
+      do IO<List<&2,Slash.SlashCommandInfo>>:
+        commands : List<&2,ExtensionTypes.ResolvedCommand> <- ExtensionRunner.getRegisteredCommands(runner)
+        return extensionCommands(commands)
+def getCommands(session: AgentSession) -> IO(List<&2,Slash.SlashCommandInfo>):
+  do IO<List<&2,Slash.SlashCommandInfo>>:
+    +loaded : Runtime.Loadout <- loadoutOf(session)
+    commands : List<&2,Slash.SlashCommandInfo> <- registeredCommands(runnerIn(loaded))
+    templates : List<&2,Templates.PromptTemplate> <- templatesFromLoader(loaded,loaderIn(loaded))
+    skills : List<&2,Skills.Skill> <- skillsFromLoader(loaded,loaderIn(loaded))
+    return List.append(&2,Slash.SlashCommandInfo,commands,List.append(&2,Slash.SlashCommandInfo,promptCommands(templates),skillCommands(skills)))
+
 def getAgentsFiles(session: AgentSession) -> IO(List<&2, Prompt.ContextFile>):
   do IO<List<&2, Prompt.ContextFile>>:
     loadout : Runtime.Loadout <- loadoutOf(session)
@@ -5118,6 +5186,12 @@ def thinkingLevelCallback(session: AgentSession, _: Unit) -> IO(Ai.ModelThinking
 def setThinkingLevelCallback(session: AgentSession, level: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):
   setThinkingLevel(session, level, ModelMutationOptions{False{}})
 
+def sessionNameCallback(session: AgentSession, _: Unit) -> IO(Maybe<&2,String>): getSessionName(session)
+def setSessionNameCallback(session: AgentSession, name: String) -> IO(Result<&2,&2,String,Unit>): setSessionName(session,name)
+def setLabelCallback(session: AgentSession, request: ExtensionTypes.LabelChange) -> IO(Result<&2,&2,String,Unit>):
+  match request: case ExtensionTypes.LabelChange{id,label}: appendLabelChange(session,id,label)
+def commandsCallback(session: AgentSession, _: Unit) -> IO(List<&2,Slash.SlashCommandInfo>): getCommands(session)
+
 # upstream bindCore's appendEntry: sessionManager.appendCustomEntry.
 def appendEntryAction(+session: AgentSession, request: ExtensionTypes.AppendEntry) -> IO(Unit):
   match request:
@@ -5138,9 +5212,13 @@ def bindSessionActions(+session: AgentSession) -> IO(Unit):
     +appender : C.Callback<ExtensionTypes.AppendEntry, Unit> <- C.create(~AgentSession, ~ExtensionTypes.AppendEntry, ~Unit, ~appendEntryCallback, session)
     +thinking : C.Callback<Unit, Ai.ModelThinkingLevel> <- C.create(~AgentSession, ~Unit, ~Ai.ModelThinkingLevel, ~thinkingLevelCallback, session)
     +setThinking : C.Callback<Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>> <- C.create(~AgentSession, ~Ai.ModelThinkingLevel, ~Result<&2, &2, String, Unit>, ~setThinkingLevelCallback, session)
-    R.write(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActionsOf(session), Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools, appender, thinking, setThinking}})
+    +setName : C.Callback<String,Result<&2,&2,String,Unit>> <- C.create(~AgentSession,~String,~Result<&2,&2,String,Unit>,~setSessionNameCallback,session)
+    +getName : C.Callback<Unit,Maybe<&2,String>> <- C.create(~AgentSession,~Unit,~Maybe<&2,String>,~sessionNameCallback,session)
+    +label : C.Callback<ExtensionTypes.LabelChange,Result<&2,&2,String,Unit>> <- C.create(~AgentSession,~ExtensionTypes.LabelChange,~Result<&2,&2,String,Unit>,~setLabelCallback,session)
+    +commands : C.Callback<Unit,List<&2,Slash.SlashCommandInfo>> <- C.create(~AgentSession,~Unit,~List<&2,Slash.SlashCommandInfo>,~commandsCallback,session)
+    R.write(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActionsOf(session), Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools, appender, thinking, setThinking, setName, getName, label, commands}})
     loadout : Runtime.Loadout <- loadoutOf(session)
-    bindActionsTo(runnerIn(loadout), ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools, appender, thinking, setThinking})
+    bindActionsTo(runnerIn(loadout), ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools, appender, thinking, setThinking, setName, getName, label, commands})
 
 # upstream bindCore's getContextUsage, compact and getSystemPrompt.
 def contextUsageOf(result: Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>) -> Maybe<&2, Ctx.ContextUsage>:

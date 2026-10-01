@@ -8,6 +8,7 @@ import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/schema-value.bend as V
 import ../../../../tui/src/autocomplete.bend as AC
 import ../messages.bend as Messages
+import ../slash-commands.bend as Slash
 import ../model-runtime.bend as Models
 import ../provider-composer.bend as Composer
 import ../skills.bend as Skills
@@ -323,6 +324,9 @@ type ModelSelectEvent is Data:
 type ThinkingLevelSelectEvent is Data:
   ThinkingLevelSelectEvent{level: Ai.ModelThinkingLevel, previousLevel: Ai.ModelThinkingLevel}
 
+type SessionInfoChangedEvent is Data:
+  SessionInfoChangedEvent{name: Maybe<&2,String>}
+
 # Native handlers return updated headers instead of mutating the event.
 type BeforeProviderHeadersEvent is Data:
   BeforeProviderHeadersEvent{headers: Ai.ProviderHeaders()}
@@ -359,6 +363,7 @@ type EventHandler is Data:
   OnAfterProviderResponse{handler: ExtensionHandler(AfterProviderResponseEvent, Unit)}
   OnModelSelect{handler: ExtensionHandler(ModelSelectEvent, Unit)}
   OnThinkingLevelSelect{handler: ExtensionHandler(ThinkingLevelSelectEvent, Unit)}
+  OnSessionInfoChanged{handler: ExtensionHandler(SessionInfoChangedEvent, Unit)}
   OnBeforeProviderHeaders{handler: ExtensionHandler(BeforeProviderHeadersEvent, Ai.ProviderHeaders())}
   OnContext{handler: ExtensionHandler(ContextEvent, ContextEventResult)}
   OnContextWithSystem{handler: ExtensionHandler(ContextWithSystemEvent, ContextEventResult)}
@@ -377,6 +382,7 @@ type ExtensionEvent is Data:
   AfterProviderResponse{event: AfterProviderResponseEvent}
   ModelSelect{event: ModelSelectEvent}
   ThinkingLevelSelect{event: ThinkingLevelSelectEvent}
+  SessionInfoChanged{event: SessionInfoChangedEvent}
   AgentStart{event: AgentStartEvent}
   AgentEnd{event: AgentEndEvent}
   AgentSettled{event: AgentSettledEvent}
@@ -416,6 +422,7 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnAfterProviderResponse{_}: "after_provider_response"
     case OnModelSelect{_}: "model_select"
     case OnThinkingLevelSelect{_}: "thinking_level_select"
+    case OnSessionInfoChanged{_}: "session_info_changed"
     case OnBeforeProviderHeaders{_}: "before_provider_headers"
     case OnContext{_}: "context"
     case OnContextWithSystem{_}: "context_with_system"
@@ -433,6 +440,7 @@ def eventType(event: ExtensionEvent) -> String:
     case AfterProviderResponse{_}: "after_provider_response"
     case ModelSelect{_}: "model_select"
     case ThinkingLevelSelect{_}: "thinking_level_select"
+    case SessionInfoChanged{_}: "session_info_changed"
     case AgentStart{_}: "agent_start"
     case AgentEnd{_}: "agent_end"
     case AgentSettled{_}: "agent_settled"
@@ -581,8 +589,11 @@ type ToolActions is Data:
 type AppendEntry is Data:
   AppendEntry{customType: String, data: Maybe<&2, V.Value>}
 
+type LabelChange is Data:
+  LabelChange{entryId: String, label: Maybe<&2,String>}
+
 type ExtensionActions is Data:
-  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>, setModel: C.Callback<Ai.Model<Ai.JsonValue>, Bool>, tools: ToolActions, appendEntry: C.Callback<AppendEntry, Unit>, getThinkingLevel: C.Callback<Unit, Ai.ModelThinkingLevel>, setThinkingLevel: C.Callback<Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>>}
+  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>, setModel: C.Callback<Ai.Model<Ai.JsonValue>, Bool>, tools: ToolActions, appendEntry: C.Callback<AppendEntry, Unit>, getThinkingLevel: C.Callback<Unit, Ai.ModelThinkingLevel>, setThinkingLevel: C.Callback<Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>>, setSessionName: C.Callback<String, Result<&2, &2, String, Unit>>, getSessionName: C.Callback<Unit, Maybe<&2,String>>, setLabel: C.Callback<LabelChange, Result<&2, &2, String, Unit>>, getCommands: C.Callback<Unit, List<&2,Slash.SlashCommandInfo>>}
 
 
 # `actions` are the session's, once bound; before that the action methods

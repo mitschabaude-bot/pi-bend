@@ -1,4 +1,5 @@
 import Base
+import ../packages/coding-agent/src/core/slash-commands.bend as Slash
 import ../packages/agent/src/agent.bend as Agent
 import ../packages/agent/src/agent-loop.bend as Loop
 import ../packages/agent/src/stream-fn.bend as StreamFn
@@ -1542,6 +1543,11 @@ def ignoreEntry(unit: Unit, request: Ext.AppendEntry) -> IO(Unit): IO.pure(Unit,
 def noThinking(_: Unit, _: Unit) -> IO(Ai.ModelThinkingLevel): IO.pure(Ai.ModelThinkingLevel, Ai.Off{})
 def ignoreThinking(_: Unit, _: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>): IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
 
+def ignoreName(_: Unit, _: String) -> IO(Result<&2,&2,String,Unit>): IO.pure(Result<&2,&2,String,Unit>,Done{Unit{}})
+def noName(_: Unit, _: Unit) -> IO(Maybe<&2,String>): IO.pure(Maybe<&2,String>,None{})
+def ignoreLabel(_: Unit, _: Ext.LabelChange) -> IO(Result<&2,&2,String,Unit>): IO.pure(Result<&2,&2,String,Unit>,Done{Unit{}})
+def noCommands(_: Unit, _: Unit) -> IO(List<&2,Slash.SlashCommandInfo>): IO.pure(List<&2,Slash.SlashCommandInfo>,Nil{})
+
 def recordingActions() -> IO(Ext.ExtensionActions):
   do IO<Ext.ExtensionActions>:
     send : C.Callback<Ext.SendMessage, Unit> <- C.create(~Unit, ~Ext.SendMessage, ~Unit, ~ignoreMessage, Unit{})
@@ -1554,7 +1560,11 @@ def recordingActions() -> IO(Ext.ExtensionActions):
     appender : C.Callback<Ext.AppendEntry, Unit> <- C.create(~Unit, ~Ext.AppendEntry, ~Unit, ~ignoreEntry, Unit{})
     thinking : C.Callback<Unit, Ai.ModelThinkingLevel> <- C.create(~Unit, ~Unit, ~Ai.ModelThinkingLevel, ~noThinking, Unit{})
     setThinking : C.Callback<Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>> <- C.create(~Unit, ~Ai.ModelThinkingLevel, ~Result<&2, &2, String, Unit>, ~ignoreThinking, Unit{})
-    return Ext.ExtensionActions{send, user, model, Ext.ToolActions{active, all, set, refresh}, appender, thinking, setThinking}
+    setName : C.Callback<String,Result<&2,&2,String,Unit>> <- C.create(~Unit,~String,~Result<&2,&2,String,Unit>,~ignoreName,Unit{})
+    getName : C.Callback<Unit,Maybe<&2,String>> <- C.create(~Unit,~Unit,~Maybe<&2,String>,~noName,Unit{})
+    label : C.Callback<Ext.LabelChange,Result<&2,&2,String,Unit>> <- C.create(~Unit,~Ext.LabelChange,~Result<&2,&2,String,Unit>,~ignoreLabel,Unit{})
+    commands : C.Callback<Unit,List<&2,Slash.SlashCommandInfo>> <- C.create(~Unit,~Unit,~List<&2,Slash.SlashCommandInfo>,~noCommands,Unit{})
+    return Ext.ExtensionActions{send, user, model, Ext.ToolActions{active, all, set, refresh}, appender, thinking, setThinking, setName, getName, label, commands}
 
 def gitMergeScenario(+cwd: String) -> IO(Unit):
   do IO<Unit>:

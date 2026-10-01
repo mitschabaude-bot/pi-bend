@@ -1,4 +1,5 @@
 import Base
+import ../slash-commands.bend as Slash
 import ../../../../runtime/src/record.bend as Record
 import ../../../../ai/src/models.bend as AiModels
 import ../../../../ai/src/types.bend as Ai
@@ -815,7 +816,7 @@ def withActionsOf(api: T.ExtensionAPI, act: T.ExtensionActions -> IO(Unit)) -> I
 
 def sendWith(actions: T.ExtensionActions, request: T.SendMessage) -> IO(Unit):
   match actions:
-    case T.ExtensionActions{send, _, _, _, _, _, _}: C.call(T.SendMessage, Unit, send, request)
+    case T.ExtensionActions{send, _, _, _, _, _, _, _, _, _, _}: C.call(T.SendMessage, Unit, send, request)
 
 # upstream pi.sendMessage(message, options).
 def sendMessage(api: T.ExtensionAPI, message: T.CustomMessageInput, options: T.SendMessageOptions) -> IO(Result<&2, &2, String, Unit>):
@@ -823,7 +824,7 @@ def sendMessage(api: T.ExtensionAPI, message: T.CustomMessageInput, options: T.S
 
 def sendUserWith(actions: T.ExtensionActions, request: T.SendUserMessage) -> IO(Unit):
   match actions:
-    case T.ExtensionActions{_, send, _, _, _, _, _}: C.call(T.SendUserMessage, Unit, send, request)
+    case T.ExtensionActions{_, send, _, _, _, _, _, _, _, _, _}: C.call(T.SendUserMessage, Unit, send, request)
 
 # upstream pi.sendUserMessage(content, options).
 def sendUserMessage(api: T.ExtensionAPI, content: Ai.UserContent, options: T.SendUserMessageOptions) -> IO(Result<&2, &2, String, Unit>):
@@ -832,7 +833,7 @@ def sendUserMessage(api: T.ExtensionAPI, content: Ai.UserContent, options: T.Sen
 def modelSetWith(found: Result<&2, &2, String, T.ExtensionActions>, model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2, &2, String, Bool>):
   match found:
     case Fail{error}: IO.pure(Result<&2, &2, String, Bool>, Fail{error})
-    case Done{T.ExtensionActions{_, _, setter, _, _, _, _}}:
+    case Done{T.ExtensionActions{_, _, setter, _, _, _, _, _, _, _, _}}:
       do IO<Result<&2, &2, String, Bool>>:
         changed : Bool <- C.call(Ai.Model<Ai.JsonValue>, Bool, setter, model)
         return Done{changed}
@@ -847,7 +848,7 @@ def setModel(api: T.ExtensionAPI, model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2
 def thinkingLevelWith(found: Result<&2, &2, String, T.ExtensionActions>) -> IO(Result<&2, &2, String, Ai.ModelThinkingLevel>):
   match found:
     case Fail{error}: IO.pure(Result<&2, &2, String, Ai.ModelThinkingLevel>, Fail{error})
-    case Done{T.ExtensionActions{_, _, _, _, _, getter, _}}:
+    case Done{T.ExtensionActions{_, _, _, _, _, getter, _, _, _, _, _}}:
       do IO<Result<&2, &2, String, Ai.ModelThinkingLevel>>:
         level : Ai.ModelThinkingLevel <- C.call(Unit, Ai.ModelThinkingLevel, getter, Unit{})
         return Done{level}
@@ -860,7 +861,7 @@ def getThinkingLevel(api: T.ExtensionAPI) -> IO(Result<&2, &2, String, Ai.ModelT
 def thinkingSetWith(found: Result<&2, &2, String, T.ExtensionActions>, level: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):
   match found:
     case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
-    case Done{T.ExtensionActions{_, _, _, _, _, _, setter}}:
+    case Done{T.ExtensionActions{_, _, _, _, _, _, setter, _, _, _, _}}:
       C.call(Ai.ModelThinkingLevel, Result<&2, &2, String, Unit>, setter, level)
 
 # Like upstream, extension changes affect this session, never its default.
@@ -869,10 +870,49 @@ def setThinkingLevel(api: T.ExtensionAPI, level: Ai.ModelThinkingLevel) -> IO(Re
     found : Result<&2, &2, String, T.ExtensionActions> <- sessionActions(api)
     thinkingSetWith(found, level)
 
+def namedWith(found: Result<&2,&2,String,T.ExtensionActions>, name: String) -> IO(Result<&2,&2,String,Unit>):
+  match found:
+    case Fail{message}: IO.pure(Result<&2,&2,String,Unit>,Fail{message})
+    case Done{T.ExtensionActions{_,_,_,_,_,_,_,setter,_,_,_}}: C.call(String,Result<&2,&2,String,Unit>,setter,name)
+def setSessionName(api: T.ExtensionAPI, name: String) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    found : Result<&2,&2,String,T.ExtensionActions> <- sessionActions(api)
+    namedWith(found,name)
+def nameWith(found: Result<&2,&2,String,T.ExtensionActions>) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
+  match found:
+    case Fail{message}: IO.pure(Result<&2,&2,String,Maybe<&2,String>>,Fail{message})
+    case Done{T.ExtensionActions{_,_,_,_,_,_,_,_,getter,_,_}}:
+      do IO<Result<&2,&2,String,Maybe<&2,String>>>:
+        name : Maybe<&2,String> <- C.call(Unit,Maybe<&2,String>,getter,Unit{})
+        return Done{name}
+def getSessionName(api: T.ExtensionAPI) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
+  do IO<Result<&2,&2,String,Maybe<&2,String>>>:
+    found : Result<&2,&2,String,T.ExtensionActions> <- sessionActions(api)
+    nameWith(found)
+def labelWith(found: Result<&2,&2,String,T.ExtensionActions>, request: T.LabelChange) -> IO(Result<&2,&2,String,Unit>):
+  match found:
+    case Fail{message}: IO.pure(Result<&2,&2,String,Unit>,Fail{message})
+    case Done{T.ExtensionActions{_,_,_,_,_,_,_,_,_,setter,_}}: C.call(T.LabelChange,Result<&2,&2,String,Unit>,setter,request)
+def setLabel(api: T.ExtensionAPI, entryId: String, label: Maybe<&2,String>) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    found : Result<&2,&2,String,T.ExtensionActions> <- sessionActions(api)
+    labelWith(found,T.LabelChange{entryId,label})
+def commandsWith(found: Result<&2,&2,String,T.ExtensionActions>) -> IO(Result<&2,&2,String,List<&2,Slash.SlashCommandInfo>>):
+  match found:
+    case Fail{message}: IO.pure(Result<&2,&2,String,List<&2,Slash.SlashCommandInfo>>,Fail{message})
+    case Done{T.ExtensionActions{_,_,_,_,_,_,_,_,_,_,getter}}:
+      do IO<Result<&2,&2,String,List<&2,Slash.SlashCommandInfo>>>:
+        commands : List<&2,Slash.SlashCommandInfo> <- C.call(Unit,List<&2,Slash.SlashCommandInfo>,getter,Unit{})
+        return Done{commands}
+def getCommands(api: T.ExtensionAPI) -> IO(Result<&2,&2,String,List<&2,Slash.SlashCommandInfo>>):
+  do IO<Result<&2,&2,String,List<&2,Slash.SlashCommandInfo>>>:
+    found : Result<&2,&2,String,T.ExtensionActions> <- sessionActions(api)
+    commandsWith(found)
+
 def toolActionsWith(-A: Data, found: Result<&2, &2, String, T.ExtensionActions>, act: T.ToolActions -> IO(A)) -> IO(Result<&2, &2, String, A>):
   match found:
     case Fail{error}: IO.pure(Result<&2, &2, String, A>, Fail{error})
-    case Done{T.ExtensionActions{_, _, _, tools, _, _, _}}:
+    case Done{T.ExtensionActions{_, _, _, tools, _, _, _, _, _, _, _}}:
       do IO<Result<&2, &2, String, A>>:
         value : A <- act(tools)
         return Done{value}
@@ -907,7 +947,7 @@ def setActiveTools(api: T.ExtensionAPI, names: List<&2, String>) -> IO(Result<&2
 def refreshWith(actions: Maybe<&2, T.ExtensionActions>) -> IO(Unit):
   match actions:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{T.ExtensionActions{_, _, _, T.ToolActions{_, _, _, refresh}, _, _, _}}: C.call(Unit, Unit, refresh, Unit{})
+    case Some{T.ExtensionActions{_, _, _, T.ToolActions{_, _, _, refresh}, _, _, _, _, _, _, _}}: C.call(Unit, Unit, refresh, Unit{})
 
 def refreshBound(runtime: T.ExtensionRuntime()) -> IO(Unit):
   do IO<Unit>:
@@ -1005,7 +1045,7 @@ def registerShortcut(api: T.ExtensionAPI, key: String, options: T.ShortcutOption
 
 def appendWith(actions: T.ExtensionActions, request: T.AppendEntry) -> IO(Unit):
   match actions:
-    case T.ExtensionActions{_, _, _, _, append, _, _}: C.call(T.AppendEntry, Unit, append, request)
+    case T.ExtensionActions{_, _, _, _, append, _, _, _, _, _, _}: C.call(T.AppendEntry, Unit, append, request)
 
 # upstream appendEntry(customType, data): a custom entry in the session.
 def appendEntry(api: T.ExtensionAPI, customType: String, data: Maybe<&2, V.Value>) -> IO(Result<&2, &2, String, Unit>):

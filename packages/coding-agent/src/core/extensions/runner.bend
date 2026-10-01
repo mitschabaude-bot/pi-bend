@@ -425,6 +425,7 @@ def handled(handler: T.EventHandler, event: T.ExtensionEvent, ctx: Ctx.Extension
     case T.OnAfterProviderResponse{callback} T.AfterProviderResponse{value}: called(T.AfterProviderResponseEvent, callback, value, ctx)
     case T.OnModelSelect{callback} T.ModelSelect{value}: called(T.ModelSelectEvent, callback, value, ctx)
     case T.OnThinkingLevelSelect{callback} T.ThinkingLevelSelect{value}: called(T.ThinkingLevelSelectEvent, callback, value, ctx)
+    case T.OnSessionInfoChanged{callback} T.SessionInfoChanged{value}: called(T.SessionInfoChangedEvent, callback, value, ctx)
     case T.OnAgentStart{callback} T.AgentStart{value}: called(T.AgentStartEvent, callback, value, ctx)
     case T.OnAgentEnd{callback} T.AgentEnd{value}: called(T.AgentEndEvent, callback, value, ctx)
     case T.OnAgentSettled{callback} T.AgentSettled{value}: called(T.AgentSettledEvent, callback, value, ctx)

@@ -4311,13 +4311,15 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3686-session-name-event.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/regressions_check.py",
-        "tests/regressions.bend"
+        "tests/regressions.bend",
+        "packages/coding-agent/test/sdk-extension-metadata.bend",
+        "tests/sdk_suites_check.py"
       ],
       "sha256": "71fca90399b614893741b8e0bc28dd976b20134939cd5d44997bd4e02cb25f7c",
-      "notes": "'emits session_info_changed when AgentSession.setSessionName is called' passes. Pending: the two extension cases (pi.setSessionName and session_info_changed delivered to extensions), which the native extension API does not expose yet. Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
+      "notes": "All three named upstream cases pass natively on one/four threads through the SDK: direct AgentSession.setSessionName, extension pi.setSessionName, and session_info_changed delivered to extensions. Assertions cover immediately visible public events/state and consecutive extension notification order. Additional checks cover sanitized/cleared names, journal persistence, labels, command metadata, loading guards and retired APIs."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3688-tree-cancel-compacting.test.ts",

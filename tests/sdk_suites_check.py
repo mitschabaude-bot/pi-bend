@@ -9,7 +9,7 @@ on a failure. Programs that need a temp directory get a fresh one.
   # sdk-stream-options uses packages/coding-agent/test/sdk-stream-options.bend.
   python3 tests/sdk_suites_check.py [--prefix build/] [--lanes bun,native-1,native-4] [suite ...]
 """
-import argparse, os, subprocess, tempfile
+import argparse, json, os, subprocess, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +17,19 @@ ROOT = Path(__file__).resolve().parents[1]
 # suite -> (upstream test names in order, needs a temp dir, names that run
 # bash and so are skipped on Bun)
 SUITES = {
+    'sdk-extension-metadata': ([
+        'metadata and command actions reject calls during loading',
+        'assistant output flushes the metadata journal',
+        'extension getter reports an unnamed session',
+        'emits session_info_changed when AgentSession.setSessionName is called',
+        'emits session_info_changed when an extension calls pi.setSessionName',
+        'emits session_info_changed to extensions',
+        'extension names normalize newlines and clear whitespace-only names',
+        'extension labels update and clear the session tree',
+        'extension labels reject nonexistent entries without changing history',
+        'extension command discovery preserves resolved names, order, descriptions and source metadata',
+        'retired metadata and command actions reject after SDK disposal',
+    ], True, set()),
     'plan-mode-extension': ([
         'preserves custom active tools while toggling plan mode',
         'does not prompt when the assistant response contains no plan',
@@ -105,6 +118,16 @@ def run(prefix, suite, lane):
         env['BEND_THREADS'] = lane.split('-')[1]
     with tempfile.TemporaryDirectory(prefix='pi-sdk-' + suite + '-') as temp:
         result = subprocess.run(args + ([temp] if needs_dir else []), capture_output=True, text=True, timeout=600, cwd=ROOT, env=env)
+        if suite == 'sdk-extension-metadata' and result.returncode == 0:
+            journals = list(Path(temp).rglob('*.jsonl'))
+            assert len(journals) == 1, journals
+            entries = [json.loads(line) for line in journals[0].read_text().splitlines()]
+            assert [entry.get('name') for entry in entries if entry['type'] == 'session_info'] == ['hello world', 'from extension', 'first', 'second', 'line name', '']
+            labels = [entry for entry in entries if entry['type'] == 'label']
+            assert [entry.get('label') for entry in labels] == ['favorite', None], labels
+            assert labels[0]['targetId'] == labels[1]['targetId']
+            assert labels[0]['targetId'] in {entry.get('id') for entry in entries}
+
     lines = [line for line in result.stdout.splitlines() if line.startswith(('ok ', 'SKIP '))]
     assert result.returncode == 0, (suite, lane, result.stdout[-2000:], result.stderr[-2000:])
     verdicts = [(line.split(' ', 1)[0], line.split(' ', 1)[1]) for line in lines]

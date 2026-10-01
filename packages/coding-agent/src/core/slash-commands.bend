@@ -1,5 +1,13 @@
 import Base
 import ../config.bend as Config
+import ./skills.bend as Skills
+
+type SlashCommandSource is Data:
+  Extension{}
+  Prompt{}
+  Skill{}
+type SlashCommandInfo is Data:
+  SlashCommandInfo{name: String, description: Maybe<&2,String>, source: SlashCommandSource, sourceInfo: Skills.SourceInfo}
 
 # upstream core/slash-commands.ts: the interactive built-in commands, in the
 # order autocomplete lists them.
