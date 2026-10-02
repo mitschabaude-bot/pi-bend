@@ -2693,6 +2693,25 @@ def queueFactory(apiRef: R.Ref<Maybe<&2, Ext.ExtensionAPI>>, +api: Ext.Extension
     handler : Ext.ExtensionHandler(Ext.InputEvent, Ext.InputEventResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.InputEvent>, ~Handled(Ext.InputEventResult), ~queueInput, Unit{})
     subscribe(api, Ext.OnInput{handler})
 
+def observeQueueInput(env: Unit, call: Ext.HandlerCall<Ext.InputEvent>) -> IO(Handled(Ext.InputEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.InputEvent{text, _, source, behavior}, _}:
+      do IO<Handled(Ext.InputEventResult)>:
+        print("input", Json.field("text", Json.text(text), Json.field("source", Json.text(queueSource(source)), Json.field("streamingBehavior", deliveryName(behavior), Nil{}))))
+        return Done{None{}}
+
+def sourceFactory(apiRef: R.Ref<Maybe<&2, Ext.ExtensionAPI>>, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    registered : Result<&2, &2, String, Unit> <- testCommandFactory(apiRef, api)
+    handler : Ext.ExtensionHandler(Ext.InputEvent, Ext.InputEventResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.InputEvent>, ~Handled(Ext.InputEventResult), ~observeQueueInput, Unit{})
+    subscribe(api, Ext.OnInput{handler})
+
+def queueScenarioFactory(+name: String, apiRef: R.Ref<Maybe<&2, Ext.ExtensionAPI>>) -> IO(Ext.ExtensionFactory()):
+  match name:
+    case "input": C.create(~R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(ref => api => queueFactory(ref, api)), apiRef)
+    case "extension-steer": C.create(~R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(ref => api => sourceFactory(ref, api)), apiRef)
+    case _: C.create(~R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(ref => api => testCommandFactory(ref, api)), apiRef)
+
 def reportPending(+session: Session.AgentSession, label: String) -> IO(Unit):
   do IO<Unit>:
     pending : Nat <- Session.pendingMessageCount(session)
@@ -2761,12 +2780,9 @@ def queueScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
     +started : Chan(Unit) <- Chan.new(Unit, 1)
     +release : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Unit) <- Chan.new(Unit, 1)
-    +transform : Bool = String.eq(name, "input")
     +follow : Bool = String.starts_with(name, "mode-follow") || String.ends_with(name, "follow")
     +all : Bool = String.ends_with(name, "all")
-    +factory : Ext.ExtensionFactory() <- Bool.pick(Unit -> IO(Ext.ExtensionFactory()), transform,
-      _ => C.create(~R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(ref => api => queueFactory(ref, api)), apiRef),
-      _ => C.create(~R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~(ref => api => testCommandFactory(ref, api)), apiRef))(Unit{})
+    +factory : Ext.ExtensionFactory() <- queueScenarioFactory(name, apiRef)
     +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{started, release}}]}, setup(queueReplies(name, follow, all)), ref, [inline("queue", factory)])
     +session : Session.AgentSession = sessionOf(harness)
     mode : Result<&2, &2, String, Unit> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), follow, _ => Session.setFollowUpMode(session, Bool.pick(T.QueueMode, all, T.All{}, T.OneAtATime{})), _ => Session.setSteeringMode(session, Bool.pick(T.QueueMode, all, T.All{}, T.OneAtATime{})))(Unit{})
@@ -2850,6 +2866,14 @@ def retryTools(+dir: String, agentDir: String) -> IO(Unit):
     H.reportMessages(sessionOf(harness))
     cleanup(harness)
 
+def retryNetworkError(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +harness : Harness <- createHarness(dir, agentDir, Builtins{}, setup([Reg.Failed{"Provider finish_reason: network_error"}, Reg.Text{"recovered"}]))
+    prompted(sessionOf(harness), "test")
+    H.reportRetrying(sessionOf(harness))
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
 def observedPrompt(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
@@ -2869,6 +2893,7 @@ def retryEvents(+dir: String, agentDir: String, kind: String) -> IO(Unit):
   match kind:
     case "delayed": retryDelayed(dir, agentDir)
     case "tools": retryTools(dir, agentDir)
+    case "network": retryNetworkError(dir, agentDir)
     case "observe": observedPrompt(dir, agentDir)
     case "deltas": mixedDeltas(dir, agentDir)
     case "error":

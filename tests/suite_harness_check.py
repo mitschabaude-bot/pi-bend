@@ -553,6 +553,12 @@ def retry_event_checks(f):
     assert [e['run'] for e in of_type(events, 'tool_run')] == ['hello']
     assert len(results) == 1 and text_of(results[0]) == 'echo:hello'
     assert text_of(messages(events)[-1]) == 'follow-up answer'
+    # retries provider network_error failures
+    events = run(f, 'retry_events', 'network', settings=settings)
+    assert len(of_type(events, 'request')) == 2
+    assert [e['type'] for e in events if e['type'] in ('auto_retry_start', 'auto_retry_end')] == ['auto_retry_start', 'auto_retry_end']
+    assert last(events, 'auto_retry_end')['success'] is True and last(events, 'retrying')['value'] is False
+    assert text_of(messages(events)[-1]) == 'recovered'
     # emits extension events before public event subscribers
     events = run(f, 'retry_events', 'observe')
     order = []
@@ -594,7 +600,7 @@ def retry_event_checks(f):
     assert of_type(events, 'message_update')
     assert len(of_type(events, 'agent_end')) == 1 and event_order(events)[-1] == 'agent_settled'
     assert last(events, 'persisted')['messages'][-1]['stopReason'] == 'aborted'
-    return 8
+    return 9
 
 
 def model_extension_checks(f):
@@ -907,6 +913,7 @@ def queue_checks(f):
         assert [text_of(m) for m in contexts[-1] if m['role'] == 'user'] == ['start', text]
         if delivery == 'steer':
             assert len(contexts) == 2
+            assert of_type(events, 'input')[-1] == dict(type='input', text='steer now', source='extension', streamingBehavior='steer')
         else:
             assert [text_of(m) for m in contexts[-1] if m['role'] == 'assistant'] == ['', 'original turn complete']
         checks += 1

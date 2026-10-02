@@ -2391,14 +2391,16 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-concurrent.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/agent-session.bend",
-        "tests/agent_session_check.py"
+        "tests/agent_session_check.py",
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
       ],
       "sha256": "0c2409ec9ce8b4b060c4ecb1fd779ed3412e997f81d372fd0ddbdbbd3f1ed0ac",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'should throw when prompt() called while streaming', 'should allow steer()/followUp() while streaming' and 'should allow prompt() after previous completes' are the busy scenario of tests/agent_session_check.py with the provider held open instead of a waiting tool. Extension-origin steering, tool_call ordering with queued events and slow extension handlers remain pending. v0.87.1 diff reviewed (46c9de402..f07218c4d): the changed case ('should persist message_end events in order with slow extension handlers' now expects the system loadout message) is not ported."
+      "notes": "All seven original cases pass on native one/four. The gated busy scenario rejects a second plain prompt and accepts steer/followUp while streaming; the retry-through-tool scenario finishes fully and accepts a fresh prompt afterward. The shared queue scenario sends through the real extension API, records extension as the input source, exposes the queued steering update and includes it in the next provider context. Extension event scenarios assert each tool_call handler sees the already-persisted system/user/assistant branch and that yielding message_end handlers preserve system/user/assistant/toolResult/toolResult/assistant order. Channels and yielding handlers replace timer guesses while retaining the observable ordering contracts."
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-provider.test.ts",
@@ -2425,14 +2427,18 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-retry.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/agent-session.bend",
-        "tests/agent_session_check.py"
+        "tests/agent_session_check.py",
+        "tests/retry-classify.bend",
+        "tests/retry_classify_check.py",
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
       ],
       "sha256": "1f366be0938adbf8aaba0469fb1acc3b8b9b33ffdd2a4b7d66530e799ac6c900",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'retries after a transient error and succeeds' and 'exhausts max retries and emits failure' are retry scenarios of tests/agent_session_check.py; 'caps agent retry delay' is covered on retryDelayMs by tests/retry_classify_check.py. Delayed message_end handling, provider network_error failures and tool-call recovery remain pending."
+      "notes": "All six original cases pass on native one/four. The agent-session fixture covers transient success and exhausted retries with call counts, events and final retry state; retry-classify covers the capped delay sequence. The shared suite harness verifies prompt completion waits for a yielding assistant message_end handler, retries the exact provider error text `Provider finish_reason: network_error`, and waits through retry recovery, tool execution, the final assistant response and a subsequent fresh prompt."
     },
     {
       "source": "packages/coding-agent/test/agent-session-runtime-events.test.ts",
