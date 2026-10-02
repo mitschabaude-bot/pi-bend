@@ -3455,13 +3455,13 @@
     },
     {
       "source": "packages/coding-agent/test/models-store.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/models-store.bend",
         "tests/models_store_check.py"
       ],
       "sha256": "ad84fe3cf045af1ce4db057844bca181db0db59eaa8326664c607f6d9c3bf82f",
-      "notes": "All five cases run on Bun and native one/four threads over packages/coding-agent/src/core/models-store.bend: catalogs persisted per provider without replacing others (write, fresh-store read, delete), an existing file's 0660 mode preserved, coalesced reloads (a shared read state serves unchanged-revision reads from its cache and reloads after the file changes), a coalesced reload kept alive for a waiting reader while the first reader is cancelled (the checker holds the proper-lockfile lock until the program reports the cancelled reader, then the waiting reader gets the stored catalog), and a write waiting for a held lock cancelled after 10 ms without writing later. Partial because upstream's lock/release call-count assertions (a mocked proper-lockfile) are not observed: native readers of one read state are serialized, so the cancelled reader withdraws its own lock wait and the waiting reader then takes the lock itself (two lock attempts, one acquisition, where upstream shares one reload)."
+      "notes": "All five cases run on Bun and native one/four threads over packages/coding-agent/src/core/models-store.bend: catalogs persist per provider without replacing others; an existing file's 0660 mode is preserved; unchanged-revision reads share cached state and file edits trigger reloads; cancellation of one concurrent reader does not cancel a waiting reader; and a cancelled write waiting for a held lock never writes later. Native synchronization serializes readers of one read state, so a cancelled reader withdraws its own lock wait and the waiting reader makes another attempt. This preserves the observable coalescing and cancellation contracts without reproducing upstream's mocked proper-lockfile call/release counts."
     },
     {
       "source": "packages/coding-agent/test/oauth-selector.test.ts",
@@ -3719,13 +3719,13 @@
     },
     {
       "source": "packages/coding-agent/test/runtime-credentials.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/auth-storage.bend",
         "tests/auth_storage_check.py"
       ],
       "sha256": "dbc0fab5e3f7e6f59c0a9947feaa16a574ae03783d7510894096e02cf1ceb409",
-      "notes": "Ported: runtime overrides mask stored credentials without persisting; enumeration merges overrides without exposing keys; delete clears both the override and persisted credential. Pending: forwards operation signals to the persistent store; keeps a runtime override when persistent deletion is cancelled."
+      "notes": "All five contracts run through RuntimeCredentials: runtime overrides mask stored credentials without persisting; enumeration merges overrides without exposing keys; each read/list/modify/delete signal is forwarded to the persistent store; a failed/cancelled persistent deletion preserves the runtime override; and a successful deletion clears both the override and persisted credential. Signal linkage is tested by aborting each original controller inside the store callback and observing the forwarded signal on native one/four threads."
     },
     {
       "source": "packages/coding-agent/test/scoped-models-selector.test.ts",

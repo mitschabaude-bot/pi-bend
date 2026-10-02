@@ -8,6 +8,8 @@ import ../packages/runtime/src/json.bend as Json
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/callback.bend as C
+import ../packages/runtime/src/ref.bend as Ref
+import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/f64.bend as F
 import ../packages/runtime/src/filesystem.bend as FS
 
@@ -144,6 +146,89 @@ def runtimeScript(storage: Storage.AuthStorage, script: String) -> IO(Unit):
     Runtime.dispose(credentials)
     Auth.disposeStore(store)
 
+# RuntimeCredentials forwards the caller's signal to every persistent-store
+# operation. Each probe aborts its original controller inside the store
+# callback; the received signal must observe that same cancellation.
+type SignalProbe is Data:
+  SignalProbe{label: String, controller: Abort.AbortController<Unit>, seen: Ref.Ref<List<&2, String>>}
+
+def observedSignal(signal: Auth.Signal()) -> IO(Bool):
+  match signal:
+    case None{}: IO.pure(Bool, False{})
+    case Some{value}: Abort.aborted(Unit, value)
+
+def recordSignal(probe: SignalProbe, signal: Auth.Signal()) -> IO(Unit):
+  match probe:
+    case SignalProbe{label, controller, seen}:
+      do IO<Unit>:
+        _ : Bool <- Abort.abort(Unit, controller, None{})
+        linked : Bool <- observedSignal(signal)
+        Ref.modify(List<&2, String>, Unit, seen, previous => (List.append(&2, String, previous, (label ++ ":" ++ Bool.pick(String, linked, "true", "false")) <> Nil{}), Unit{}))
+
+def probedRead(probe: SignalProbe, request: Auth.Request) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
+  match request:
+    case Auth.Request{_, signal}:
+      do IO<Auth.StoreResult(Maybe<&2, Auth.Credential>)>:
+        recordSignal(probe, signal)
+        return Done{None{}}
+
+def probedList(probe: SignalProbe, signal: Auth.Signal()) -> IO(Auth.StoreResult(List<&2, Auth.CredentialInfo>)):
+  do IO<Auth.StoreResult(List<&2, Auth.CredentialInfo>)>:
+    recordSignal(probe, signal)
+    return Done{Nil{}}
+
+def probedModify(probe: SignalProbe, request: Auth.Modify) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
+  match request:
+    case Auth.Modify{_, _, signal}:
+      do IO<Auth.StoreResult(Maybe<&2, Auth.Credential>)>:
+        recordSignal(probe, signal)
+        return Done{None{}}
+
+def probedDelete(probe: SignalProbe, request: Auth.Request) -> IO(Auth.StoreResult(Unit)):
+  match request:
+    case Auth.Request{_, signal}:
+      do IO<Auth.StoreResult(Unit)>:
+        recordSignal(probe, signal)
+        return Fail{"cancelled"}
+
+def textList(values: List<&2, String>) -> List<&2, V.Value>:
+  match values:
+    case Nil{}: Nil{}
+    case value <> rest: V.Text{value} <> textList(rest)
+
+def runtimeContracts() -> IO(Unit):
+  do IO<Unit>:
+    +seen : Ref.Ref<List<&2, String>> <- Ref.new(List<&2, String>, Nil{})
+    +readController : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +listController : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +modifyController : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +deleteController : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +reader : C.Callback<Auth.Request, Auth.StoreResult(Maybe<&2, Auth.Credential>)> <- C.create(~SignalProbe, ~Auth.Request, ~(Auth.StoreResult(Maybe<&2, Auth.Credential>)), ~probedRead, SignalProbe{"read", readController, seen})
+    +lister : C.Callback<Auth.Signal(), Auth.StoreResult(List<&2, Auth.CredentialInfo>)> <- C.create(~SignalProbe, ~(Auth.Signal()), ~(Auth.StoreResult(List<&2, Auth.CredentialInfo>)), ~probedList, SignalProbe{"list", listController, seen})
+    +modifier : C.Callback<Auth.Modify, Auth.StoreResult(Maybe<&2, Auth.Credential>)> <- C.create(~SignalProbe, ~Auth.Modify, ~(Auth.StoreResult(Maybe<&2, Auth.Credential>)), ~probedModify, SignalProbe{"modify", modifyController, seen})
+    +deleter : C.Callback<Auth.Request, Auth.StoreResult(Unit)> <- C.create(~SignalProbe, ~Auth.Request, ~(Auth.StoreResult(Unit)), ~probedDelete, SignalProbe{"delete", deleteController, seen})
+    +store : Auth.CredentialStore = Auth.CredentialStore{reader, lister, modifier, deleter}
+    +credentials : Runtime.RuntimeCredentials <- Runtime.create(store)
+    Runtime.setRuntimeApiKey(credentials, "anthropic", "runtime-key")
+    _ : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Runtime.read(credentials, "missing", Some{Abort.signal(Unit, readController)})
+    _ : Auth.StoreResult(List<&2, Auth.CredentialInfo>) <- Runtime.list(credentials, Some{Abort.signal(Unit, listController)})
+    +unchanged : Auth.Modification() <- C.create(~Maybe<&2, Auth.Credential>, ~Maybe<&2, Auth.Credential>, ~(Auth.StoreResult(Maybe<&2, Auth.Credential>)), ~update, None{})
+    _ : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Runtime.modify(credentials, "missing", unchanged, Some{Abort.signal(Unit, modifyController)})
+    deleteResult : Auth.StoreResult(Unit) <- Runtime.delete(credentials, "anthropic", Some{Abort.signal(Unit, deleteController)})
+    preserved : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Runtime.read(credentials, "anthropic", None{})
+    observations : List<&2, String> <- Ref.read(List<&2, String>, seen)
+    IO.print(line(V.ArrayValue{textList(observations)}))
+    IO.print(outcome(Unit, unitValue, deleteResult))
+    IO.print(outcome(Maybe<&2, Auth.Credential>, credentialValue, preserved))
+    C.dispose(Maybe<&2, Auth.Credential>, Auth.StoreResult(Maybe<&2, Auth.Credential>), unchanged)
+    Runtime.dispose(credentials)
+    Auth.disposeStore(store)
+    _ : List<&2, String> <- Ref.dispose(List<&2, String>, seen)
+    Abort.dispose(Unit, readController)
+    Abort.dispose(Unit, listController)
+    Abort.dispose(Unit, modifyController)
+    Abort.dispose(Unit, deleteController)
+
 def operate(storage: Storage.AuthStorage, values: List<String>) -> IO(Unit):
   match values:
     case "read" <> providerId <> Nil{}:
@@ -189,6 +274,7 @@ def rereadWith(pair: Storage.AuthStorageOwner & Storage.AuthStorage, location: S
 
 def run(values: List<String>) -> IO(Unit):
   match values:
+    case "runtime_contracts" <> Nil{}: runtimeContracts()
     case "reread" <> +location <> providerId <> json <> Nil{}:
       do IO<Unit>:
         owner : Storage.AuthStorageOwner <- open(location)

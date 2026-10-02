@@ -85,4 +85,10 @@ for backend, command in [('bun', ['bun', str(PREFIX) + '.js']), ('native-1', [st
         memory = 'memory:' + json.dumps({'anthropic': {'type': 'api_key', 'key': 'stored-key'}})
         assert run('runtime', memory, 'set:anthropic=runtime-key,delete:anthropic,read:anthropic,list') == ['ok', 'ok', None, []]
         print(f'{backend}: delete clears both the override and persisted credential', flush=True)
+        if backend != 'bun':
+            contracts = run('runtime_contracts')
+            assert contracts[0] == ['read:true', 'list:true', 'modify:true', 'delete:true']
+            print(f'{backend}: forwards operation signals to the persistent store', flush=True)
+            assert contracts[1:] == [{'error': 'cancelled'}, {'type': 'api_key', 'key': 'runtime-key'}]
+            print(f'{backend}: keeps a runtime override when persistent deletion is cancelled', flush=True)
 print('auth_storage_check: PASS')

@@ -1352,6 +1352,17 @@
         "packages/coding-agent/src/core/models-store.bend": "8a50e2c3d8d6a23c81e55e88e87334a32dd73c7874e44bf8ea3a4751e02748ad"
       }
     },
+    "packages/coding-agent/src/core/runtime-credentials.ts": {
+      "state": "ported",
+      "note": "RuntimeCredentials preserves the upstream credential-store overlay: transient API-key set/remove/lookup, override-first reads, merged credential metadata without key exposure, persistent modification forwarding and deletion that removes an override only after persistent success. All operation signals are forwarded and pre-aborted reads, lists and deletes fail before changing overlay state. The native store view makes the same interface available to pi-ai consumers; lifecycle disposal is explicit.",
+      "ports": [
+        "packages/coding-agent/src/core/runtime-credentials.bend"
+      ],
+      "source_sha256": "ddbedbe209da4314a873c9e435c2a80404a25bcf63406351888bd613068b7036",
+      "port_sha256": {
+        "packages/coding-agent/src/core/runtime-credentials.bend": "77f613968b0e59481ceef3b5c478943f451987986df98e5ce793bd435b5ff0b2"
+      }
+    },
     "packages/coding-agent/src/core/tools/edit-diff.ts": {
       "state": "partial",
       "ports": [
