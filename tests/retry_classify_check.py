@@ -2,7 +2,7 @@
 """Differential check of packages/ai/src/utils/retry.bend and overflow.bend against
 the pinned pi-ai classifiers: every case is classified by both and compared."""
 from upstream_pin import UPSTREAM
-import argparse, json, subprocess, sys, tempfile
+import argparse, json, re, subprocess, sys, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -135,6 +135,12 @@ def main():
     if failures:
         sys.exit('retry-classify: %d of %d cases differ' % (failures, len(rows)))
     print('retry-classify: %d cases agree with upstream' % len(rows))
+    retry_section = (UPSTREAM / 'test' / 'retry.test.ts').read_text().split('describe("retryAssistantCall"', 1)[1]
+    retry_names = re.findall(r'\bit\("([^"]+)"', retry_section)
+    command = ['bun', runner, '--', 'named'] if runner.endswith('.js') else [runner, '--threads', args.threads, '--', 'named']
+    named = subprocess.run(command, capture_output=True, text=True, check=True).stdout.splitlines()
+    assert named == ['PASS ' + name for name in retry_names], (named, retry_names)
+    print('retry-loop: all %d named upstream cases pass' % len(retry_names))
 
 if __name__ == '__main__':
     main()

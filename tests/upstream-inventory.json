@@ -1959,14 +1959,14 @@
     },
     {
       "source": "packages/ai/test/retry.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/retry-classify.bend",
         "tests/retry_classify_check.py"
       ],
       "sha256": "3b94867dcfc5f363927dd28838ccb8b4da87fadfab2dd145b71a520a60c5b3a8",
       "implementation": "packages/ai/src/utils/retry.bend",
-      "notes": "Every classification message and the retryDelayMs cases are in the differential corpus of tests/retry_classify_check.py (upstream oracle plus pinned expectations). retryAssistantCall (the summarization retry loop) is not ported yet."
+      "notes": "Every classification message and retryDelayMs case is in the 175-case differential corpus (upstream oracle plus pinned expectations). All ten retryAssistantCall cases pass by original name on native one/four: immediate/terminal outcomes, retry exhaustion, capped delays, recovery, disabled policy, scheduled/start/finished callbacks and signal-cancelled backoff."
     },
     {
       "source": "packages/ai/test/sampling-options.test.ts",

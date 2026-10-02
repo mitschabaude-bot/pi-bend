@@ -1948,6 +1948,17 @@
       "port_sha256": {
         "packages/ai/src/api/lazy.bend": "b6a73c00f8c901f21bdbdb436a93ac439a6550c2d7dbca0a04d57645e7d3109b"
       }
+    },
+    "packages/ai/src/utils/retry.ts": {
+      "state": "ported",
+      "note": "Transient provider classification preserves upstream's case-insensitive allow/deny patterns; retryDelayMs preserves exponential growth, safe-integer handling and the policy cap. retryAssistantCall preserves bounded attempts, non-retryable and aborted terminal outcomes, cancellable backoff and the scheduled/start/finished callback sequence. Native callbacks use one typed RetryNotice callback instead of three optional object fields. The 175-case differential and all ten named loop cases pass on native one/four.",
+      "ports": [
+        "packages/ai/src/utils/retry.bend"
+      ],
+      "source_sha256": "e262b1b936890015633e6e82d198f64ac7fbab778596f520716aa6dc8806929d",
+      "port_sha256": {
+        "packages/ai/src/utils/retry.bend": "5b465c6a857d9c4d82aa00b367d5f2c376230681a359b5024ddae4e403dc701c"
+      }
     }
   }
 }
