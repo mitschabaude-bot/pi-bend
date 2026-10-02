@@ -100,7 +100,7 @@ try {
 			},
 			notify: (event: any) => {
 				emit("N", event);
-				if (spec.abortOnDeviceCode && event.type === "device_code") controller.abort();
+				if (spec.abortOnDeviceCode && event.type === "device_code") setTimeout(() => controller.abort(), 200);
 				if (event.type !== "auth_url") return;
 				authUrl = event.url;
 				callbackUrl = new URL(event.url).searchParams.get("callback_url") ?? "";

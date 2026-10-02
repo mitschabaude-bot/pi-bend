@@ -32,6 +32,7 @@ def DEVICE_USER_CODE_URL() -> String: "https://auth.openai.com/api/accounts/devi
 def DEVICE_TOKEN_URL() -> String: "https://auth.openai.com/api/accounts/deviceauth/token"
 def DEVICE_VERIFICATION_URI() -> String: "https://auth.openai.com/codex/device"
 def DEVICE_REDIRECT_URI() -> String: "https://auth.openai.com/deviceauth/callback"
+def DEVICE_EXPIRES_MS() -> U32: 900000
 
 type DeviceEndpoints is Data:
   DeviceEndpoints{userCodeUrl: String, tokenUrl: String, exchangeUrl: String, verificationUri: String}
@@ -123,9 +124,28 @@ def textRead(reader: Response.Read(Client.ReadError(Unit), Client.State(Unit)), 
 def bodyText(body: Response.Body<Client.State(Unit)>) -> IO(Result<&2, &2, String, String>):
   Response.with(~(Client.ReadError(Unit)), ~(Client.State(Unit)), ~Result<&2, &2, String, String>, ~(Client.read(Unit)), ~(Client.close(Unit)), reader => closer => textRead(reader, closer, body))
 
+def refreshHTTPMessage(error: Client.APIError) -> String:
+  match error:
+    case Client.APIError{+metadata, Client.TextDiagnostic{SCon{head, tail}}, _}:
+      "OpenAI Codex token refresh failed (" ++ U32.show(Response.metadataStatus(metadata)) ++ "): " ++ SCon{head, tail}
+    case Client.APIError{+metadata, Client.TextDiagnostic{SNil{}}, _}:
+      "OpenAI Codex token refresh failed (" ++ U32.show(Response.metadataStatus(metadata)) ++ "): " ++ Response.statusText(metadata)
+    case Client.APIError{+metadata, Client.JSONDiagnostic{value}, _}:
+      "OpenAI Codex token refresh failed (" ++ U32.show(Response.metadataStatus(metadata)) ++ "): " ++ Maybe.default(&2, String, Encode.stringify(value), Response.statusText(metadata))
+
+def refreshAttemptMessage(cause: Client.AttemptError<Unit>) -> String:
+  "OpenAI Codex token refresh error: " ++ Client.describeAttempt(Unit, cause, Some{Client.prefix("openai-codex")})
+
+def refreshFailure(failure: Retry.RequestFailure<Client.AttemptError<Unit>>) -> String:
+  match failure:
+    case Retry.Provider{Retry.ProviderError{Client.HTTPFailure{cause}, _, _, _, _, _}}: refreshHTTPMessage(cause)
+    case Retry.Other{Client.HTTPFailure{cause}}: refreshHTTPMessage(cause)
+    case Retry.Provider{Retry.ProviderError{cause, _, _, _, _, _}}: refreshAttemptMessage(cause)
+    case Retry.Other{cause}: refreshAttemptMessage(cause)
+
 def responded(outcome: Client.Outcome(Unit)) -> IO(Result<&2, &2, String, String>):
   match outcome:
-    case Fail{failure}: IO.pure(Result<&2, &2, String, String>, Fail{"OpenAI Codex token refresh error: " ++ Client.describeRetry(Unit, Retry.RequestFailed{failure}, Some{Client.prefix("openai-codex")})})
+    case Fail{failure}: IO.pure(Result<&2, &2, String, String>, Fail{refreshFailure(failure)})
     case Done{Response.Response{_, body}}: bodyText(body)
 
 def parsedToken(now: F64, text: Result<&2, &2, String, String>) -> Result<&2, &2, String, OAuthToken>:
@@ -138,7 +158,7 @@ def dispatched(fetch: Fetch.Fetch(Unit), signal: Abort.AbortSignal<Unit>, prepar
     case Fail{error}: IO.pure(Result<&2, &2, String, OAuthToken>, Fail{error})
     case Done{ready}:
       do IO<Result<&2, &2, String, OAuthToken>>:
-        outcome : Client.Outcome(Unit) <- Client.attempt(~Unit, ready, signal, fetch, 65536n)
+        outcome : Client.Outcome(Unit) <- Client.attemptWith(~Unit, raw => Client.TextDiagnostic{raw}, ready, signal, fetch, 65536n)
         text : Result<&2, &2, String, String> <- responded(outcome)
         now : F64 <- Date.now()
         return parsedToken(now, text)
@@ -325,12 +345,12 @@ def boundedWait(+deadline: F64, +now: F64, interval: U32) -> U32:
         waited : Result<&2, &2, Abort.AbortReason<Unit>, Unit> <- Timer.sleep(Unit, boundedWait(deadline, current, planInterval(plan)), signal)
         Bool.pick(Unit -> IO(Result<&2, &2, String, AuthorizationCode>), waitedOk(waited), _ => pollLoop(flow, endpoint, device, signal, deadline, planInterval(plan), planSlowed(plan)), _ => IO.pure(Result<&2, &2, String, AuthorizationCode>, Fail{"Login cancelled"}))(Unit{}))(Unit{})
 
-def pollDevice(flow: Flow, endpoints: DeviceEndpoints, +device: DeviceCode, signal: Abort.AbortSignal<Unit>) -> IO(Result<&2, &2, String, AuthorizationCode>):
+def pollDevice(flow: Flow, endpoints: DeviceEndpoints, +device: DeviceCode, signal: Abort.AbortSignal<Unit>, expiresMs: U32) -> IO(Result<&2, &2, String, AuthorizationCode>):
   match endpoints device:
     case DeviceEndpoints{_, endpoint, _, _} DeviceCode{_, _, +interval, _}:
       do IO<Result<&2, &2, String, AuthorizationCode>>:
         now : F64 <- Date.now()
-        pollLoop(flow, endpoint, device, signal, F.add(now, F.fromU32(900000)), U32.max(1000, (interval * 1000 : U32)), False{})
+        pollLoop(flow, endpoint, device, signal, F.add(now, F.fromU32(expiresMs)), U32.max(1000, (interval * 1000 : U32)), False{})
 
 def exchangeBodyAt(code: AuthorizationCode, redirectUri: String) -> String:
   match code:
@@ -420,18 +440,18 @@ def deviceAuthorized(flow: Flow,endpoints: DeviceEndpoints,result: Result<&2,&2,
 def deviceIntervalSeconds(device: DeviceCode) -> F64:
   match device:
     case DeviceCode{_,_,interval,_}: F.fromU32(interval)
-def deviceStarted(+flow: Flow,+endpoints: DeviceEndpoints,result: Result<&2,&2,String,DeviceCode>,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+def deviceStarted(+flow: Flow,+endpoints: DeviceEndpoints,+expiresMs: U32,result: Result<&2,&2,String,DeviceCode>,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   match result interaction:
     case Fail{message} _: IO.pure(Auth.LoginOutcome(),Fail{message})
     case Done{+device} Auth.ProviderAuthInteraction{+signal,_,notify}:
       do IO<Auth.LoginOutcome()>:
-        C.call(Auth.AuthEvent,Unit,notify,Auth.DeviceCodeEvent{deviceUserCode(device),deviceVerificationUri(device),Some{deviceIntervalSeconds(device)},Some{F.fromU32(900)}})
-        code : Result<&2,&2,String,AuthorizationCode> <- pollDevice(flow,endpoints,device,signal)
+        C.call(Auth.AuthEvent,Unit,notify,Auth.DeviceCodeEvent{deviceUserCode(device),deviceVerificationUri(device),Some{deviceIntervalSeconds(device)},Some{F.divide(F.fromU32(expiresMs),F.fromU32(1000))}})
+        code : Result<&2,&2,String,AuthorizationCode> <- pollDevice(flow,endpoints,device,signal,expiresMs)
         deviceAuthorized(flow,endpoints,code,signal)
 def exchangeEndpoint(endpoints: DeviceEndpoints) -> String:
   match endpoints:
     case DeviceEndpoints{_,_,endpoint,_}: endpoint
-def selectedLogin(+flow: Flow,+endpoints: DeviceEndpoints,+interaction: Auth.ProviderAuthInteraction,method: Browser.CodeResult()) -> IO(Auth.LoginOutcome()):
+def selectedLogin(+flow: Flow,+endpoints: DeviceEndpoints,expiresMs: U32,+interaction: Auth.ProviderAuthInteraction,method: Browser.CodeResult()) -> IO(Auth.LoginOutcome()):
   match method interaction:
     case Fail{message} _: IO.pure(Auth.LoginOutcome(),Fail{message})
     case Done{"browser"} _:
@@ -441,15 +461,15 @@ def selectedLogin(+flow: Flow,+endpoints: DeviceEndpoints,+interaction: Auth.Pro
     case Done{"device_code"} Auth.ProviderAuthInteraction{signal,_,_}:
       do IO<Auth.LoginOutcome()>:
         device : Result<&2,&2,String,DeviceCode> <- startDevice(flow,endpoints,signal)
-        deviceStarted(flow,endpoints,device,interaction)
+        deviceStarted(flow,endpoints,expiresMs,device,interaction)
     case Done{other} _: IO.pure(Auth.LoginOutcome(),Fail{"Unknown OpenAI Codex login method: " ++ other})
-type LoginFlow is Data: LoginFlow{flow: Flow, endpoints: DeviceEndpoints}
+type LoginFlow is Data: LoginFlow{flow: Flow, endpoints: DeviceEndpoints, expiresMs: U32}
 def loginCopied(context: LoginFlow,+interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   match context interaction:
-    case LoginFlow{flow,endpoints} Auth.ProviderAuthInteraction{_,prompt,_}:
+    case LoginFlow{flow,endpoints,expiresMs} Auth.ProviderAuthInteraction{_,prompt,_}:
       do IO<Auth.LoginOutcome()>:
         method : Browser.CodeResult() <- C.call(Auth.AuthPrompt,Browser.CodeResult(),prompt,Auth.SelectPrompt{"Select OpenAI Codex login method:",[Auth.AuthSelectOption{"browser","Browser login (default)",None{}},Auth.AuthSelectOption{"device_code","Device code login (headless)",None{}}],None{}})
-        selectedLogin(flow,endpoints,interaction,method)
+        selectedLogin(flow,endpoints,expiresMs,interaction,method)
 
 def login(flow: LoginFlow,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   loginCopied(flow,interaction)
@@ -469,12 +489,15 @@ def toAuth(unused: Unit, credential: Auth.Credential) -> IO(Result<&2, &2, Strin
     case _: IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Fail{"OpenAI Codex auth requires an OAuth credential"})
 
 # The fetch callback is borrowed: retire the OAuthAuth before the fetch runtime.
-def openaiCodexOAuthWithEndpoints(+fetch: Fetch.Fetch(Unit), +url: URL.Context, endpoints: DeviceEndpoints) -> IO(Auth.OAuthAuth):
+def openaiCodexOAuthConfigured(+fetch: Fetch.Fetch(Unit), +url: URL.Context, endpoints: DeviceEndpoints, expiresMs: U32) -> IO(Auth.OAuthAuth):
   do IO<Auth.OAuthAuth>:
-    authenticate : C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()> <- C.create(~LoginFlow,~Auth.ProviderAuthInteraction,~Auth.LoginOutcome(),~login,LoginFlow{Flow{fetch,url},endpoints})
+    authenticate : C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()> <- C.create(~LoginFlow,~Auth.ProviderAuthInteraction,~Auth.LoginOutcome(),~login,LoginFlow{Flow{fetch,url},endpoints,expiresMs})
     refresher : C.Callback<Auth.RefreshInput, Result<&2, &2, String, Auth.Credential>> <- C.create(~Flow, ~Auth.RefreshInput, ~Result<&2, &2, String, Auth.Credential>, ~refresh, Flow{fetch, url})
     deriver : C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>> <- C.create(~Unit, ~Auth.Credential, ~Result<&2, &2, String, Auth.ModelAuth>, ~toAuth, Unit{})
     return Auth.OAuthAuth{"OpenAI (ChatGPT Plus/Pro)", True{}, None{}, authenticate, refresher, deriver}
+
+def openaiCodexOAuthWithEndpoints(fetch: Fetch.Fetch(Unit), url: URL.Context, endpoints: DeviceEndpoints) -> IO(Auth.OAuthAuth):
+  openaiCodexOAuthConfigured(fetch,url,endpoints,DEVICE_EXPIRES_MS())
 
 def openaiCodexOAuth(fetch: Fetch.Fetch(Unit),url: URL.Context) -> IO(Auth.OAuthAuth):
   openaiCodexOAuthWithEndpoints(fetch,url,deviceEndpoints())

@@ -15,6 +15,7 @@ the clock is real, so a poll must fall in [expected, expected + 900 ms) after
 login starts, and credential expiry is compared to the clock at the response.
 """
 import argparse
+import base64
 import json
 import os
 import re
@@ -166,9 +167,9 @@ def expires_near(credential, base_time, lifetime_ms):
 TESTS = []
 
 
-def test(name):
+def test(name, compare_upstream=True):
     def register(function):
-        TESTS.append((name, function))
+        TESTS.append((name, function, compare_upstream))
         return function
     return register
 
@@ -233,12 +234,12 @@ def main():
     commands = {'bun': ['bun', arguments.prefix + '.js'], 'native-1': [arguments.prefix, '--threads', '1'], 'native-4': [arguments.prefix, '--threads', '4']}
     executors = [('upstream', ['bun', 'tests/oauth_flows_reference.ts'])] + [(backend, commands[backend]) for backend in arguments.backends]
     failures = 0
-    for name, function in TESTS:
+    for name, function, compare_upstream in TESTS:
         if arguments.only and arguments.only not in name:
             continue
         results = {}
         problems = []
-        for executor, command in executors:
+        for executor, command in (executors if compare_upstream else executors[1:]):
             server = Server()
             try:
                 out = function(lambda spec: run(command, server, spec), server)
@@ -972,6 +973,142 @@ def anthropic_manual_prompt(execute, server):
     expect(credential.get('type') == 'oauth' and credential.get('access') == 'access', out)
     expect(any(e['type'] == 'auth_url' for e in out['events']) and any(p['type'] == 'manual_code' for p in out['prompts']), out)
     expect(out['browser'].get('M') == 'true', out['browser'])
+    return out
+
+
+# openai-codex-oauth.test.ts
+# --------------------------
+CODEX_USER_CODE = 'https://auth.openai.com/api/accounts/deviceauth/usercode'
+CODEX_DEVICE_TOKEN = 'https://auth.openai.com/api/accounts/deviceauth/token'
+CODEX_TOKEN = 'https://auth.openai.com/oauth/token'
+CODEX_CLIENT = 'app_EMoamEEZ73f0CkXaXp7hrann'
+C = 'openai-codex-oauth.test.ts > OpenAI Codex OAuth'
+
+
+def codex_access(account):
+    encoded = lambda value: base64.urlsafe_b64encode(json.dumps(value, separators=(',', ':')).encode()).decode().rstrip('=')
+    return f'{encoded({"alg": "none"})}.{encoded({"https://api.openai.com/auth": {"chatgpt_account_id": account}})}.signature'
+
+
+def codex_device(interval=1, code='ABCD-1234'):
+    return {'device_auth_id': 'device-auth-id', 'user_code': code, 'interval': str(interval)}
+
+
+def codex_authorized():
+    return {'authorization_code': 'oauth-code', 'code_challenge': 'device-code-challenge', 'code_verifier': 'device-code-verifier'}
+
+
+def codex_exchange(account):
+    return {'access_token': codex_access(account), 'refresh_token': 'refresh-token', 'expires_in': 3600}
+
+
+def codex_requests(requests):
+    return [request for request in requests if request['key'] in (CODEX_USER_CODE, CODEX_DEVICE_TOKEN, CODEX_TOKEN)]
+
+
+@test(f'{C} > logs in with the OpenAI Codex device code flow')
+def codex_device_login(execute, server):
+    polls = []
+
+    def user_code(request):
+        expect(request['method'] == 'POST' and request['headers'].get('content-type') == 'application/json', request)
+        expect(json.loads(request['body']) == {'client_id': CODEX_CLIENT}, request['body'])
+        return 200, codex_device(), None
+
+    def poll(request):
+        expect(json.loads(request['body']) == {'device_auth_id': 'device-auth-id', 'user_code': 'ABCD-1234'}, request['body'])
+        polls.append(request['at'])
+        return (403, {'error': {'code': 'deviceauth_authorization_pending'}}, None) if len(polls) == 1 else (200, codex_authorized(), None)
+
+    def exchange(request):
+        values = form(request)
+        expect(request['headers'].get('content-type') == 'application/x-www-form-urlencoded', request)
+        expect(values == {'grant_type': 'authorization_code', 'client_id': CODEX_CLIENT, 'code': 'oauth-code', 'code_verifier': 'device-code-verifier', 'redirect_uri': 'https://auth.openai.com/deviceauth/callback'}, values)
+        return 200, codex_exchange('account-123'), None
+
+    server.routes = {CODEX_USER_CODE: user_code, CODEX_DEVICE_TOKEN: poll, CODEX_TOKEN: exchange}
+    out = execute({'flow': 'codex', 'prompts': ['device_code']})
+    expect(out['events'] == [{'type': 'device_code', 'userCode': 'ABCD-1234', 'verificationUri': 'https://auth.openai.com/codex/device', 'intervalSeconds': 1, 'expiresInSeconds': 900}], out)
+    expect(len(polls) == 2 and near(polls[0], 0, out['start']) and near(polls[1], 1, out['start']), [p - out['start'] for p in polls])
+    credential = out['credential'] or {}
+    expect(credential.get('access') == codex_access('account-123') and credential.get('refresh') == 'refresh-token' and credential.get('accountId') == 'account-123', out)
+    expect(expires_near(credential, server.requests[-1]['at'], 3_600_000), credential)
+    return out
+
+
+@test(f'{C} > offers browser login first and uses the selected OpenAI Codex device code flow')
+def codex_selects_device(execute, server):
+    server.routes = {
+        CODEX_USER_CODE: reply(codex_device(code='WXYZ-7890')),
+        CODEX_DEVICE_TOKEN: reply(codex_authorized()),
+        CODEX_TOKEN: reply(codex_exchange('account-456')),
+    }
+    out = execute({'flow': 'codex', 'prompts': ['device_code']})
+    expect(out['prompts'] == [{'type': 'select', 'message': 'Select OpenAI Codex login method:', 'options': [{'id': 'browser', 'label': 'Browser login (default)'}, {'id': 'device_code', 'label': 'Device code login (headless)'}]}], out['prompts'])
+    expect(out['events'] == [{'type': 'device_code', 'userCode': 'WXYZ-7890', 'verificationUri': 'https://auth.openai.com/codex/device', 'intervalSeconds': 1, 'expiresInSeconds': 900}], out['events'])
+    expect((out['credential'] or {}).get('accountId') == 'account-456', out)
+    return out
+
+
+@test(f'{C} > cancels when OpenAI Codex login method selection is cancelled')
+def codex_selection_cancelled(execute, server):
+    out = execute({'flow': 'codex', 'promptError': 'Login cancelled'})
+    expect(out['error'] == 'Login cancelled' and not server.requests, out)
+    return out
+
+
+@test(f'{C} > cancels the OpenAI Codex device code flow while waiting')
+def codex_poll_cancelled(execute, server):
+    server.routes = {
+        CODEX_USER_CODE: reply(codex_device(interval=5)),
+        CODEX_DEVICE_TOKEN: reply({'error': {'code': 'deviceauth_authorization_pending'}}, 403),
+    }
+    out = execute({'flow': 'codex', 'prompts': ['device_code'], 'abortOnDeviceCode': True})
+    polls = [request for request in server.requests if request['key'] == CODEX_DEVICE_TOKEN]
+    expect(out['error'] == 'Login cancelled' and len(polls) == 1, (out, codex_requests(server.requests)))
+    return out
+
+
+@test(f'{C} > times out the OpenAI Codex device code flow after 15 minutes', compare_upstream=False)
+def codex_poll_timeout(execute, server):
+    server.routes = {
+        CODEX_USER_CODE: reply(codex_device(interval=60)),
+        CODEX_DEVICE_TOKEN: reply({'error': {'code': 'deviceauth_authorization_pending'}}, 403),
+    }
+    out = execute({'flow': 'codex', 'prompts': ['device_code'], 'codexExpiresMs': 50})
+    polls = [request for request in server.requests if request['key'] == CODEX_DEVICE_TOKEN]
+    expect(out['error'] == 'Device flow timed out' and len(polls) == 1, (out, codex_requests(server.requests)))
+    return out
+
+
+@test(f'{C} > treats OpenAI Codex device auth 403 and 404 responses as pending')
+def codex_pending_statuses(execute, server):
+    server.routes = {
+        CODEX_USER_CODE: reply(codex_device()),
+        CODEX_DEVICE_TOKEN: sequence(reply({'error': 'access_denied', 'error_description': 'denied'}, 403), reply(b'not ready', 404), reply(codex_authorized())),
+        CODEX_TOKEN: reply(codex_exchange('account-403-404')),
+    }
+    out = execute({'flow': 'codex', 'prompts': ['device_code']})
+    polls = [request for request in server.requests if request['key'] == CODEX_DEVICE_TOKEN]
+    expect((out['credential'] or {}).get('accountId') == 'account-403-404' and len(polls) == 3, (out, codex_requests(server.requests)))
+    return out
+
+
+@test(f'{C} > includes the response body in OpenAI Codex device auth poll failures')
+def codex_poll_failure_body(execute, server):
+    body = b'{"error":"server_error","error_description":"try again later"}'
+    server.routes = {CODEX_USER_CODE: reply(codex_device()), CODEX_DEVICE_TOKEN: reply(body, 500)}
+    out = execute({'flow': 'codex', 'prompts': ['device_code']})
+    expect(out['error'] == f'OpenAI Codex device auth failed with status 500: {body.decode()}', out)
+    return out
+
+
+@test(f'{C} > does not write token refresh failures to stderr')
+def codex_refresh_failure(execute, server):
+    body = b'{"error":{"message":"Could not validate your token. Please try signing in again.","type":"invalid_request_error"}}'
+    server.routes = {CODEX_TOKEN: reply(body, 401)}
+    out = execute({'flow': 'codex', 'action': 'refresh', 'credential': {'type': 'oauth', 'access': 'invalid-access-token', 'refresh': 'invalid-refresh-token', 'expires': 0}})
+    expect(out['error'] and 'OpenAI Codex token refresh failed (401)' in out['error'] and 'Could not validate your token' in out['error'], out)
     return out
 
 

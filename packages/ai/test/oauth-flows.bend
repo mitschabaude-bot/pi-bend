@@ -104,6 +104,15 @@ def optionalText(name: String, value: Maybe<&2, String>, rest: List<&2, R.Proper
     case Some{text}: prop(name, V.Text{text}) <> rest
     case None{}: rest
 
+def selectOptionJson(option: Auth.AuthSelectOption) -> V.Value:
+  match option:
+    case Auth.AuthSelectOption{id,label,description}: V.ObjectValue{R.Record{prop("id",V.Text{id}) <> prop("label",V.Text{label}) <> optionalText("description",description,Nil{})}}
+
+def selectOptions(options: List<&2,Auth.AuthSelectOption>) -> List<&2,V.Value>:
+  match options:
+    case Nil{}: Nil{}
+    case option <> rest: selectOptionJson(option) <> selectOptions(rest)
+
 def eventJson(event: Auth.AuthEvent) -> V.Value:
   match event:
     case Auth.InfoEvent{message, _}: V.ObjectValue{R.Record{[prop("type", V.Text{"info"}), prop("message", V.Text{message})]}}
@@ -148,7 +157,7 @@ def promptJson(prompt: Auth.AuthPrompt) -> V.Value:
   match prompt:
     case Auth.TextPrompt{message, placeholder, _}: V.ObjectValue{R.Record{prop("type", V.Text{"text"}) <> prop("message", V.Text{message}) <> optionalText("placeholder", placeholder, Nil{})}}
     case Auth.SecretPrompt{message, placeholder, _}: V.ObjectValue{R.Record{prop("type", V.Text{"secret"}) <> prop("message", V.Text{message}) <> optionalText("placeholder", placeholder, Nil{})}}
-    case Auth.SelectPrompt{message, _, _}: V.ObjectValue{R.Record{[prop("type", V.Text{"select"}), prop("message", V.Text{message})]}}
+    case Auth.SelectPrompt{message, options, _}: V.ObjectValue{R.Record{[prop("type", V.Text{"select"}), prop("message", V.Text{message}), prop("options",V.ArrayValue{selectOptions(options)})]}}
     case Auth.ManualCodePrompt{message, placeholder, _}: V.ObjectValue{R.Record{prop("type", V.Text{"manual_code"}) <> prop("message", V.Text{message}) <> optionalText("placeholder", placeholder, Nil{})}}
 
 # In an answer, `{callback}`, `{redirect_uri}` and `{state}` stand for the
@@ -255,6 +264,19 @@ def abortIf(hit: Bool, controller: Abort.AbortController<Unit>) -> IO(Unit):
         won : Bool <- Abort.abort(Unit, controller, None{})
         return Unit{}
 
+def abortLater(controller: Abort.AbortController<Unit>) -> IO(Unit):
+  do IO<Unit>:
+    IO.sleep(200)
+    abortIf(True{},controller)
+
+def scheduleAbort(hit: Bool, controller: Abort.AbortController<Unit>) -> IO(Unit):
+  match hit:
+    case False{}: IO.pure(Unit,Unit{})
+    case True{}:
+      do IO<Unit>:
+        task : Chan(Unit) <- IO.fork(Unit,abortLater(controller))
+        return Unit{}
+
 # The browser
 # -----------
 def statusOf(result: Result<&2, &2, Http.Failure, H.Reply>) -> Maybe<&2, U32>:
@@ -312,7 +334,7 @@ def notifiedShared(state: Interaction, +event: Auth.AuthEvent) -> IO(Unit):
     case Interaction{_, +controller, abortOnDeviceCode, browser}:
       do IO<Unit>:
         emit("N", eventJson(event))
-        abortIf(abortOnDeviceCode && isDeviceCode(event), controller)
+        scheduleAbort(abortOnDeviceCode && isDeviceCode(event),controller)
         browsed(event, browser, controller)
 
 def notified(state: Interaction, event: Auth.AuthEvent) -> IO(Unit): notifiedShared(state, event)
@@ -362,7 +384,7 @@ def credentialOf(value: Maybe<&2, V.Value>) -> Auth.Credential:
     case Some{V.ObjectValue{R.Record{+fields}}}: Auth.OAuthCredential{Maybe.default(&2, String, textOf(R.get(V.Value, R.Record{fields}, "refresh")), ""), Maybe.default(&2, String, textOf(R.get(V.Value, R.Record{fields}, "access")), ""), numberOf(R.get(V.Value, R.Record{fields}, "expires")), R.Record{withoutKnown(fields)}}
     case _: Auth.OAuthCredential{"", "", F.fromU32(0), R.new(V.Value)}
 
-def flowOf(+name: String, fetch: Fetch.Fetch(Unit), url: URL.Context) -> IO(Maybe<&2, Auth.OAuthAuth>):
+def flowOf(+name: String, fetch: Fetch.Fetch(Unit), url: URL.Context, codexExpires: Maybe<&2,F64>) -> IO(Maybe<&2, Auth.OAuthAuth>):
   match name:
     case "xai":
       do IO<Maybe<&2, Auth.OAuthAuth>>:
@@ -382,7 +404,8 @@ def flowOf(+name: String, fetch: Fetch.Fetch(Unit), url: URL.Context) -> IO(Mayb
         return Some{oauth}
     case "codex":
       do IO<Maybe<&2, Auth.OAuthAuth>>:
-        oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, url)
+        +expires : U32 = Maybe.default(&2,U32,Maybe.map(&2,F64,U32,value => F64.to_u32(value),codexExpires),CodexOAuth.DEVICE_EXPIRES_MS())
+        oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuthConfigured(fetch,url,CodexOAuth.deviceEndpoints(),expires)
         return Some{oauth}
     case "anthropic":
       do IO<Maybe<&2, Auth.OAuthAuth>>:
@@ -580,7 +603,7 @@ def runCase(+fetch: Fetch.Fetch(Unit), +base: String, parsed: Result<&2, &2, Dec
     case Done{+value}:
       do IO<Unit>:
         rewriter : Fetch.Fetch(Unit) <- C.create(~Rewrite, ~Fetch.Input<Unit>, ~Fetch.Result_(Unit), ~rewritten, Rewrite{fetch, base, TestClient.urlContext()})
-        oauth : Maybe<&2, Auth.OAuthAuth> <- flowOf(Maybe.default(&2, String, textOf(field(value, "flow")), ""), rewriter, TestClient.urlContext())
+        oauth : Maybe<&2, Auth.OAuthAuth> <- flowOf(Maybe.default(&2, String, textOf(field(value, "flow")), ""), rewriter, TestClient.urlContext(), numberField(field(value,"codexExpiresMs")))
         withFlow(H.Flow{fetch, TestClient.urlContext()}, oauth, value)
 
 def caseText(result: Result<&2, &2, FS.Error, List<&2, U32>>) -> String:

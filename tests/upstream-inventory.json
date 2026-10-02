@@ -1481,12 +1481,16 @@
     },
     {
       "source": "packages/ai/test/openai-codex-oauth.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/oauth-device-login.bend",
-        "tests/oauth_device_login_check.py"
+        "tests/oauth_device_login_check.py",
+        "packages/ai/test/oauth-flows.bend",
+        "tests/oauth_flows_check.py",
+        "tests/oauth_flows_reference.ts"
       ],
-      "sha256": "82d9746892b5e8a8b8bef1037dd6cca40f37427a3a317a43d8028f5cb7031f8e"
+      "sha256": "82d9746892b5e8a8b8bef1037dd6cca40f37427a3a317a43d8028f5cb7031f8e",
+      "notes": "All eight original cases pass through the public native OAuth adapter on one and four threads. Seven cases run differentially against pinned pi; the 15-minute deadline uses the same production poll loop with an injected 50 ms deadline so it remains executable without fake timers. Selection options, cancellation, 403/404 pending responses, raw poll errors and silent refresh-error rendering retain the upstream contracts."
     },
     {
       "source": "packages/ai/test/openai-codex-stream.test.ts",

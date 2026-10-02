@@ -281,10 +281,10 @@
     },
     "packages/ai/src/auth/oauth/openai-codex.ts": {
       "state": "partial",
-      "note": "Native OAuthAuth.login selects browser/device login. Browser authorization uses PKCE, independent 16-byte hex state, upstream URL fields, callback host override, state validation, manual-input fallback and token exchange with the browser redirect URI. Device login notifies the user code then polls/exchanges with the device redirect URI. Refresh and toAuth remain native. Browser/manual workers share typed first-settlement arbitration and are cancelled/joined before disposal. The callback server answers with upstream's handler (callbackReply) and oauth-page.bend's pages, compared byte for byte with pinned pi in tests/oauth_callback_pages_check.py; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
+      "note": "Native OAuthAuth.login selects browser/device login. Browser authorization uses PKCE, independent 16-byte hex state, upstream URL fields, callback host override, state validation, manual-input fallback and token exchange with the browser redirect URI. Device login notifies the user code then polls/exchanges with the device redirect URI, including deadline, cancellation and pending-response behavior. Refresh preserves the operation-specific status and raw response diagnostic without writing to stderr; toAuth remains native. Browser/manual workers share typed first-settlement arbitration and are cancelled/joined before disposal. The callback server answers with upstream's handler (callbackReply) and oauth-page.bend's pages, compared byte for byte with pinned pi in tests/oauth_callback_pages_check.py. All eight named OAuth tests are ported; source-wide browser edge-case parity remains incomplete.",
       "source_sha256": "757c6cff2bc67d89df30ad175eead549519e1d3756397b5b4189460ac9dbcaba",
       "port_sha256": {
-        "packages/ai/src/auth/oauth/openai-codex.bend": "9797cd217d69fc79c4a7e4e788390c18da5ab80ea092ecafeaa4af9997dd44f5",
+        "packages/ai/src/auth/oauth/openai-codex.bend": "990f4461f237010d7f9dfa142e5f93c68468c8b17b4e652176cf8cc812363e19",
         "packages/ai/src/auth/oauth/browser.bend": "fdb9e73450eb2a5630d820fcade347aaad6c05c39fc7a8f04c2631a6514f99f5"
       },
       "ports": [
