@@ -1,4 +1,6 @@
 import Base
+import ../../../runtime/src/cancellable-task.bend as Tasks
+import ../../../runtime/src/keyed-serial.bend as KeyedSerial
 import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/auth/types.bend as Auth
 import ../../../ai/src/auth/context.bend as Context
@@ -89,6 +91,8 @@ def emptyExtensions() -> ExtensionState: ExtensionState{Nil{}, None{}}
 type ModelsRefreshResult is Data:
   ModelsRefreshResult{aborted: Bool, errors: R.Record<String>}
 
+def cancelledRefresh() -> ModelsRefreshResult: ModelsRefreshResult{True{},R.new(String)}
+
 # Only interactive all-catalog requests share work. Provider-specific refreshes
 # still use refresh() directly. The runtime owns this state, so no global map or
 # identity-based lookup is needed.
@@ -116,7 +120,7 @@ type Generation is Data:
 type Definition is Data:
   Definition{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, config: Config.ModelConfig, errors: List<&2, String>, generation: Generation, source: DefinitionSource, retired: List<&2, Generation>}
 type ModelRuntime is Data:
-  ModelRuntime{definition: Ref.Ref<Definition>, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>, credentials: RuntimeCredentials.RuntimeCredentials, refreshWork: Ref.Ref<RefreshWork>}
+  ModelRuntime{definition: Ref.Ref<Definition>, models: AiModels.Models, catalog: Ref.Ref<Catalog>, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>, sharedRefresh: Ref.Ref<SharedRefresh>, availability: Ref.Ref<AvailabilityStatus>, credentials: RuntimeCredentials.RuntimeCredentials, refreshWork: Ref.Ref<RefreshWork>, credentialQueues: KeyedSerial.Registry}
 
 # Composition (recomposeProvider/rebuildProviders)
 # -----------------------------------------------
@@ -234,7 +238,8 @@ def assembled(composition: Composition, builtins: List<&2, String>, config: Conf
     case Composition{providers, errors, refreshes, owned}:
       do IO<ModelRuntime>:
         definition : Ref.Ref<Definition> <- Ref.new(Definition, Definition{List.reverse(&2,AiModels.Provider,providers), builtins, config, List.reverse(&2,String,errors), Generation{owned,radiusOwned,refreshes}, source, Nil{}})
-        return ModelRuntime{definition, models, catalog, storeState, extensions, sharedRefresh, availability, credentials, refreshWork}
+        credentialQueues : KeyedSerial.Registry <- KeyedSerial.create()
+        return ModelRuntime{definition, models, catalog, storeState, extensions, sharedRefresh, availability, credentials, refreshWork, credentialQueues}
 
 def unknownProvider(id: String) -> Resolve.ModelsError:
   Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ id}
@@ -244,17 +249,17 @@ def unknownProvider(id: String) -> Resolve.ModelsError:
 
 def modelsOf(runtime: ModelRuntime) -> AiModels.Models:
   match runtime:
-    case ModelRuntime{_, models, _, _, _, _, _, _, _}: models
+    case ModelRuntime{_, models, _, _, _, _, _, _, _, _}: models
 
 def definitionRef(runtime: ModelRuntime) -> Ref.Ref<Definition>:
   match runtime:
-    case ModelRuntime{definition, _, _, _, _, _, _, _, _}: definition
+    case ModelRuntime{definition, _, _, _, _, _, _, _, _, credentialQueues}: definition
 
 def credentialsOf(runtime: ModelRuntime) -> Auth.CredentialStore: AiModels.credentialsOf(modelsOf(runtime))
 
 def runtimeCredentialsOf(runtime: ModelRuntime) -> RuntimeCredentials.RuntimeCredentials:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, credentials, _}: credentials
+    case ModelRuntime{_, _, _, _, _, _, _, credentials, _, _}: credentials
 
 def contextOf(runtime: ModelRuntime) -> Auth.AuthContext: AiModels.authContextOf(modelsOf(runtime))
 
@@ -262,7 +267,7 @@ def storeOf(runtime: ModelRuntime) -> Store.ModelsStore: AiModels.modelsStoreOf(
 
 def catalogRef(runtime: ModelRuntime) -> Ref.Ref<Catalog>:
   match runtime:
-    case ModelRuntime{_, _, catalog, _, _, _, _, _, _}: catalog
+    case ModelRuntime{_, _, catalog, _, _, _, _, _, _, _}: catalog
 
 def readCatalog(runtime: ModelRuntime) -> IO(Catalog):
   Ref.read(Catalog, catalogRef(runtime))
@@ -638,7 +643,7 @@ def disposeApiStreamsOf(streams: Maybe<&2, Composer.ProviderStream()>) -> IO(Uni
 
 def extensionsRef(runtime: ModelRuntime) -> Ref.Ref<ExtensionState>:
   match runtime:
-    case ModelRuntime{_, _, _, _, extensions, _, _, _, _}: extensions
+    case ModelRuntime{_, _, _, _, extensions, _, _, _, _, _}: extensions
 
 def entryId(entry: ExtensionEntry) -> String:
   match entry:
@@ -663,7 +668,7 @@ def joinedErrors(configError: Maybe<&2, String>, errors: List<&2, String>) -> Ma
 
 def availabilityRef(runtime: ModelRuntime) -> Ref.Ref<AvailabilityStatus>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, availability, _, _}: availability
+    case ModelRuntime{_, _, _, _, _, _, availability, _, _, _}: availability
 
 def errorWithAvailability(base: Maybe<&2, String>, status: AvailabilityStatus) -> Maybe<&2, String>:
   match status base:
@@ -829,27 +834,42 @@ def entriesOf(result: AiModels.AvailabilitiesResult()) -> List<&2, AiModels.Avai
     case Fail{_}: Nil{}
     case Done{results}: availabilityEntries(results)
 
+def signalAborted(signal: Auth.Signal()) -> IO(Bool):
+  match signal:
+    case None{}: IO.pure(Bool, False{})
+    case Some{given}: Abort.aborted(Unit, given)
+
 # upstream runAvailabilityRefresh: every provider's auth is checked again and
 # the available models are those of the configured providers, narrowed by
 # their filterModels. A provider whose check fails counts as unconfigured.
-def refreshAvailability(+runtime: ModelRuntime) -> IO(Unit):
+def publishAvailability(stopped: Bool, runtime: ModelRuntime, entries: List<&2, AiModels.Availability>) -> IO(Unit):
+  match stopped:
+    case True{}: IO.pure(Unit, Unit{})
+    case False{}: Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (withAvailability(catalog, entries), Unit{}))
+
+def refreshAvailability(+runtime: ModelRuntime, +signal: Auth.Signal()) -> IO(Unit):
   do IO<Unit>:
-    result : AiModels.AvailabilitiesResult() <- AiModels.getAvailabilities(modelsOf(runtime), None{}, None{})
-    +entries : List<&2, AiModels.Availability> <- IO.pure(List<&2, AiModels.Availability>, entriesOf(result))
-    Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (withAvailability(catalog, entries), Unit{}))
+    result : AiModels.AvailabilitiesResult() <- AiModels.getAvailabilities(modelsOf(runtime), None{}, signal)
+    stopped : Bool <- signalAborted(signal)
+    publishAvailability(stopped, runtime, entriesOf(result))
 
 def readied(catalog: Catalog, +id: String, +entries: List<&2, AiModels.Availability>, +all: List<&2, Model()>) -> Catalog:
   match catalog:
     case Catalog{natives, configured, +available}: Catalog{natives, withProvider(containsId(configuredIds(entries), id), id, withoutId(configured, id)), mergedAvailable(all, id, availableModels(entries), available)}
 
-# upstream refreshProviderAvailability: one provider after its credentials
-# or its registration changed (login, logout, a runtime API key).
-def refreshProviderAvailability(+runtime: ModelRuntime, +id: String) -> IO(Unit):
+def publishProviderAvailability(stopped: Bool, runtime: ModelRuntime, id: String, entries: List<&2, AiModels.Availability>, all: List<&2, Model()>) -> IO(Unit):
+  match stopped:
+    case True{}: IO.pure(Unit, Unit{})
+    case False{}: Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (readied(catalog, id, entries, all), Unit{}))
+
+# Provider-local publication preserves unrelated availability and rejects a
+# result that arrived after its caller cancelled.
+def refreshProviderAvailability(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(Unit):
   do IO<Unit>:
-    result : AiModels.AvailabilitiesResult() <- AiModels.getAvailabilities(modelsOf(runtime), Some{id}, None{})
-    +all : List<&2, Model()> <- getModels(runtime)
-    +entries : List<&2, AiModels.Availability> <- IO.pure(List<&2, AiModels.Availability>, entriesOf(result))
-    Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (readied(catalog, id, entries, all), Unit{}))
+    result : AiModels.AvailabilitiesResult() <- AiModels.getAvailabilities(modelsOf(runtime), Some{id}, signal)
+    all : List<&2, Model()> <- getModels(runtime)
+    stopped : Bool <- signalAborted(signal)
+    publishProviderAvailability(stopped, runtime, id, entriesOf(result), all)
 
 def configuredOf(catalog: Catalog) -> List<&2, String>:
   match catalog:
@@ -886,10 +906,6 @@ def availabilityAt(status: AvailabilityStatus, generation: Nat, error: Maybe<&2,
 def finishAvailability(+runtime: ModelRuntime, generation: Nat, error: Maybe<&2, String>) -> IO(Unit):
   Ref.modify(AvailabilityStatus, Unit, availabilityRef(runtime), status => availabilityAt(status, generation, error))
 
-def signalAborted(signal: Auth.Signal()) -> IO(Bool):
-  match signal:
-    case None{}: IO.pure(Bool, False{})
-    case Some{given}: Abort.aborted(Unit, given)
 
 def availableFailure(+runtime: ModelRuntime, generation: Nat, signal: Auth.Signal(), +error: Resolve.ModelsError) -> IO(AiModels.AvailableResult()):
   do IO<AiModels.AvailableResult()>:
@@ -1534,18 +1550,18 @@ def refreshOptions() -> ModelsRefreshOptions: ModelsRefreshOptions{None{}, None{
 
 # `errors` maps provider ids to the refresh failure message.
 
-def availabilityOf(+runtime: ModelRuntime, ids: List<&2, String>) -> IO(Unit):
+def availabilityOf(+runtime: ModelRuntime, ids: List<&2, String>, +signal: Auth.Signal()) -> IO(Unit):
   match ids:
     case Nil{}: IO.pure(Unit, Unit{})
     case id <> rest:
       do IO<Unit>:
-        refreshProviderAvailability(runtime, id)
-        availabilityOf(runtime, rest)
+        refreshProviderAvailability(runtime, id, signal)
+        availabilityOf(runtime, rest, signal)
 
-def refreshedAvailability(+runtime: ModelRuntime, filter: Maybe<&2, List<&2, String>>) -> IO(Unit):
+def refreshedAvailability(+runtime: ModelRuntime, filter: Maybe<&2, List<&2, String>>, signal: Auth.Signal()) -> IO(Unit):
   match filter:
-    case None{}: refreshAvailability(runtime)
-    case Some{ids}: availabilityOf(runtime, ids)
+    case None{}: refreshAvailability(runtime, signal)
+    case Some{ids}: availabilityOf(runtime, ids, signal)
 
 def refreshResult(result: AiModels.ModelsRefreshResult, signal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(ModelsRefreshResult):
   match result signal:
@@ -1591,14 +1607,14 @@ def reloadConfig(+runtime: ModelRuntime) -> IO(Bool):
 # upstream ModelRuntime.refresh: the collection refreshes the dynamic
 # providers (all, or the selected ones) with the network allowed by default
 # unless PI_OFFLINE is set; then availability is checked again.
-def refresh(+runtime: ModelRuntime, options: ModelsRefreshOptions) -> IO(ModelsRefreshResult):
+def refreshTask(+runtime: ModelRuntime, options: ModelsRefreshOptions) -> IO(ModelsRefreshResult):
   match options:
     case ModelsRefreshOptions{allowNetwork, +filter, force, +signal}:
       do IO<ModelsRefreshResult>:
         changed : Bool <- reloadConfig(runtime)
         offline : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_OFFLINE")
         result : AiModels.ModelsRefreshResult <- AiModels.refresh(modelsOf(runtime), AiModels.ModelsRefreshOptions{Some{Maybe.default(&2, Bool, allowNetwork, networkEnabled(offline))}, filter, force, signal})
-        refreshedAvailability(runtime, filter)
+        refreshedAvailability(runtime, filter, signal)
         refreshResult(result, signal)
 
 # One all-catalog network request serves concurrent interactive callers. A
@@ -1618,11 +1634,11 @@ def admitRefresh(state: SharedRefresh, +candidate: Abort.AbortController<Unit>, 
 
 def sharedRef(runtime: ModelRuntime) -> Ref.Ref<SharedRefresh>:
   match runtime:
-    case ModelRuntime{_,_,_,_,_,sharedRefresh,_,_,_}: sharedRefresh
+    case ModelRuntime{_,_,_,_,_,sharedRefresh,_,_,_, _}: sharedRefresh
 
 def workRef(runtime: ModelRuntime) -> Ref.Ref<RefreshWork>:
   match runtime:
-    case ModelRuntime{_,_,_,_,_,_,_,_,work}: work
+    case ModelRuntime{_,_,_,_,_,_,_,_,work, _}: work
 
 def workStarted(state: RefreshWork) -> RefreshWork & Bool:
   match state:
@@ -1664,6 +1680,29 @@ def closeRefreshWork(+work: Ref.Ref<RefreshWork>,ready: Bool) -> IO(Unit):
     finished : Unit <- Deferred.result(Unit,drainedOf(state))
     previous : RefreshWork <- Ref.dispose(RefreshWork,work)
     Deferred.dispose(Unit,drainedOf(previous))
+
+def workContinued(state: RefreshWork) -> RefreshWork & Unit:
+  match state:
+    case RefreshWork{running, closing, drained}: (RefreshWork{running + 1n, closing, drained}, Unit{})
+
+def refreshLeased(+runtime: ModelRuntime, options: ModelsRefreshOptions) -> IO(ModelsRefreshResult):
+  match options:
+    case ModelsRefreshOptions{network, providers, force, None{}}:
+      do IO<ModelsRefreshResult>:
+        result : ModelsRefreshResult <- refreshTask(runtime, ModelsRefreshOptions{network, providers, force, None{}})
+        workLeft(workRef(runtime))
+        return result
+    case ModelsRefreshOptions{network, providers, force, Some{caller}}:
+      Tasks.run(ModelsRefreshResult, caller,
+        signal => refreshTask(runtime, ModelsRefreshOptions{network, providers, force, Some{signal}}),
+        IO.pure(Maybe<&2, ModelsRefreshResult>, Some{cancelledRefresh()}), workLeft(workRef(runtime)))
+
+def refresh(+runtime: ModelRuntime, options: ModelsRefreshOptions) -> IO(ModelsRefreshResult):
+  do IO<ModelsRefreshResult>:
+    admitted : Bool <- Ref.modify(RefreshWork, Bool, workRef(runtime), workStarted)
+    Bool.pick(Unit -> IO(ModelsRefreshResult), admitted,
+      _ => refreshLeased(runtime, options),
+      _ => IO.pure(ModelsRefreshResult, cancelledRefresh()))(Unit{})
 
 type RefreshDeparture is Data:
   StillWaiting{}
@@ -1779,7 +1818,6 @@ def observeRefreshAbort(ticket: Deferred.Ticket<Maybe<&2,Abort.AbortReason<Unit>
     value : Maybe<&2,Abort.AbortReason<Unit>> <- Deferred.wait(Maybe<&2,Abort.AbortReason<Unit>>,ticket)
     settleAbortArrival(value,completion)
 
-def cancelledRefresh() -> ModelsRefreshResult: ModelsRefreshResult{True{},R.new(String)}
 
 def arrivalValue(first: RefreshArrival) -> IO(ModelsRefreshResult):
   match first:
@@ -1883,9 +1921,10 @@ def disposeSharedRefresh(+state: Ref.Ref<SharedRefresh>,+work: Ref.Ref<RefreshWo
 
 def dispose(runtime: ModelRuntime) -> IO(Unit):
   match runtime:
-    case ModelRuntime{definition, +models, catalog, storeState, extensions, sharedRefresh, availability, credentials, refreshWork}:
+    case ModelRuntime{definition, +models, catalog, storeState, extensions, sharedRefresh, availability, credentials, refreshWork, credentialQueues}:
       do IO<Unit>:
         disposeSharedRefresh(sharedRefresh,refreshWork)
+        KeyedSerial.dispose(credentialQueues)
         +registered : ExtensionState <- Ref.dispose(ExtensionState, extensions)
         disposeEntries(extensionEntries(registered))
         disposeApiStreamsOf(apiStreamsOf(registered))
@@ -2278,7 +2317,7 @@ def synchronizedRefresh(+runtime: ModelRuntime, +id: String, signal: Auth.Signal
     case AiModels.ModelsRefreshResult{True{}, _}: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{synchronizationAborted(id)})
     case AiModels.ModelsRefreshResult{False{}, errors}: synchronizedRefreshError(runtime, id, signal, R.get(String, errors, id))
 
-def synchronizeCredentialState(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+def synchronizeCredentialTask(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
   do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
     stopped : Bool <- signalAborted(signal)
     Bool.pick(Unit -> IO(Result<&2, &2, Resolve.ModelsError, Unit>), stopped,
@@ -2287,76 +2326,200 @@ def synchronizeCredentialState(+runtime: ModelRuntime, +id: String, +signal: Aut
         refreshed : AiModels.ModelsRefreshResult <- AiModels.refresh(modelsOf(runtime), AiModels.ModelsRefreshOptions{Some{False{}}, Some{[id]}, None{}, signal})
         synchronizedRefresh(runtime, id, signal, refreshed))(Unit{})
 
-# Provider-directed login persists its credential before local synchronization.
-def loginSynchronized(credential: Auth.Credential, result: Result<&2, &2, Resolve.ModelsError, Unit>) -> Auth.LoginOutcome():
-  match result:
-    case Done{_}: Done{credential}
-    case Fail{error}: Fail{"Credential saved; " ++ Resolve.errorMessage(error)}
+def synchronizeCredentialState(+runtime: ModelRuntime, +id: String, signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+  match signal:
+    case None{}: synchronizeCredentialTask(runtime, id, None{})
+    case Some{caller}:
+      do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+        Ref.modify(RefreshWork, Unit, workRef(runtime), workContinued)
+        Tasks.run(Result<&2, &2, Resolve.ModelsError, Unit>, caller,
+          child => synchronizeCredentialTask(runtime, id, Some{child}),
+          IO.pure(Maybe<&2, Result<&2, &2, Resolve.ModelsError, Unit>>, Some{Fail{synchronizationAborted(id)}}),
+          workLeft(workRef(runtime)))
 
-def loginDone(+runtime: ModelRuntime, +id: String, signal: Auth.Signal(), result: Auth.LoginOutcome()) -> IO(Auth.LoginOutcome()):
+# A failed mutation and a committed mutation whose snapshot failed are
+# different outcomes. The latter retains the credential and original cause.
+type CredentialSynchronizationOperation is Data:
+  LoginOperation{}
+  LogoutOperation{}
+  SetRuntimeApiKeyOperation{}
+  RemoveRuntimeApiKeyOperation{}
+
+type CredentialError is Data:
+  CredentialFailure{cause: Resolve.ModelsError}
+  CredentialSynchronizationError{providerId: String, operation: CredentialSynchronizationOperation, credential: Maybe<&2, Auth.Credential>, cause: Resolve.ModelsError}
+
+def CredentialOutcome(-Value: Data) -> Data: Result<&2, &2, CredentialError, Value>
+def LoginOutcome() -> Data: CredentialOutcome(Auth.Credential)
+
+def credentialOperationName(operation: CredentialSynchronizationOperation) -> String:
+  match operation:
+    case LoginOperation{}: "login"
+    case LogoutOperation{}: "logout"
+    case SetRuntimeApiKeyOperation{}: "setRuntimeApiKey"
+    case RemoveRuntimeApiKeyOperation{}: "removeRuntimeApiKey"
+
+def credentialErrorMessage(error: CredentialError) -> String:
+  match error:
+    case CredentialFailure{cause}: Resolve.errorMessage(cause)
+    case CredentialSynchronizationError{id, operation, _, _}: "Credential " ++ credentialOperationName(operation) ++ " committed for " ++ id ++ ", but local synchronization failed"
+
+def credentialSynchronized(-Value: Data, id: String, operation: CredentialSynchronizationOperation, credential: Maybe<&2, Auth.Credential>, value: Value, result: Result<&2, &2, Resolve.ModelsError, Unit>) -> CredentialOutcome(Value):
   match result:
-    case Fail{error}: IO.pure(Auth.LoginOutcome(), Fail{error})
-    case Done{credential}:
-      do IO<Auth.LoginOutcome()>:
+    case Done{_}: Done{value}
+    case Fail{cause}: Fail{CredentialSynchronizationError{id, operation, credential, cause}}
+
+# Provider-directed login waits for its store mutation before checking local
+# synchronization, including when cancellation arrives after the commit.
+def loginDone(+runtime: ModelRuntime, +id: String, signal: Auth.Signal(), result: Auth.LoginOutcome()) -> IO(LoginOutcome()):
+  match result:
+    case Fail{error}: IO.pure(LoginOutcome(), Fail{CredentialFailure{Resolve.ModelsError{Resolve.AuthError{}, error}}})
+    case Done{+credential}:
+      do IO<LoginOutcome()>:
         synchronized : Result<&2, &2, Resolve.ModelsError, Unit> <- synchronizeCredentialState(runtime, id, signal)
-        return loginSynchronized(credential, synchronized)
+        return credentialSynchronized(Auth.Credential, id, LoginOperation{}, Some{credential}, credential, synchronized)
 
-def loginUnlessAborted(+runtime: ModelRuntime, +id: String, kind: Auth.CredentialType, interaction: Auth.AuthInteraction, signal: Auth.Signal(), aborted: Bool) -> IO(Auth.LoginOutcome()):
+def loginUnlessAborted(+runtime: ModelRuntime, +id: String, kind: Auth.CredentialType, interaction: Auth.AuthInteraction, signal: Auth.Signal(), aborted: Bool) -> IO(LoginOutcome()):
   match aborted:
-    case True{}: IO.pure(Auth.LoginOutcome(), Fail{"Login cancelled"})
+    case True{}: IO.pure(LoginOutcome(), Fail{CredentialFailure{Resolve.ModelsError{Resolve.AuthError{}, "Login cancelled"}}})
     case False{}:
-      do IO<Auth.LoginOutcome()>:
+      do IO<LoginOutcome()>:
         result : Auth.LoginOutcome() <- AiModels.login(modelsOf(runtime), id, kind, interaction)
         loginDone(runtime, id, signal, result)
 
-def login(+runtime: ModelRuntime, +id: String, kind: Auth.CredentialType, interaction: Auth.AuthInteraction) -> IO(Auth.LoginOutcome()):
+def loginTask(+runtime: ModelRuntime, +id: String, kind: Auth.CredentialType, interaction: Auth.AuthInteraction) -> IO(LoginOutcome()):
   match interaction:
     case Auth.AuthInteraction{+signal, prompt, notify}:
-      do IO<Auth.LoginOutcome()>:
+      do IO<LoginOutcome()>:
         aborted : Bool <- signalAborted(signal)
         loginUnlessAborted(runtime, id, kind, Auth.AuthInteraction{signal, prompt, notify}, signal, aborted)
 
-def logoutDone(+runtime: ModelRuntime, +id: String, signal: Auth.Signal(), result: Result<&2, &2, Resolve.ModelsError, Unit>) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+def logoutDone(+runtime: ModelRuntime, +id: String, signal: Auth.Signal(), result: Result<&2, &2, Resolve.ModelsError, Unit>) -> IO(CredentialOutcome(Unit)):
   match result:
-    case Fail{error}: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{error})
+    case Fail{error}: IO.pure(CredentialOutcome(Unit), Fail{CredentialFailure{error}})
     case Done{_}:
-      do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
-        synchronizeCredentialState(runtime, id, signal)
+      do IO<CredentialOutcome(Unit)>:
+        synchronized : Result<&2, &2, Resolve.ModelsError, Unit> <- synchronizeCredentialState(runtime, id, signal)
+        return credentialSynchronized(Unit, id, LogoutOperation{}, None{}, Unit{}, synchronized)
 
-# The credential store may be injected by an SDK caller. Its deletion and the
-# provider's availability update both settle before logout reports success.
-def logout(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
-  do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+# Deletion and provider availability settle before logout reports success.
+def logoutTask(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(CredentialOutcome(Unit)):
+  do IO<CredentialOutcome(Unit)>:
     result : Result<&2, &2, Resolve.ModelsError, Unit> <- AiModels.logout(modelsOf(runtime), id, signal)
     logoutDone(runtime, id, signal, result)
 
-def setRuntimeApiKeyReady(+runtime: ModelRuntime, +id: String, +key: String, signal: Auth.Signal(), provider: Maybe<&2, AiModels.Provider>) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+def setRuntimeApiKeyReady(+runtime: ModelRuntime, +id: String, +key: String, signal: Auth.Signal(), provider: Maybe<&2, AiModels.Provider>) -> IO(CredentialOutcome(Unit)):
   match provider:
-    case None{}: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{unknownProvider(id)})
+    case None{}: IO.pure(CredentialOutcome(Unit), Fail{CredentialFailure{unknownProvider(id)}})
     case Some{_}:
-      do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+      do IO<CredentialOutcome(Unit)>:
         RuntimeCredentials.setRuntimeApiKey(runtimeCredentialsOf(runtime), id, key)
-        synchronizeCredentialState(runtime, id, signal)
+        synchronized : Result<&2, &2, Resolve.ModelsError, Unit> <- synchronizeCredentialState(runtime, id, signal)
+        return credentialSynchronized(Unit, id, SetRuntimeApiKeyOperation{}, Some{Auth.ApiKeyCredential{Some{key}, None{}}}, Unit{}, synchronized)
 
-# Runtime keys mask stored credentials for this ModelRuntime only. The
-# provider's availability snapshot is updated before the operation returns.
-def setRuntimeApiKey(+runtime: ModelRuntime, +id: String, +key: String, +signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
-  do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+def setRuntimeApiKeyTask(+runtime: ModelRuntime, +id: String, +key: String, +signal: Auth.Signal()) -> IO(CredentialOutcome(Unit)):
+  do IO<CredentialOutcome(Unit)>:
     stopped : Bool <- signalAborted(signal)
-    Bool.pick(Unit -> IO(Result<&2, &2, Resolve.ModelsError, Unit>), stopped,
-      _ => IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{Resolve.ModelsError{Resolve.AuthError{}, "This operation was aborted"}}),
-      _ => do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+    Bool.pick(Unit -> IO(CredentialOutcome(Unit)), stopped,
+      _ => IO.pure(CredentialOutcome(Unit), Fail{CredentialFailure{Resolve.ModelsError{Resolve.AuthError{}, "This operation was aborted"}}}),
+      _ => do IO<CredentialOutcome(Unit)>:
         provider : Maybe<&2, AiModels.Provider> <- getProvider(runtime, id)
         setRuntimeApiKeyReady(runtime, id, key, signal, provider))(Unit{})
 
-def removeRuntimeApiKey(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
-  do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+def removeRuntimeApiKeyTask(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(CredentialOutcome(Unit)):
+  do IO<CredentialOutcome(Unit)>:
     stopped : Bool <- signalAborted(signal)
-    Bool.pick(Unit -> IO(Result<&2, &2, Resolve.ModelsError, Unit>), stopped,
-      _ => IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Fail{Resolve.ModelsError{Resolve.AuthError{}, "This operation was aborted"}}),
-      _ => do IO<Result<&2, &2, Resolve.ModelsError, Unit>>:
+    Bool.pick(Unit -> IO(CredentialOutcome(Unit)), stopped,
+      _ => IO.pure(CredentialOutcome(Unit), Fail{CredentialFailure{Resolve.ModelsError{Resolve.AuthError{}, "This operation was aborted"}}}),
+      _ => do IO<CredentialOutcome(Unit)>:
         RuntimeCredentials.removeRuntimeApiKey(runtimeCredentialsOf(runtime), id)
-        synchronizeCredentialState(runtime, id, signal))(Unit{})
+        synchronized : Result<&2, &2, Resolve.ModelsError, Unit> <- synchronizeCredentialState(runtime, id, signal)
+        return credentialSynchronized(Unit, id, RemoveRuntimeApiKeyOperation{}, None{}, Unit{}, synchronized))(Unit{})
+
+# The queue token spans the mutation and its local synchronization. Other
+# providers obtain independent tokens; typed failures release the token too.
+def credentialQueuesOf(runtime: ModelRuntime) -> KeyedSerial.Registry:
+  match runtime:
+    case ModelRuntime{_, _, _, _, _, _, _, _, _, queues}: queues
+
+type CredentialPhase is Data:
+  CredentialQueued{}
+  CredentialStarted{}
+  CredentialCancelled{}
+
+def startCredential(phase: CredentialPhase) -> CredentialPhase & Bool:
+  match phase:
+    case CredentialQueued{}: (CredentialStarted{}, True{})
+    case other: (other, False{})
+
+def cancelCredential(phase: CredentialPhase) -> CredentialPhase & Bool:
+  match phase:
+    case CredentialQueued{}: (CredentialCancelled{}, True{})
+    case CredentialCancelled{}: (CredentialCancelled{}, True{})
+    case CredentialStarted{}: (CredentialStarted{}, False{})
+
+def credentialAbort(-Outcome: Data, phase: Ref.Ref<CredentialPhase>, cancelled: Outcome) -> IO(Maybe<&2, Outcome>):
+  do IO<Maybe<&2, Outcome>>:
+    stopped : Bool <- Ref.modify(CredentialPhase, Bool, phase, cancelCredential)
+    return Bool.pick(Maybe<&2, Outcome>, stopped, Some{cancelled}, None{})
+
+def credentialCleanup(runtime: ModelRuntime, phase: Ref.Ref<CredentialPhase>) -> IO(Unit):
+  do IO<Unit>:
+    previous : CredentialPhase <- Ref.dispose(CredentialPhase, phase)
+    workLeft(workRef(runtime))
+
+def credentialStarted(-Outcome: Data, start: Bool, task: IO(Outcome), cancelled: Outcome) -> IO(Unit & Outcome):
+  match start:
+    case False{}: IO.pure(Unit & Outcome, (Unit{}, cancelled))
+    case True{}:
+      do IO<Unit & Outcome>:
+        result : Outcome <- task
+        return (Unit{}, result)
+
+def credentialLocked(-Outcome: Data, phase: Ref.Ref<CredentialPhase>, task: IO(Outcome), cancelled: Outcome) -> IO(Unit & Outcome):
+  do IO<Unit & Outcome>:
+    start : Bool <- Ref.modify(CredentialPhase, Bool, phase, startCredential)
+    credentialStarted(Outcome, start, task, cancelled)
+
+def credentialLeased(-Outcome: Data, +runtime: ModelRuntime, id: String, signal: Auth.Signal(), task: IO(Outcome), +cancelled: Outcome) -> IO(Outcome):
+  match signal:
+    case None{}:
+      do IO<Outcome>:
+        queue : Serial.Handle<Unit> <- KeyedSerial.queue(credentialQueuesOf(runtime), id)
+        result : Outcome <- Serial.run(Unit, Outcome, queue, _ => do IO<Unit & Outcome>:
+          value : Outcome <- task
+          return (Unit{}, value))
+        workLeft(workRef(runtime))
+        return result
+    case Some{caller}:
+      do IO<Outcome>:
+        +phase : Ref.Ref<CredentialPhase> <- Ref.new(CredentialPhase, CredentialQueued{})
+        Tasks.run(Outcome, caller,
+          _ => do IO<Outcome>:
+            queue : Serial.Handle<Unit> <- KeyedSerial.queue(credentialQueuesOf(runtime), id)
+            Serial.run(Unit, Outcome, queue, _ => credentialLocked(Outcome, phase, task, cancelled)),
+          credentialAbort(Outcome, phase, cancelled), credentialCleanup(runtime, phase))
+
+def serializedCredential(-Outcome: Data, +runtime: ModelRuntime, id: String, signal: Auth.Signal(), task: IO(Outcome), +cancelled: Outcome) -> IO(Outcome):
+  do IO<Outcome>:
+    admitted : Bool <- Ref.modify(RefreshWork, Bool, workRef(runtime), workStarted)
+    Bool.pick(Unit -> IO(Outcome), admitted,
+      _ => credentialLeased(Outcome, runtime, id, signal, task, cancelled),
+      _ => IO.pure(Outcome, cancelled))(Unit{})
+
+def login(+runtime: ModelRuntime, +id: String, kind: Auth.CredentialType, +interaction: Auth.AuthInteraction) -> IO(LoginOutcome()):
+  match interaction:
+    case Auth.AuthInteraction{signal, _, _}:
+      serializedCredential(LoginOutcome(), runtime, id, signal, loginTask(runtime, id, kind, interaction), Fail{CredentialFailure{Resolve.ModelsError{Resolve.AuthError{}, "Login cancelled"}}})
+
+def logout(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(CredentialOutcome(Unit)):
+  serializedCredential(CredentialOutcome(Unit), runtime, id, signal, logoutTask(runtime, id, signal), Fail{CredentialFailure{Resolve.abortedError()}})
+
+def setRuntimeApiKey(+runtime: ModelRuntime, +id: String, key: String, +signal: Auth.Signal()) -> IO(CredentialOutcome(Unit)):
+  serializedCredential(CredentialOutcome(Unit), runtime, id, signal, setRuntimeApiKeyTask(runtime, id, key, signal), Fail{CredentialFailure{Resolve.abortedError()}})
+
+def removeRuntimeApiKey(+runtime: ModelRuntime, +id: String, +signal: Auth.Signal()) -> IO(CredentialOutcome(Unit)):
+  serializedCredential(CredentialOutcome(Unit), runtime, id, signal, removeRuntimeApiKeyTask(runtime, id, signal), Fail{CredentialFailure{Resolve.abortedError()}})
 
 # Creation
 # --------
@@ -2376,8 +2539,9 @@ def fromProvidersWithStore(+providers: List<&2, AiModels.Provider>, credentials:
     refreshWork : Ref.Ref<RefreshWork> <- newRefreshWork()
     availability : Ref.Ref<AvailabilityStatus> <- Ref.new(AvailabilityStatus, AvailabilityStatus{0n, None{}})
     definition : Ref.Ref<Definition> <- Ref.new(Definition, Definition{providers,builtinIds(providers),Config.empty(),Nil{},Generation{Nil{},Nil{},Nil{}},StaticSource{providers},Nil{}})
-    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{definition, models, catalog, storeState, extensions, sharedRefresh, availability, runtimeCredentials, refreshWork})
-    refreshAvailability(runtime)
+    credentialQueues : KeyedSerial.Registry <- KeyedSerial.create()
+    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{definition, models, catalog, storeState, extensions, sharedRefresh, availability, runtimeCredentials, refreshWork, credentialQueues})
+    refreshAvailability(runtime, None{})
     return runtime
 
 def fromProviders(providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext) -> IO(ModelRuntime):

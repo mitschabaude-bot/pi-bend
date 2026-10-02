@@ -3386,13 +3386,13 @@
     },
     {
       "source": "packages/coding-agent/test/model-runtime-credential-sync.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/model-availability.bend",
         "tests/interactive_login_run_check.py"
       ],
       "sha256": "275163af35dfa1e53393736c9c510607fc7b8121cd13e7101e347ae953c63103",
-      "notes": "Injected-store logout and runtime API-key set/remove publish provider-local availability. Native model-availability exercises network-free cache restore, cached-model publication, committed credentials after refresh failure, error propagation and later recovery; mounted Codex/Anthropic login/logout cover the UI path. Same-provider operation ordering, concurrent-provider flows, cancellation after commit and upstream CredentialSynchronizationError metadata remain pending."
+      "notes": "All ten credential-sync contracts run in tests/model-availability.bend: locally consistent login/logout, same-provider ordering, concurrent provider flows, unrelated-provider isolation, scoped availability cancellation, cache-only credential synchronization, independent refreshes, committed-store cancellation boundaries, and typed CredentialSynchronizationError metadata with the retained credential and cause. Native one/four threads pass; mounted login/logout checks cover their terminal consumers. Native cancellation retains blocked work until runtime disposal rather than releasing its callback resources early."
     },
     {
       "source": "packages/coding-agent/test/model-runtime-modify-models-compat.test.ts",

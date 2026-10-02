@@ -963,7 +963,7 @@ type Catalog is Data:
 # The catalog follows credential changes (login, logout) since the last refresh.
 def refreshedAvailable(+models: Models.ModelRuntime) -> IO(List<&2,Models.Model()>):
   do IO<List<&2,Models.Model()>>:
-    Models.refreshAvailability(models)
+    Models.refreshAvailability(models, None{})
     Models.getAvailableSnapshot(models)
 def catalogPair(+scope: List<&2,Models.ScopedModel>, pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Services & Catalog):
   match pair:
@@ -998,7 +998,7 @@ def loginInteractive(_: Unit,request: InteractiveRun.LoginRequest) -> IO(AuthLog
   match request:
     case InteractiveRun.LoginRequest{runtime,provider,kind,interaction}:
       do IO<AuthLogin.Outcome()>:
-        result : Auth.LoginOutcome() <- Models.login(runtime,provider,kind,interaction)
+        result : Models.LoginOutcome() <- Models.login(runtime,provider,kind,interaction)
         return InteractiveRun.loginRequestOutcome(result)
 def refreshInteractive(host: Host(),_: Unit) -> IO(List<&2,Models.Model()>):
   do IO<List<&2,Models.Model()>>:

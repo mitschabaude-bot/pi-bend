@@ -162,7 +162,7 @@ def registration(result: Result<&2, &2, String, Unit>) -> IO(Unit):
     case Done{_}: IO.pure(Unit, Unit{})
     case Fail{message}: IO.die(Unit, 1, message)
 
-def authorization(result: Result<&2, &2, Resolve.ModelsError, Unit>) -> IO(Unit):
+def authorization(result: Models.CredentialOutcome(Unit)) -> IO(Unit):
   match result:
     case Done{_}: IO.pure(Unit, Unit{})
     case Fail{_}: IO.die(Unit, 1, "runtime key setup failed")
@@ -332,7 +332,7 @@ def cacheWarmingCase(+directory: String, +restored: Bool) -> IO(Unit):
     native : AiModels.Provider <- provider([warmModel()])
     registered : Result<&2, &2, String, Unit> <- Models.registerNativeProviderStream(models, native, Some{stream})
     registration(registered)
-    authorized : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(models, "capture-provider", "test-key", None{})
+    authorized : Models.CredentialOutcome(Unit) <- Models.setRuntimeApiKey(models, "capture-provider", "test-key", None{})
     authorization(authorized)
     pair : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(directory, directory, Settings.options())
     settings : Settings.SettingsManager = settingsOf(pair)
@@ -510,7 +510,7 @@ def run(+directory: String) -> IO(Unit):
     native : AiModels.Provider <- provider([codex, completions])
     registered : Result<&2, &2, String, Unit> <- Models.registerNativeProviderStream(models, native, Some{stream})
     registration(registered)
-    authorized : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(models, "capture-provider", "test-key", None{})
+    authorized : Models.CredentialOutcome(Unit) <- Models.setRuntimeApiKey(models, "capture-provider", "test-key", None{})
     authorization(authorized)
     pair : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(directory, directory, Settings.options())
     +settings : Settings.SettingsManager = settingsOf(pair)

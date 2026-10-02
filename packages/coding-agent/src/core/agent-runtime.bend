@@ -1175,17 +1175,17 @@ def withModel(+options: CreateOptions, transport: Transport, storage: Storage.Au
 
 # A runtime API key changes the provider's availability (upstream
 # setRuntimeApiKey refreshes it).
-def applyKey(+models: Models.ModelRuntime, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Result<&2, &2, Resolve.ModelsError, Unit>):
+def applyKey(+models: Models.ModelRuntime, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Models.CredentialOutcome(Unit)):
   match apiKey selected:
     case Some{key} Done{Some{model}}:
       +provider = Models.modelProvider(model)
       Models.setRuntimeApiKey(models, provider, key, None{})
-    case _ _: IO.pure(Result<&2, &2, Resolve.ModelsError, Unit>, Done{Unit{}})
+    case _ _: IO.pure(Models.CredentialOutcome(Unit), Done{Unit{}})
 
-def keyFailure(result: Result<&2, &2, Resolve.ModelsError, Unit>) -> Maybe<&2, String>:
+def keyFailure(result: Models.CredentialOutcome(Unit)) -> Maybe<&2, String>:
   match result:
     case Done{_}: None{}
-    case Fail{error}: Some{Resolve.errorMessage(error)}
+    case Fail{error}: Some{Models.credentialErrorMessage(error)}
 
 # Extensions (upstream resource loader and agent-session-services)
 # ------------------------------------------------------------------
@@ -1278,7 +1278,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         +resolution : Models.ResolveCliModelResult <- cliResolution(models, options, packageDir)
         reportResolution(resolution)
         +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options, resolution)
-        key : Result<&2, &2, Resolve.ModelsError, Unit> <- applyKey(models, apiKey, selected)
+        key : Models.CredentialOutcome(Unit) <- applyKey(models, apiKey, selected)
         prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir, resolved)
         withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, models, paths, failedWith(extensionFailure(extensions), failedWith(keyFailure(key), prompt)), selected, runnerOf(extensions), factories)
 

@@ -179,7 +179,7 @@ def firstStored(state: State) -> Bool:
   match state:
     case State{_, _, _, enabled}: enabled
 
-def loggedOut(result: Result<&2, &2, Resolve.ModelsError, Unit>) -> Bool:
+def loggedOut(result: Models.CredentialOutcome(Unit)) -> Bool:
   match result:
     case Done{_}: True{}
     case Fail{_}: False{}
@@ -189,16 +189,18 @@ def keyIs(result: Auth.StoreResult(Maybe<&2, Auth.Credential>), expected: String
     case Done{Some{Auth.ApiKeyCredential{Some{key}, _}}}: String.eq(key, expected)
     case _: False{}
 
-def synchronizationFailed(result: Result<&2, &2, Resolve.ModelsError, Unit>) -> Bool:
+def synchronizationFailed(result: Models.CredentialOutcome(Unit)) -> Bool:
   match result:
-    case Fail{error}: String.contains(Resolve.errorMessage(error), "cache restore failed")
+    case Fail{Models.CredentialSynchronizationError{_, _, _, cause}}: String.contains(Resolve.errorMessage(cause), "cache restore failed")
+    case Fail{_}: False{}
     case Done{_}: False{}
 
-def loginSyncFailed(result: Auth.LoginOutcome()) -> Bool:
+def loginSyncFailed(result: Models.LoginOutcome()) -> Bool:
   match result:
-    case Fail{+message}: String.contains(message, "Credential saved") && String.contains(message, "cache restore failed")
+    case Fail{Models.CredentialSynchronizationError{_, Models.LoginOperation{}, Some{Auth.ApiKeyCredential{Some{key}, _}}, cause}}: String.eq(key, "login-key") && String.contains(Resolve.errorMessage(cause), "cache restore failed")
+    case Fail{_}: False{}
     case Done{_}: False{}
-def loginSucceeded(result: Auth.LoginOutcome()) -> Bool:
+def loginSucceeded(result: Models.LoginOutcome()) -> Bool:
   match result:
     case Done{_}: True{}
     case Fail{_}: False{}
@@ -234,11 +236,11 @@ def check(+runtime: Models.ModelRuntime, +state: Ref.Ref<State>) -> IO(Unit):
     require(Maybe.is_none(&2, String, cleared), "successful refresh did not clear error")
     final : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
     require(Nat.is_eq(List.length(&2, AiModels.Model(), final), 1n), "full query did not publish snapshot")
-    logout : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.logout(runtime, "a", None{})
+    logout : Models.CredentialOutcome(Unit) <- Models.logout(runtime, "a", None{})
     require(loggedOut(logout), "runtime logout failed")
     remaining : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
     require(List.is_empty(&2, AiModels.Model(), remaining), "logout returned before availability changed")
-    override : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(runtime, "a", "session-key", None{})
+    override : Models.CredentialOutcome(Unit) <- Models.setRuntimeApiKey(runtime, "a", "session-key", None{})
     require(loggedOut(override), "runtime key override failed")
     visibleKey : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(Models.credentialsOf(runtime), "a", None{})
     require(keyIs(visibleKey, "session-key"), "runtime key was not used for auth")
@@ -246,7 +248,7 @@ def check(+runtime: Models.ModelRuntime, +state: Ref.Ref<State>) -> IO(Unit):
     require(Nat.is_eq(List.length(&2, AiModels.Model(), overridden), 1n), "runtime key did not publish availability")
     stored : State <- Ref.read(State, state)
     require(Bool.not(firstStored(stored)), "runtime key modified the injected store")
-    removed : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.removeRuntimeApiKey(runtime, "a", None{})
+    removed : Models.CredentialOutcome(Unit) <- Models.removeRuntimeApiKey(runtime, "a", None{})
     require(loggedOut(removed), "runtime key removal failed")
     afterRemoval : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
     require(List.is_empty(&2, AiModels.Model(), afterRemoval), "runtime key removal did not publish availability")
@@ -263,37 +265,39 @@ def checkDynamicSynchronization() -> IO(Unit):
     context : Auth.AuthContext <- Context.defaultProviderAuthContext()
     dynamic : AiModels.Provider <- providerWithRefresh("dynamic", Some{refresh})
     +runtime : Models.ModelRuntime <- Models.fromProviders([dynamic], store, context)
-    failed : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(runtime, "dynamic", "runtime-key", None{})
+    failed : Models.CredentialOutcome(Unit) <- Models.setRuntimeApiKey(runtime, "dynamic", "runtime-key", None{})
     require(synchronizationFailed(failed), "cache restore failure was swallowed")
     unchanged : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
     require(List.is_empty(&2, AiModels.Model(), unchanged), "failed synchronization published availability")
     effective : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(Models.credentialsOf(runtime), "dynamic", None{})
     require(keyIs(effective, "runtime-key"), "committed runtime key was lost after sync failure")
     Ref.modify(RefreshState, Unit, refreshState, state => setRefreshFailure(state, False{}))
-    restored : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.setRuntimeApiKey(runtime, "dynamic", "runtime-key", None{})
+    restored : Models.CredentialOutcome(Unit) <- Models.setRuntimeApiKey(runtime, "dynamic", "runtime-key", None{})
     require(loggedOut(restored), "successful local refresh failed")
     available : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
     require(Nat.is_eq(List.length(&2, AiModels.Model(), available), 2n), "cached catalog did not reach availability")
-    removed : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.removeRuntimeApiKey(runtime, "dynamic", None{})
+    removed : Models.CredentialOutcome(Unit) <- Models.removeRuntimeApiKey(runtime, "dynamic", None{})
     require(loggedOut(removed), "runtime key removal failed after local refresh")
     unavailable : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
     require(List.is_empty(&2, AiModels.Model(), unavailable), "removed key left cached models available")
     Ref.modify(RefreshState, Unit, refreshState, state => setRefreshFailure(state, True{}))
     +prompt : C.Callback<Auth.AuthPrompt, Result<&2, &2, String, String>> <- C.create(~Unit, ~Auth.AuthPrompt, ~Result<&2, &2, String, String>, ~loginPrompt, Unit{})
     +notify : C.Callback<Auth.AuthEvent, Unit> <- C.create(~Unit, ~Auth.AuthEvent, ~Unit, ~loginNotice, Unit{})
-    login : Auth.LoginOutcome() <- Models.login(runtime, "dynamic", Auth.ApiKeyType{}, Auth.AuthInteraction{None{}, prompt, notify})
+    login : Models.LoginOutcome() <- Models.login(runtime, "dynamic", Auth.ApiKeyType{}, Auth.AuthInteraction{None{}, prompt, notify})
     require(loginSyncFailed(login), "login did not report a committed credential and failed refresh")
     persisted : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(store, "dynamic", None{})
     require(keyIs(persisted, "login-key"), "failed synchronization lost the stored login credential")
     C.dispose(Auth.AuthPrompt, Result<&2, &2, String, String>, prompt)
     C.dispose(Auth.AuthEvent, Unit, notify)
     Ref.modify(RefreshState, Unit, refreshState, state => setRefreshFailure(state, False{}))
-    logout : Result<&2, &2, Resolve.ModelsError, Unit> <- Models.logout(runtime, "dynamic", None{})
+    logout : Models.CredentialOutcome(Unit) <- Models.logout(runtime, "dynamic", None{})
     require(loggedOut(logout), "logout did not synchronize cached catalog")
     deleted : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(store, "dynamic", None{})
     require(noCredential(deleted), "logout did not delete stored credential")
     count : RefreshState <- Ref.read(RefreshState, refreshState)
     require(fiveCalls(count), "credential operations skipped local cache refresh")
+    IO.print("ok does not run network refresh inside the credential operation chain")
+    IO.print("ok reports committed credentials when local synchronization fails")
     Models.dispose(runtime)
     Auth.disposeStore(store)
     previous : RefreshState <- Ref.dispose(RefreshState, refreshState)
@@ -332,7 +336,7 @@ def loginBesideStalledRefresh() -> IO(Unit):
     began : Maybe<&1,Unit> <- Chan.recv(Unit,started)
     +prompt : C.Callback<Auth.AuthPrompt,Result<&2,&2,String,String>> <- C.create(~Unit,~Auth.AuthPrompt,~Result<&2,&2,String,String>,~loginPrompt,Unit{})
     +notify : C.Callback<Auth.AuthEvent,Unit> <- C.create(~Unit,~Auth.AuthEvent,~Unit,~loginNotice,Unit{})
-    login : Auth.LoginOutcome() <- Models.login(runtime,"dynamic",Auth.ApiKeyType{},Auth.AuthInteraction{None{},prompt,notify})
+    login : Models.LoginOutcome() <- Models.login(runtime,"dynamic",Auth.ApiKeyType{},Auth.AuthInteraction{None{},prompt,notify})
     require(loginSucceeded(login),"login waited for an older stalled network refresh")
     stored : Auth.StoreResult(Maybe<&2,Auth.Credential>) <- Auth.read(store,"dynamic",None{})
     require(keyIs(stored,"login-key"),"login did not persist its credential")
@@ -612,6 +616,299 @@ def configAuthOptions() -> IO(Unit):
     discardedSignal : Maybe<&2, Abort.AbortSignal<Unit>> <- Ref.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, signalSlot)
     return Unit{}
 
+# Gates exercise asynchronous boundaries without timing-dependent sleeps.
+def blockedLogin(gate: RefreshGate, _: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  match gate:
+    case RefreshGate{started, release}:
+      do IO<Auth.LoginOutcome()>:
+        sent : Bool <- Chan.send(Unit, started, Unit{})
+        resumed : Maybe<&1, Unit> <- Chan.recv(Unit, release)
+        return Done{Auth.ApiKeyCredential{Some{"login-key"}, None{}}}
+
+def storedAuth(_: Unit, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
+  match input:
+    case Auth.ResolveInput{_, Some{Auth.ApiKeyCredential{key, env}}, _}:
+      IO.pure(Auth.AuthOutcome(), Done{Some{Auth.AuthResult{Auth.ModelAuth{key, None{}, None{}}, env, Some{"stored"}}}})
+    case _: IO.pure(Auth.AuthOutcome(), Done{None{}})
+
+def loginProvider(+id: String, gate: RefreshGate) -> IO(AiModels.Provider):
+  do IO<AiModels.Provider>:
+    login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~RefreshGate, ~Auth.ProviderAuthInteraction, ~Auth.LoginOutcome(), ~blockedLogin, gate)
+    resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~storedAuth, Unit{})
+    return AiModels.Provider{id, id, "https://faux.invalid", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"API key", Some{login}, resolve, None{}}}, None{}}, [model(id)], AiModels.ApiStreams{}, None{}, None{}}
+
+def concurrentCredentials() -> IO(Unit):
+  do IO<Unit>:
+    +startedA : Chan(Unit) <- Chan.new(Unit, 1)
+    +releaseA : Chan(Unit) <- Chan.new(Unit, 1)
+    +startedB : Chan(Unit) <- Chan.new(Unit, 1)
+    +releaseB : Chan(Unit) <- Chan.new(Unit, 1)
+    a : AiModels.Provider <- loginProvider("a", RefreshGate{startedA, releaseA})
+    b : AiModels.Provider <- loginProvider("b", RefreshGate{startedB, releaseB})
+    +store : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    +runtime : Models.ModelRuntime <- Models.fromProviders([a, b], store, context)
+    +prompt : C.Callback<Auth.AuthPrompt, Result<&2, &2, String, String>> <- C.create(~Unit, ~Auth.AuthPrompt, ~Result<&2, &2, String, String>, ~loginPrompt, Unit{})
+    +notify : C.Callback<Auth.AuthEvent, Unit> <- C.create(~Unit, ~Auth.AuthEvent, ~Unit, ~loginNotice, Unit{})
+    +interaction : Auth.AuthInteraction = Auth.AuthInteraction{None{}, prompt, notify}
+    first : Chan(Models.LoginOutcome()) <- IO.fork(Models.LoginOutcome(), Models.login(runtime, "a", Auth.ApiKeyType{}, interaction))
+    beganA : Maybe<&1, Unit> <- Chan.recv(Unit, startedA)
+    logout : Chan(Models.CredentialOutcome(Unit)) <- IO.fork(Models.CredentialOutcome(Unit), Models.logout(runtime, "a", None{}))
+    second : Chan(Models.LoginOutcome()) <- IO.fork(Models.LoginOutcome(), Models.login(runtime, "b", Auth.ApiKeyType{}, interaction))
+    beganB : Maybe<&1, Unit> <- Chan.recv(Unit, startedB)
+    releasedB : Bool <- Chan.send(Unit, releaseB, Unit{})
+    resultB : Models.LoginOutcome() <- IO.join(Models.LoginOutcome(), second)
+    storedB : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(store, "b", None{})
+    configuredB : Bool <- Models.hasConfiguredAuth(runtime, "b")
+    availableB : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
+    require(keyIs(storedB, "login-key") && configuredB && Nat.is_eq(List.length(&2, AiModels.Model(), availableB), 1n), "login resolved before credential, configuration and availability agreed")
+    checked(loginSucceeded(resultB), "allows different providers to run credential flows concurrently")
+    releasedA : Bool <- Chan.send(Unit, releaseA, Unit{})
+    resultA : Models.LoginOutcome() <- IO.join(Models.LoginOutcome(), first)
+    removed : Models.CredentialOutcome(Unit) <- IO.join(Models.CredentialOutcome(Unit), logout)
+    credential : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(store, "a", None{})
+    configured : Bool <- Models.hasConfiguredAuth(runtime, "a")
+    availableAfterLogout : List<&2, AiModels.Model()> <- Models.getAvailableSnapshot(runtime)
+    checked(loginSucceeded(resultA) && loggedOut(removed) && noCredential(credential) && Bool.not(configured), "orders same-provider credential operations through local synchronization")
+    checked(Nat.is_eq(List.length(&2, AiModels.Model(), availableAfterLogout), 1n), "publishes locally consistent availability before login and logout resolve")
+    Models.dispose(runtime)
+    Auth.disposeStore(store)
+    C.dispose(Auth.AuthPrompt, Result<&2, &2, String, String>, prompt)
+    C.dispose(Auth.AuthEvent, Unit, notify)
+
+# Block cache restoration only after construction has completed.
+type CacheGate is Data:
+  CacheGate{enabled: Ref.Ref<Bool>, gate: RefreshGate}
+
+def enableCache(_: Bool) -> Bool & Unit: (True{}, Unit{})
+
+def waitCache(enabled: Bool, gate: RefreshGate) -> IO(Result<&2, &2, String, Unit>):
+  match enabled gate:
+    case False{} _: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case True{} RefreshGate{started, release}:
+      do IO<Result<&2, &2, String, Unit>>:
+        sent : Bool <- Chan.send(Unit, started, Unit{})
+        resumed : Maybe<&1, Unit> <- Chan.recv(Unit, release)
+        return Done{Unit{}}
+
+def blockedCache(state: CacheGate, request: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, Unit>):
+  match state request:
+    case CacheGate{enabled, gate} AiModels.RefreshModelsContext{_, _, _, False{}, _, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        active : Bool <- Ref.read(Bool, enabled)
+        waitCache(active, gate)
+    case _ _: IO.die(Result<&2, &2, String, Unit>, 1, "credential synchronization used network refresh")
+
+def committedLogin(result: Models.LoginOutcome()) -> Bool:
+  match result:
+    case Fail{Models.CredentialSynchronizationError{id, Models.LoginOperation{}, Some{Auth.ApiKeyCredential{Some{key}, _}}, _}}:
+      String.eq(id, "dynamic") && String.eq(key, "login-key")
+    case _: False{}
+
+def cancelledSynchronization() -> IO(Unit):
+  do IO<Unit>:
+    +enabled : Ref.Ref<Bool> <- Ref.new(Bool, False{})
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    refresh : AiModels.RefreshModels() <- C.create(~CacheGate, ~AiModels.RefreshModelsContext, ~Result<&2, &2, String, Unit>, ~blockedCache, CacheGate{enabled, RefreshGate{started, release}})
+    dynamic : AiModels.Provider <- gatedProvider(refresh)
+    +store : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    +runtime : Models.ModelRuntime <- Models.fromProviders([dynamic], store, context)
+    Ref.modify(Bool, Unit, enabled, enableCache)
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +prompt : C.Callback<Auth.AuthPrompt, Result<&2, &2, String, String>> <- C.create(~Unit, ~Auth.AuthPrompt, ~Result<&2, &2, String, String>, ~loginPrompt, Unit{})
+    +notify : C.Callback<Auth.AuthEvent, Unit> <- C.create(~Unit, ~Auth.AuthEvent, ~Unit, ~loginNotice, Unit{})
+    login : Chan(Models.LoginOutcome()) <- IO.fork(Models.LoginOutcome(), Models.login(runtime, "dynamic", Auth.ApiKeyType{}, Auth.AuthInteraction{Some{Abort.signal(Unit, controller)}, prompt, notify}))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    stopped : Bool <- Abort.abort(Unit, controller, Some{Unit{}})
+    result : Models.LoginOutcome() <- IO.join(Models.LoginOutcome(), login)
+    stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(store, "dynamic", None{})
+    checked(committedLogin(result) && keyIs(stored, "login-key"), "reports a typed error when cancellation interrupts post-commit synchronization")
+    released : Bool <- Chan.send(Unit, release, Unit{})
+    Models.dispose(runtime)
+    Auth.disposeStore(store)
+    Abort.dispose(Unit, controller)
+    C.dispose(Auth.AuthPrompt, Result<&2, &2, String, String>, prompt)
+    C.dispose(Auth.AuthEvent, Unit, notify)
+    previous : Bool <- Ref.dispose(Bool, enabled)
+    return Unit{}
+
+def checkedAvailability(state: CacheGate, request: Auth.ResolveInput) -> IO(Auth.CheckOutcome()):
+  match state:
+    case CacheGate{enabled, gate}:
+      do IO<Auth.CheckOutcome()>:
+        active : Bool <- Ref.read(Bool, enabled)
+        waited : Result<&2, &2, String, Unit> <- waitCache(active, gate)
+        return Done{Some{Auth.AuthCheck{Some{"stored"}, Auth.ApiKeyType{}}}}
+
+def availabilityProvider(+id: String, state: CacheGate) -> IO(AiModels.Provider):
+  do IO<AiModels.Provider>:
+    login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~Unit, ~Auth.ProviderAuthInteraction, ~Auth.LoginOutcome(), ~gateLogin, Unit{})
+    resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~ambientGateAuth, Unit{})
+    check : C.Callback<Auth.ResolveInput, Auth.CheckOutcome()> <- C.create(~CacheGate, ~Auth.ResolveInput, ~Auth.CheckOutcome(), ~checkedAvailability, state)
+    return AiModels.Provider{id, id, "https://faux.invalid", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"API key", Some{login}, resolve, Some{check}}}, None{}}, [model(id)], AiModels.ApiStreams{}, None{}, None{}}
+
+def refreshAborted(result: Models.ModelsRefreshResult) -> Bool:
+  match result:
+    case Models.ModelsRefreshResult{aborted, _}: aborted
+
+def scopedAvailabilityCancellation() -> IO(Unit):
+  do IO<Unit>:
+    +enabled : Ref.Ref<Bool> <- Ref.new(Bool, False{})
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    unrelated : AiModels.Provider <- availabilityProvider("unrelated", CacheGate{enabled, RefreshGate{started, release}})
+    target : AiModels.Provider <- provider("target")
+    +store : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    +runtime : Models.ModelRuntime <- Models.fromProviders([unrelated, target], store, context)
+    Ref.modify(Bool, Unit, enabled, enableCache)
+    +prompt : C.Callback<Auth.AuthPrompt, Result<&2, &2, String, String>> <- C.create(~Unit, ~Auth.AuthPrompt, ~Result<&2, &2, String, String>, ~loginPrompt, Unit{})
+    +notify : C.Callback<Auth.AuthEvent, Unit> <- C.create(~Unit, ~Auth.AuthEvent, ~Unit, ~loginNotice, Unit{})
+    login : Models.LoginOutcome() <- Models.login(runtime, "target", Auth.ApiKeyType{}, Auth.AuthInteraction{None{}, prompt, notify})
+    refreshed : Models.ModelsRefreshResult <- Models.refresh(runtime, Models.ModelsRefreshOptions{Some{False{}}, Some{["target"]}, None{}, None{}})
+    configured : Bool <- Models.hasConfiguredAuth(runtime, "target")
+    checked(loginSucceeded(login) && configured && Bool.not(refreshAborted(refreshed)), "does not wait for unrelated provider availability during local synchronization")
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    pending : Chan(Models.ModelsRefreshResult) <- IO.fork(Models.ModelsRefreshResult, Models.refresh(runtime, Models.ModelsRefreshOptions{Some{False{}}, Some{["unrelated"]}, None{}, Some{Abort.signal(Unit, controller)}}))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    stopped : Bool <- Abort.abort(Unit, controller, Some{Unit{}})
+    result : Models.ModelsRefreshResult <- IO.join(Models.ModelsRefreshResult, pending)
+    checked(refreshAborted(result), "reports cancellation that occurs during provider-scoped availability")
+    released : Bool <- Chan.send(Unit, release, Unit{})
+    Models.dispose(runtime)
+    Auth.disposeStore(store)
+    Abort.dispose(Unit, controller)
+    C.dispose(Auth.AuthPrompt, Result<&2, &2, String, String>, prompt)
+    C.dispose(Auth.AuthEvent, Unit, notify)
+    previous : Bool <- Ref.dispose(Bool, enabled)
+    return Unit{}
+
+type NetworkGate is Data:
+  NetworkGate{gate: RefreshGate, signal: Ref.Ref<Maybe<&2, Abort.AbortSignal<Unit>>>}
+
+def retainNetworkSignal(signal: Abort.AbortSignal<Unit>, _: Maybe<&2, Abort.AbortSignal<Unit>>) -> Maybe<&2, Abort.AbortSignal<Unit>> & Unit:
+  (Some{signal}, Unit{})
+
+def blockedNetwork(state: NetworkGate, request: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, Unit>):
+  match state request:
+    case NetworkGate{gate, slot} AiModels.RefreshModelsContext{_, _, _, True{}, _, signal}:
+      do IO<Result<&2, &2, String, Unit>>:
+        Ref.modify(Maybe<&2, Abort.AbortSignal<Unit>>, Unit, slot, current => retainNetworkSignal(signal, current))
+        waitCache(True{}, gate)
+    case _ _: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+
+def independentRefreshes() -> IO(Unit):
+  do IO<Unit>:
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +slot : Ref.Ref<Maybe<&2, Abort.AbortSignal<Unit>>> <- Ref.new(Maybe<&2, Abort.AbortSignal<Unit>>, None{})
+    refresh : AiModels.RefreshModels() <- C.create(~NetworkGate, ~AiModels.RefreshModelsContext, ~Result<&2, &2, String, Unit>, ~blockedNetwork, NetworkGate{RefreshGate{started, release}, slot})
+    one : AiModels.Provider <- providerWithRefresh("one", Some{refresh})
+    two : AiModels.Provider <- provider("two")
+    +store : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    +runtime : Models.ModelRuntime <- Models.fromProviders([one, two], store, context)
+    keyOne : Models.CredentialOutcome(Unit) <- Models.setRuntimeApiKey(runtime, "one", "one-key", None{})
+    keyTwo : Models.CredentialOutcome(Unit) <- Models.setRuntimeApiKey(runtime, "two", "two-key", None{})
+    pending : Chan(Models.ModelsRefreshResult) <- IO.fork(Models.ModelsRefreshResult, Models.refresh(runtime, Models.ModelsRefreshOptions{Some{True{}}, Some{["one"]}, None{}, None{}}))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    second : Models.ModelsRefreshResult <- Models.refresh(runtime, Models.ModelsRefreshOptions{Some{True{}}, Some{["two"]}, None{}, None{}})
+    captured : Maybe<&2, Abort.AbortSignal<Unit>> <- Ref.read(Maybe<&2, Abort.AbortSignal<Unit>>, slot)
+    signal : Abort.AbortSignal<Unit> <- retainedSignal(captured)
+    aborted : Bool <- Abort.aborted(Unit, signal)
+    checked(loggedOut(keyOne) && loggedOut(keyTwo) && Bool.not(refreshAborted(second)) && Bool.not(aborted), "keeps provider-scoped refreshes from superseding unrelated providers")
+    released : Bool <- Chan.send(Unit, release, Unit{})
+    first : Models.ModelsRefreshResult <- IO.join(Models.ModelsRefreshResult, pending)
+    require(Bool.not(refreshAborted(first)), "independent provider refresh was aborted")
+    Models.dispose(runtime)
+    Auth.disposeStore(store)
+    previous : Maybe<&2, Abort.AbortSignal<Unit>> <- Ref.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, slot)
+    return Unit{}
+type DelayedStore is Data:
+  DelayedStore{value: Ref.Ref<Maybe<&2, Auth.Credential>>, gate: RefreshGate}
+
+def delayedRead(state: DelayedStore, _: Auth.Request) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
+  match state:
+    case DelayedStore{value, _}:
+      do IO<Auth.StoreResult(Maybe<&2, Auth.Credential>)>:
+        credential : Maybe<&2, Auth.Credential> <- Ref.read(Maybe<&2, Auth.Credential>, value)
+        return Done{credential}
+
+def replaceCredential(credential: Maybe<&2, Auth.Credential>, _: Maybe<&2, Auth.Credential>) -> Maybe<&2, Auth.Credential> & Unit:
+  (credential, Unit{})
+
+def delayedCommit(state: DelayedStore, result: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
+  match state result:
+    case _ Fail{reason}: IO.pure(Auth.StoreResult(Maybe<&2, Auth.Credential>), Fail{reason})
+    case DelayedStore{value, gate} Done{+credential}:
+      do IO<Auth.StoreResult(Maybe<&2, Auth.Credential>)>:
+        Ref.modify(Maybe<&2, Auth.Credential>, Unit, value, previous => replaceCredential(credential, previous))
+        waited : Result<&2, &2, String, Unit> <- waitCache(True{}, gate)
+        return Done{credential}
+
+def delayedModify(state: DelayedStore, request: Auth.Modify) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
+  match state request:
+    case DelayedStore{+value, gate} Auth.Modify{_, update, _}:
+      do IO<Auth.StoreResult(Maybe<&2, Auth.Credential>)>:
+        current : Maybe<&2, Auth.Credential> <- Ref.read(Maybe<&2, Auth.Credential>, value)
+        result : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- C.call(Maybe<&2, Auth.Credential>, Auth.StoreResult(Maybe<&2, Auth.Credential>), update, current)
+        delayedCommit(DelayedStore{value, gate}, result)
+
+def delayedDelete(state: DelayedStore, _: Auth.Request) -> IO(Auth.StoreResult(Unit)):
+  match state:
+    case DelayedStore{value, _}:
+      do IO<Auth.StoreResult(Unit)>:
+        Ref.modify(Maybe<&2, Auth.Credential>, Unit, value, previous => replaceCredential(None{}, previous))
+        return Done{Unit{}}
+
+def delayedStore(+state: DelayedStore) -> IO(Auth.CredentialStore):
+  do IO<Auth.CredentialStore>:
+    reader : C.Callback<Auth.Request, Auth.StoreResult(Maybe<&2, Auth.Credential>)> <- C.create(~DelayedStore, ~Auth.Request, ~Auth.StoreResult(Maybe<&2, Auth.Credential>), ~delayedRead, state)
+    modifier : C.Callback<Auth.Modify, Auth.StoreResult(Maybe<&2, Auth.Credential>)> <- C.create(~DelayedStore, ~Auth.Modify, ~Auth.StoreResult(Maybe<&2, Auth.Credential>), ~delayedModify, state)
+    deleter : C.Callback<Auth.Request, Auth.StoreResult(Unit)> <- C.create(~DelayedStore, ~Auth.Request, ~Auth.StoreResult(Unit), ~delayedDelete, state)
+    lister : C.Callback<Auth.Signal(), Auth.StoreResult(List<&2, Auth.CredentialInfo>)> <- C.create(~Unit, ~Auth.Signal(), ~Auth.StoreResult(List<&2, Auth.CredentialInfo>), ~listStore, Unit{})
+    return Auth.CredentialStore{reader, lister, modifier, deleter}
+
+def settledLogin(settled: Ref.Ref<Bool>, task: IO(Models.LoginOutcome())) -> IO(Models.LoginOutcome()):
+  do IO<Models.LoginOutcome()>:
+    result : Models.LoginOutcome() <- task
+    Ref.modify(Bool, Unit, settled, enableCache)
+    return result
+
+def cancellationAfterCommit() -> IO(Unit):
+  do IO<Unit>:
+    +value : Ref.Ref<Maybe<&2, Auth.Credential>> <- Ref.new(Maybe<&2, Auth.Credential>, None{})
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +store : Auth.CredentialStore <- delayedStore(DelayedStore{value, RefreshGate{started, release}})
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    dynamic : AiModels.Provider <- provider("dynamic")
+    +runtime : Models.ModelRuntime <- Models.fromProviders([dynamic], store, context)
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +settled : Ref.Ref<Bool> <- Ref.new(Bool, False{})
+    +prompt : C.Callback<Auth.AuthPrompt, Result<&2, &2, String, String>> <- C.create(~Unit, ~Auth.AuthPrompt, ~Result<&2, &2, String, String>, ~loginPrompt, Unit{})
+    +notify : C.Callback<Auth.AuthEvent, Unit> <- C.create(~Unit, ~Auth.AuthEvent, ~Unit, ~loginNotice, Unit{})
+    login : Chan(Models.LoginOutcome()) <- IO.fork(Models.LoginOutcome(), settledLogin(settled, Models.login(runtime, "dynamic", Auth.ApiKeyType{}, Auth.AuthInteraction{Some{Abort.signal(Unit, controller)}, prompt, notify})))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    stopped : Bool <- Abort.abort(Unit, controller, Some{Unit{}})
+    IO.sleep(10)
+    premature : Bool <- Ref.read(Bool, settled)
+    require(Bool.not(premature), "cancelled login settled while committed store mutation was unfinished")
+    released : Bool <- Chan.send(Unit, release, Unit{})
+    result : Models.LoginOutcome() <- IO.join(Models.LoginOutcome(), login)
+    stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(store, "dynamic", None{})
+    checked(committedLogin(result) && keyIs(stored, "login-key"), "waits for a committed credential mutation to settle before reporting cancellation")
+    Models.dispose(runtime)
+    Auth.disposeStore(store)
+    Abort.dispose(Unit, controller)
+    C.dispose(Auth.AuthPrompt, Result<&2, &2, String, String>, prompt)
+    C.dispose(Auth.AuthEvent, Unit, notify)
+    previous : Maybe<&2, Auth.Credential> <- Ref.dispose(Maybe<&2, Auth.Credential>, value)
+    wasSettled : Bool <- Ref.dispose(Bool, settled)
+    return Unit{}
+
 def main() -> IO(Unit):
   do IO<Unit>:
     +state : Ref.Ref<State> <- Ref.new(State, State{Nil{}, False{}, True{}, True{}})
@@ -629,6 +926,11 @@ def main() -> IO(Unit):
     previous : State <- Ref.dispose(State, state)
     checkDynamicSynchronization()
     loginBesideStalledRefresh()
+    concurrentCredentials()
+    cancelledSynchronization()
+    scopedAvailabilityCancellation()
+    independentRefreshes()
+    cancellationAfterCommit()
     providerMetadata()
     configAuthOptions()
     IO.print("model availability: scoped reads, credential synchronization, snapshots, stream ownership, and auth gating pass")

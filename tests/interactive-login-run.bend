@@ -49,10 +49,10 @@ def factoryTransport(+agentDir: String,request: Host.Request,storage: Storage.Au
         +streams : Ref.Ref<List<&2,Faux.EventStream()>> <- Ref.new(List<&2,Faux.EventStream()>,Nil{})
         +gates : Ref.Ref<List<&2,Faux.Gate>> <- Ref.new(List<&2,Faux.Gate>,Nil{})
         +stream : AgentRuntime.Stream() <- Callback.create(~Faux.Faux,~Faux.Input(),~Faux.Output(),~Faux.provider,Faux.Faux{responses,streams,gates,1n})
-        +registry : StreamFn.Registry(Unit,Tools.ToolDetails,AgentRuntime.LoopConfig(),Tools.ToolError) <- StreamFn.create(Unit,Tools.ToolDetails,AgentRuntime.LoopConfig(),Tools.ToolError)
+        +registry : StreamFn.Registry(Schema.Value,Tools.ToolDetails,AgentRuntime.LoopConfig(),Tools.ToolError) <- StreamFn.create(Schema.Value,Tools.ToolDetails,AgentRuntime.LoopConfig(),Tools.ToolError)
         +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError,~AgentRuntime.validationError)
         +converter : AgentRuntime.Converter() <- AgentRuntime.createConverter(False{})
-        created : Result<&2,&2,StreamFn.MissingDefault,AgentRuntime.Owner()> <- Agent.new(~Unit,~Tools.ToolDetails,~AgentRuntime.Custom(),~Tools.ToolError,~Unit,Faux.options(stream,converter,Sessions.getSessionId(Unit,Tools.ToolDetails,Schema.Value,stored),None{}),registry,validator,Tools.emptyDetails())
+        created : Result<&2,&2,StreamFn.MissingDefault,AgentRuntime.Owner()> <- Agent.new(~Schema.Value,~Tools.ToolDetails,~AgentRuntime.Custom(),~Tools.ToolError,~Unit,Faux.options(stream,converter,Sessions.getSessionId(Schema.Value,Tools.ToolDetails,Schema.Value,stored),None{}),registry,validator,Tools.emptyDetails())
         +agent : AgentRuntime.Owner() <- Faux.requireAgent(created)
         loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd,agentDir,Settings.options())
         +session : Session.AgentSession <- Session.create(agent,stored,Faux.settingsOf(loaded),cwd,AgentRuntime.Loadout{Record.new(String),Nil{},Nil{},Nil{},None{},Nil{},None{},Nil{}},models,Nil{})
@@ -143,7 +143,7 @@ def loginCopied(+base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome
   match request:
     case Run.LoginRequest{runtime,provider,Auth.ApiKeyType{},interaction}:
       do IO<AuthLogin.Outcome()>:
-        result : Auth.LoginOutcome() <- Models.login(runtime,provider,Auth.ApiKeyType{},interaction)
+        result : Models.LoginOutcome() <- Models.login(runtime,provider,Auth.ApiKeyType{},interaction)
         return Run.loginRequestOutcome(result)
     case Run.LoginRequest{_,provider,Auth.OAuthType{},interaction}:
       do IO<AuthLogin.Outcome()>:
@@ -154,7 +154,7 @@ def login(base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()): lo
 def models(runtime: Models.ModelRuntime,_: Unit) -> IO(List<&2,Models.Model()>):
   do IO<List<&2,Models.Model()>>:
     +current : Models.ModelRuntime = runtime
-    Models.refreshAvailability(current)
+    Models.refreshAvailability(current, None{})
     Models.getAvailableSnapshot(current)
 def requireSession(result: Sessions.Outcome(Session.Session())) -> IO(Session.Session()):
   match result:
