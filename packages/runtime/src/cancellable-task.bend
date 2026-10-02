@@ -128,3 +128,86 @@ def run(-A: Data, +caller: Abort.AbortSignal<Unit>, operation: Abort.AbortSignal
     Abort.unlink(Unit, link)
     depart(A, task, False{})
     return value
+
+# A scope keeps borrowed resources alive until every admitted operation has
+# finished, including workers whose callers stopped waiting after cancellation.
+type ScopeState is Data:
+  ScopeState{running: Nat, closing: Bool, drained: D.Deferred<Unit>}
+
+type Scope is Data:
+  Scope{state: Ref.Ref<ScopeState>}
+
+def scope() -> IO(Scope):
+  do IO<Scope>:
+    drained : D.Deferred<Unit> <- D.new(Unit)
+    state : Ref.Ref<ScopeState> <- Ref.new(ScopeState, ScopeState{0n, False{}, drained})
+    return Scope{state}
+
+def entered(state: ScopeState) -> ScopeState & Bool:
+  match state:
+    case ScopeState{running, True{}, drained}: (ScopeState{running, True{}, drained}, False{})
+    case ScopeState{running, False{}, drained}: (ScopeState{Nat.add(running, 1n), False{}, drained}, True{})
+
+def departed(state: ScopeState) -> ScopeState & Maybe<&2, D.Deferred<Unit>>:
+  match state:
+    case ScopeState{1n, True{}, +drained}: (ScopeState{0n, True{}, drained}, Some{drained})
+    case ScopeState{1n+(rest), closing, drained}: (ScopeState{rest, closing, drained}, None{})
+    case ScopeState{0n, closing, drained}: (ScopeState{0n, closing, drained}, None{})
+
+def notifyDrained(drained: Maybe<&2, D.Deferred<Unit>>) -> IO(Unit):
+  match drained:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{drained}:
+      do IO<Unit>:
+        resolved : Bool <- D.resolve(Unit, drained, Unit{})
+        return Unit{}
+
+def leaveScope(scope: Scope) -> IO(Unit):
+  match scope:
+    case Scope{state}:
+      do IO<Unit>:
+        notify : Maybe<&2, D.Deferred<Unit>> <- Ref.modify(ScopeState, Maybe<&2, D.Deferred<Unit>>, state, departed)
+        notifyDrained(notify)
+
+def scoped(-A: Data, +scope: Scope, admitted: Bool, signal: Maybe<&2, Abort.AbortSignal<Unit>>, operation: Abort.AbortSignal<Unit> -> IO(A), cancelled: A) -> IO(A):
+  match admitted signal:
+    case False{} _: IO.pure(A, cancelled)
+    case True{} Some{+caller}: run(A, caller, child => operation(caller), IO.pure(Maybe<&2, A>, Some{cancelled}), leaveScope(scope))
+    case True{} None{}:
+      do IO<A>:
+        +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        result : A <- operation(Abort.signal(Unit, controller))
+        Abort.dispose(Unit, controller)
+        leaveScope(scope)
+        return result
+
+def runScoped(-A: Data, scope: Scope, signal: Maybe<&2, Abort.AbortSignal<Unit>>, operation: Abort.AbortSignal<Unit> -> IO(A), cancelled: A) -> IO(A):
+  match scope:
+    case Scope{+state}:
+      do IO<A>:
+        admitted : Bool <- Ref.modify(ScopeState, Bool, state, entered)
+        scoped(A, Scope{state}, admitted, signal, operation, cancelled)
+
+def closing(state: ScopeState) -> ScopeState & (D.Deferred<Unit> & Bool):
+  match state:
+    case ScopeState{+running, _, +drained}: (ScopeState{running, True{}, drained}, (drained, Nat.is_eq(running, 0n)))
+
+def awaitScope(pair: D.Deferred<Unit> & Bool) -> IO(Unit):
+  match pair:
+    case Tuple{+drained, ready}:
+      do IO<Unit>:
+        notifyDrained(Bool.pick(Maybe<&2, D.Deferred<Unit>>, ready, Some{drained}, None{}))
+        D.result(Unit, drained)
+
+def disposeScopeState(state: ScopeState) -> IO(Unit):
+  match state:
+    case ScopeState{_, _, drained}: D.dispose(Unit, drained)
+
+def closeScope(scope: Scope) -> IO(Unit):
+  match scope:
+    case Scope{+state}:
+      do IO<Unit>:
+        pending : D.Deferred<Unit> & Bool <- Ref.modify(ScopeState, D.Deferred<Unit> & Bool, state, closing)
+        awaitScope(pending)
+        previous : ScopeState <- Ref.dispose(ScopeState, state)
+        disposeScopeState(previous)

@@ -190,7 +190,8 @@ def refreshStored(credentials: Auth.CredentialStore, +providerId: String, +oauth
     +update : Auth.Modification() <- C.create(~Refresh, ~Maybe<&2, Auth.Credential>, ~(Auth.StoreResult(Maybe<&2, Auth.Credential>)), ~refreshCurrent, Refresh{providerId, oauth, minimum, signal, failed})
     post : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.modify(credentials, providerId, update, Some{signal})
     C.dispose(Maybe<&2, Auth.Credential>, Auth.StoreResult(Maybe<&2, Auth.Credential>), update)
-    recorded : Maybe<&2, ModelsError> <- Ref.dispose(Maybe<&2, ModelsError>, failed)
+    # An active store invocation retains this diagnostic cell after abort.
+    recorded : Maybe<&2, ModelsError> <- Ref.read(Maybe<&2, ModelsError>, failed)
     postRefresh(providerId, oauth, requested, minimum, recorded, post)
 
 def refreshIfStale(credentials: Auth.CredentialStore, providerId: String, oauth: Auth.OAuthAuth, stored: Auth.Credential, signal: Abort.AbortSignal<Unit>, requested: Maybe<&2, F64>, minimum: F64, stale: Bool) -> IO(Resolution()):

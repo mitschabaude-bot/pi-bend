@@ -1,4 +1,5 @@
 import Base
+import ../../runtime/src/cancellable-task.bend as Tasks
 import ./types.bend as T
 import ./api/options.bend as Options
 import ./api/lazy.bend as Lazy
@@ -370,7 +371,7 @@ type ModelsState is Data:
 # credential store stays with its owner. The models store and auth context
 # are owned by the collection.
 type Models is Data:
-  Models{state: Ref.Ref<ModelsState>, credentials: Auth.CredentialStore, modelsStore: Store.ModelsStore, authContext: Auth.AuthContext, ownsCredentials: Bool}
+  Models{state: Ref.Ref<ModelsState>, credentials: Auth.CredentialStore, modelsStore: Store.ModelsStore, authContext: Auth.AuthContext, ownsCredentials: Bool, work: Tasks.Scope}
 
 type CreateModelsOptions is Data:
   CreateModelsOptions{credentials: Maybe<&2, Auth.CredentialStore>, modelsStore: Maybe<&2, Store.ModelsStore>, authContext: Maybe<&2, Auth.AuthContext>}
@@ -404,23 +405,28 @@ def createModels(options: CreateModelsOptions) -> IO(Models):
         catalogs : Store.ModelsStore <- modelsStoreOr(store)
         environment : Auth.AuthContext <- authContextOr(context)
         state : Ref.Ref<ModelsState> <- Ref.new(ModelsState, emptyModelsState())
-        return Models{state, chosen, catalogs, environment, Bool.not(Maybe.is_some(&2, Auth.CredentialStore, credentials))}
+        work : Tasks.Scope <- Tasks.scope()
+        return Models{state, chosen, catalogs, environment, Bool.not(Maybe.is_some(&2, Auth.CredentialStore, credentials)), work}
 
 def credentialsOf(+models: Models) -> Auth.CredentialStore:
   match models:
-    case Models{_, credentials, _, _, _}: credentials
+    case Models{_, credentials, _, _, _, _}: credentials
 
 def modelsStoreOf(+models: Models) -> Store.ModelsStore:
   match models:
-    case Models{_, _, store, _, _}: store
+    case Models{_, _, store, _, _, _}: store
 
 def authContextOf(+models: Models) -> Auth.AuthContext:
   match models:
-    case Models{_, _, _, context, _}: context
+    case Models{_, _, _, context, _, _}: context
 
 def stateOf(+models: Models) -> Ref.Ref<ModelsState>:
   match models:
-    case Models{state, _, _, _, _}: state
+    case Models{state, _, _, _, _, _}: state
+
+def workOf(models: Models) -> Tasks.Scope:
+  match models:
+    case Models{_, _, _, _, _, work}: work
 
 def disposeOwnedCredentials(owned: Bool, credentials: Auth.CredentialStore) -> IO(Unit):
   match owned:
@@ -431,8 +437,9 @@ def disposeOwnedCredentials(owned: Bool, credentials: Auth.CredentialStore) -> I
 # default credential store). Providers stay with whoever created them.
 def disposeModels(models: Models) -> IO(Unit):
   match models:
-    case Models{state, credentials, store, context, owned}:
+    case Models{state, credentials, store, context, owned, work}:
       do IO<Unit>:
+        Tasks.closeScope(work)
         old : ModelsState <- Ref.dispose(ModelsState, state)
         Store.dispose(store)
         Auth.disposeContext(context)
@@ -710,7 +717,7 @@ def checkSignalled(+models: Models, +id: String, +signal: Abort.AbortSignal<Unit
 # upstream checkAuth: whether the provider has complete auth configuration,
 # without refreshing OAuth; nothing for an unknown or unconfigured provider.
 def checkAuth(+models: Models, +id: String, signal: Auth.Signal()) -> IO(CheckResult()):
-  signalled(CheckResult(), signal, given => checkSignalled(models, id, given))
+  Tasks.runScoped(CheckResult(), workOf(models), signal, given => checkSignalled(models, id, given), Fail{abortedError()})
 
 # One provider's availability: its auth check and, when configured, its
 # models narrowed by filterModels for the stored credential.
@@ -774,7 +781,7 @@ def availabilitiesSignalled(+models: Models, id: Maybe<&2, String>, +signal: Abo
 # id), in registration order; a failed check or credential read is that
 # provider's entry.
 def getAvailabilities(+models: Models, id: Maybe<&2, String>, signal: Auth.Signal()) -> IO(AvailabilitiesResult()):
-  signalled(AvailabilitiesResult(), signal, given => availabilitiesSignalled(models, id, given))
+  Tasks.runScoped(AvailabilitiesResult(), workOf(models), signal, given => availabilitiesSignalled(models, id, given), Fail{abortedError()})
 
 def AvailableResult() -> Data: Result<&2, &2, Resolve.ModelsError, List<&2, Model()>>
 
@@ -804,10 +811,15 @@ def resolveKnown(+models: Models, provider: Maybe<&2, Provider>, overrides: Reso
 
 # upstream getAuth(providerId): provider-scoped auth, nothing for an unknown
 # or unconfigured provider.
-def getAuth(+models: Models, +id: String, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
-  do IO<Resolve.Resolution()>:
-    provider : Maybe<&2, Provider> <- getProvider(models, id)
-    resolveKnown(models, provider, overrides)
+def authTask(+models: Models, +id: String, overrides: Resolve.AuthResolutionOverrides, signal: Abort.AbortSignal<Unit>) -> IO(Resolve.Resolution()):
+  match overrides:
+    case Resolve.AuthResolutionOverrides{key, env, minimum, _}:
+      do IO<Resolve.Resolution()>:
+        provider : Maybe<&2, Provider> <- getProvider(models, id)
+        resolveKnown(models, provider, Resolve.AuthResolutionOverrides{key, env, minimum, Some{signal}})
+
+def getAuth(+models: Models, id: String, +overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
+  Tasks.runScoped(Resolve.Resolution(), workOf(models), Resolve.signalOf(overrides), given => authTask(models, id, overrides, given), Fail{abortedError()})
 
 def sameHeaderName(+left: String, +right: String) -> Bool: U.equal(String.to_lower(left), String.to_lower(right))
 
@@ -1159,7 +1171,7 @@ def refreshWithSignal(+models: Models, filter: Maybe<&2, List<&2, String>>, allo
 # failures are returned per provider id; cancellation is `aborted`.
 def refresh(+models: Models, options: ModelsRefreshOptions) -> IO(ModelsRefreshResult):
   match options:
-    case ModelsRefreshOptions{allowNetwork, filter, force, signal}: signalled(ModelsRefreshResult, signal, given => refreshWithSignal(models, filter, Maybe.default(&2, Bool, allowNetwork, True{}), force, given))
+    case ModelsRefreshOptions{allowNetwork, filter, force, signal}: Tasks.runScoped(ModelsRefreshResult, workOf(models), signal, given => refreshWithSignal(models, filter, Maybe.default(&2, Bool, allowNetwork, True{}), force, given), ModelsRefreshResult{True{}, R.new(String)})
 
 # Collection requests keep their header transform outside provider options.
 def BaseResult() -> Data: Result<&2, &2, Resolve.ModelsError, Options.BaseOptions(Resolve.ModelsError)>

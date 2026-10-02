@@ -57,10 +57,11 @@ def observe(-Reason: Data, value: AbortSignal<Reason>) -> IO(D.Observation<Abort
   match value:
     case AbortSignal{settlement}: D.observe(AbortReason<Reason>, settlement)
 
-# The owner disposes the signal after all observation tickets have completed.
+# Retire the controller after all observation tickets have completed. Signals
+# are shared Data: captured aliases retain their settlement and reason until
+# their last use. Closing its Ref here would invalidate those live aliases.
 def dispose(-Reason: Data, controller: AbortController<Reason>) -> IO(Unit):
-  match controller:
-    case AbortController{AbortSignal{settlement}}: D.dispose(AbortReason<Reason>, settlement)
+  IO.pure(Unit, Unit{})
 
 
 # Pure arbitration at the final observation boundary. Cancellation without a

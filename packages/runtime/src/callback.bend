@@ -30,13 +30,16 @@ def acquire(-A: Type, source: Factory<A>) -> Factory<A> & A:
   match source:
     case Factory{next}: next(Unit{})
 
-def call(-Input: Type, -Output: Type, callback: Callback<Input, Output>, argument: Input) -> IO(Output):
+# Capture an affine invocation before queuing it. Disposing the callback's
+# factory later leaves this invocation and its captured Data alive.
+def borrow(-Input: Type, -Output: Type, callback: Callback<Input, Output>) -> IO(Input -> IO(Output)):
   match callback:
-    case Callback{state}:
-      do IO<Output>:
-        invoke : (Input -> IO(Output)) <- R.modify(Factory<(Input -> IO(Output))>, Input -> IO(Output), state, source => acquire(Input -> IO(Output), source))
-        # The factory is already released. User code may await or re-enter.
-        invoke(argument)
+    case Callback{state}: R.modify(Factory<(Input -> IO(Output))>, Input -> IO(Output), state, source => acquire(Input -> IO(Output), source))
+
+def call(-Input: Type, -Output: Type, callback: Callback<Input, Output>, argument: Input) -> IO(Output):
+  do IO<Output>:
+    invoke : (Input -> IO(Output)) <- borrow(Input, Output, callback)
+    invoke(argument)
 
 def dispose(-Input: Type, -Output: Type, callback: Callback<Input, Output>) -> IO(Unit):
   match callback:

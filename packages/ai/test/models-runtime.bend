@@ -20,10 +20,8 @@ import ../../runtime/src/ref.bend as R
 # list. Adaptations: upstream's `toBe` identity checks compare what makes the
 # values distinct (a replacement provider's base URL; a signal's link to the
 # caller's controller); getModels() cannot fail here (catalogs are values),
-# so 'swallows provider source failures ...' has no counterpart. Pending:
-# cases where the caller stops waiting for a blocked provider, store or auth
-# callback (the collection waits for them), model-store signal identity, and
-# the remaining model-store/cancellation cases.
+# so 'swallows provider source failures ...' has no counterpart. Cancellation
+# cases use gates to verify that callers return before workers are released.
 
 def check(ok: Bool, +name: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit), ok, _ => IO.print("ok " ++ name), _ => IO.die(Unit, 1, "FAIL " ++ name))(Unit{})
@@ -86,6 +84,41 @@ def envKeyAuth(key: Maybe<&2, String>) -> IO(Auth.ProviderAuth):
     apiKey : Auth.ApiKeyAuth <- envKey(key)
     return Auth.ProviderAuth{Some{apiKey}, None{}}
 
+# Gates expose callback entry separately from completion; cancellation tests
+# must observe the caller result before opening the gate.
+type Gate is Data:
+  Gate{started: Chan(Unit), release: Chan(Unit), signals: R.Ref<List<&2, Abort.AbortSignal<Unit>>>}
+
+def gate() -> IO(Gate):
+  do IO<Gate>:
+    started : Chan(Unit) <- Chan.new(Unit, 1)
+    release : Chan(Unit) <- Chan.new(Unit, 1)
+    signals : R.Ref<List<&2, Abort.AbortSignal<Unit>>> <- R.new(List<&2, Abort.AbortSignal<Unit>>, Nil{})
+    return Gate{started, release, signals}
+
+def awaitStarted(gate: Gate) -> IO(Unit):
+  match gate:
+    case Gate{started, _, _}:
+      do IO<Unit>:
+        seen : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+        return Unit{}
+
+def releaseGate(gate: Gate) -> IO(Unit):
+  match gate:
+    case Gate{_, release, _}:
+      do IO<Unit>:
+        sent : Bool <- Chan.send(Unit, release, Unit{})
+        return Unit{}
+
+def waitGate(gate: Gate, signal: Abort.AbortSignal<Unit>) -> IO(Unit):
+  match gate:
+    case Gate{started, release, signals}:
+      do IO<Unit>:
+        R.modify(List<&2, Abort.AbortSignal<Unit>>, Unit, signals, current => (List.append(&2, Abort.AbortSignal<Unit>, current, [signal]), Unit{}))
+        sent : Bool <- Chan.send(Unit, started, Unit{})
+        received : Maybe<&1, Unit> <- Chan.recv(Unit, release)
+        return Unit{}
+
 # The refresh behaviours of the cases' testOAuth({ refresh }).
 type Refresh is Data:
   Echo{count: R.Ref<Nat>}
@@ -93,6 +126,7 @@ type Refresh is Data:
   NewToken{count: R.Ref<Nat>}
   FailWith{message: String}
   Slow{count: R.Ref<Nat>}
+  BlockOAuth{gate: Gate, fail: Bool}
 
 def incremented(+value: Nat) -> Nat & Nat: (Nat.add(value, 1n), Nat.add(value, 1n))
 
@@ -116,6 +150,11 @@ def refreshed(script: Refresh, input: Auth.RefreshInput) -> IO(Result<&2, &2, St
         seen : Nat <- R.modify(Nat, Nat, count, value => incremented(value))
         now : F64 <- Date.now()
         return Done{withAccess(credential, "new-token", F64.add(now, U32.to_f64(3600000)))}
+    case BlockOAuth{gate, fail} Auth.RefreshInput{credential, signal}:
+      do IO<Result<&2, &2, String, Auth.Credential>>:
+        waitGate(gate, signal)
+        now : F64 <- Date.now()
+        return Bool.pick(Result<&2, &2, String, Auth.Credential>, fail, Fail{"late OAuth failure"}, Done{withAccess(credential, "late-token", F64.add(now, U32.to_f64(3600000)))})
     case FailWith{message} _: IO.pure(Result<&2, &2, String, Auth.Credential>, Fail{message})
     case Slow{count} _:
       do IO<Result<&2, &2, String, Auth.Credential>>:
@@ -159,6 +198,9 @@ type Script is Data:
   CaptureSignal{seen: R.Ref<List<&2, String>>}
   # The first network refresh waits for `release` after signalling `started`.
   Gated{count: R.Ref<Nat>, started: Chan(Unit), release: Chan(Unit)}
+  BlockProvider{gate: Gate}
+  RestoreCached{}
+  CaptureStoreSignal{signals: R.Ref<List<&2, Abort.AbortSignal<Unit>>>}
 
 def append(slot: R.Ref<List<&2, String>>, entry: String) -> IO(Unit):
   R.modify(List<&2, String>, Unit, slot, current => (List.append(&2, String, current, [entry]), Unit{}))
@@ -239,8 +281,28 @@ def networkOnly(network: Bool, script: Script, context: Models.RefreshModelsCont
     case True{}: onNetwork(script, context)
     case False{}: IO.pure(Outcome(), Done{Unit{}})
 
+def cachedModels(stored: Maybe<&2, Store.ModelsStoreEntry>) -> List<&2, Models.Model()>:
+  match stored:
+    case None{}: Nil{}
+    case Some{Store.ModelsStoreEntry{models, _, _, _}}: models
+
 def refreshWith(script: Script, +context: Models.RefreshModelsContext) -> IO(Outcome()):
   match script:
+    case BlockProvider{gate}:
+      do IO<Outcome()>:
+        waitGate(gate, Models.signalOf(context))
+        return Fail{"late provider failure"}
+    case RestoreCached{}:
+      match context:
+        case Models.RefreshModelsContext{_, stored, _, network, _, _}:
+          do IO<Outcome()>:
+            accepted : Bool <- publish(context, Models.ModelsPublication{Models.KeepStored{}, Some{Bool.pick(List<&2, Models.Model()>, network, Nil{}, cachedModels(stored))}})
+            return Bool.pick(Outcome(), network, Fail{"must not fetch"}, Done{Unit{}})
+    case CaptureStoreSignal{signals}:
+      do IO<Outcome()>:
+        R.modify(List<&2, Abort.AbortSignal<Unit>>, Unit, signals, current => (List.append(&2, Abort.AbortSignal<Unit>, current, [Models.signalOf(context)]), Unit{}))
+        accepted : Bool <- publish(context, Bool.pick(Models.ModelsPublication, networkOf(context), generationPublication("fresh"), Models.ModelsPublication{Models.KeepStored{}, None{}}))
+        return Done{Unit{}}
     case RecordPhases{id, calls}:
       do IO<Outcome()>:
         append(calls, id ++ ":" ++ Bool.pick(String, networkOf(context), "network", "cache"))
@@ -1197,6 +1259,274 @@ def streamsThroughTheProvider() -> IO(Unit):
     check(String.eq(names, "start,done") && isStopped(raw) && usesBothProviderMethods(calls), "streams through the provider")
     disposeStreamFixture(fixture)
 
+# Remaining upstream Models cancellation contracts.
+type BlockedAuth is Data:
+  BlockedAuth{check: Gate, resolve: Gate}
+
+def blockedCheck(gates: BlockedAuth, input: Auth.ResolveInput) -> IO(Auth.CheckOutcome()):
+  match gates input:
+    case BlockedAuth{gate, _} Auth.ResolveInput{_, _, signal}:
+      do IO<Auth.CheckOutcome()>:
+        waitGate(gate, signal)
+        return Done{Some{Auth.AuthCheck{None{}, Auth.ApiKeyType{}}}}
+
+def blockedResolve(gates: BlockedAuth, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
+  match gates input:
+    case BlockedAuth{_, gate} Auth.ResolveInput{_, _, signal}:
+      do IO<Auth.AuthOutcome()>:
+        waitGate(gate, signal)
+        return keyOutcome(Some{"key"}, False{})
+
+def blockedAuth(+gates: BlockedAuth) -> IO(Auth.ProviderAuth):
+  do IO<Auth.ProviderAuth>:
+    check : C.Callback<Auth.ResolveInput, Auth.CheckOutcome()> <- C.create(~BlockedAuth, ~Auth.ResolveInput, ~Auth.CheckOutcome(), ~blockedCheck, gates)
+    resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~BlockedAuth, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~blockedResolve, gates)
+    return Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Blocked auth", None{}, resolve, Some{check}}}, None{}}
+
+def restoresCachedModelsBeforeWaitingForNetworkAuth() -> IO(Unit):
+  do IO<Unit>:
+    +wait : Gate <- gate()
+    auth : Auth.ProviderAuth <- blockedAuth(BlockedAuth{wait, wait})
+    +provider : Models.Provider <- testProvider("dynamic", auth, Nil{}, Some{RestoreCached{}})
+    +store : Store.ModelsStore <- Store.inMemoryModelsStore()
+    stored : Store.StoreResult(Unit) <- Store.write(store, "dynamic", Store.ModelsStoreEntry{[testModel("dynamic", "cached")], None{}, None{}, None{}}, None{})
+    +models : Models.Models <- Models.createModels(Models.CreateModelsOptions{None{}, Some{store}, None{}})
+    Models.setProvider(models, provider)
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    pending : Chan(Models.ModelsRefreshResult) <- IO.fork(Models.ModelsRefreshResult, Models.refresh(models, options(None{}, Some{["dynamic"]}, None{}, Some{Abort.signal(Unit, controller)})))
+    awaitStarted(wait)
+    cached : Maybe<&2, Models.Model()> <- Models.getModel(models, "dynamic", "cached")
+    won : Bool <- Abort.abort(Unit, controller, None{})
+    result : Models.ModelsRefreshResult <- IO.join(Models.ModelsRefreshResult, pending)
+    same(present(cached) ++ " | " ++ errorsText(result), "dynamic/cached | aborted True errors 0", "restores cached models before waiting for network auth")
+    releaseGate(wait)
+    Models.disposeModels(models)
+    Models.disposeProvider(provider)
+    Abort.dispose(Unit, controller)
+
+type SignalStore is Data:
+  SignalStore{inner: Store.ModelsStore, signals: R.Ref<List<&2, Abort.AbortSignal<Unit>>>}
+
+def recordStoreSignal(signals: R.Ref<List<&2, Abort.AbortSignal<Unit>>>, signal: Store.Signal()) -> IO(Unit):
+  match signal:
+    case None{}: IO.die(Unit, 1, "missing model-store signal")
+    case Some{value}: R.modify(List<&2, Abort.AbortSignal<Unit>>, Unit, signals, current => (List.append(&2, Abort.AbortSignal<Unit>, current, [value]), Unit{}))
+
+def signalStoreRead(store: SignalStore, request: Store.StoreRequest) -> IO(Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>)):
+  match store request:
+    case SignalStore{inner, signals} Store.StoreRequest{id, +signal}:
+      do IO<Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>)>:
+        recordStoreSignal(signals, signal)
+        Store.read(inner, id, signal)
+
+def signalStoreWrite(store: SignalStore, request: Store.StoreWrite) -> IO(Store.StoreResult(Unit)):
+  match store request:
+    case SignalStore{inner, signals} Store.StoreWrite{id, entry, +signal}:
+      do IO<Store.StoreResult(Unit)>:
+        recordStoreSignal(signals, signal)
+        Store.write(inner, id, entry, signal)
+
+def signalStoreDelete(store: SignalStore, request: Store.StoreRequest) -> IO(Store.StoreResult(Unit)):
+  match store request:
+    case SignalStore{inner, signals} Store.StoreRequest{id, +signal}:
+      do IO<Store.StoreResult(Unit)>:
+        recordStoreSignal(signals, signal)
+        Store.delete(inner, id, signal)
+
+def observingStore(+store: SignalStore) -> IO(Store.ModelsStore):
+  do IO<Store.ModelsStore>:
+    read : C.Callback<Store.StoreRequest, Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>)> <- C.create(~SignalStore, ~Store.StoreRequest, ~Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>), ~signalStoreRead, store)
+    write : C.Callback<Store.StoreWrite, Store.StoreResult(Unit)> <- C.create(~SignalStore, ~Store.StoreWrite, ~Store.StoreResult(Unit), ~signalStoreWrite, store)
+    delete : C.Callback<Store.StoreRequest, Store.StoreResult(Unit)> <- C.create(~SignalStore, ~Store.StoreRequest, ~Store.StoreResult(Unit), ~signalStoreDelete, store)
+    return Store.ModelsStore{read, write, delete}
+
+def bindsModelStoreWaitsToTheProviderRefreshSignal() -> IO(Unit):
+  do IO<Unit>:
+    +storage : R.Ref<List<&2, Abort.AbortSignal<Unit>>> <- R.new(List<&2, Abort.AbortSignal<Unit>>, Nil{})
+    +providerSignals : R.Ref<List<&2, Abort.AbortSignal<Unit>>> <- R.new(List<&2, Abort.AbortSignal<Unit>>, Nil{})
+    +inner : Store.ModelsStore <- Store.inMemoryModelsStore()
+    store : Store.ModelsStore <- observingStore(SignalStore{inner, storage})
+    +models : Models.Models <- Models.createModels(Models.CreateModelsOptions{None{}, Some{store}, None{}})
+    auth : Auth.ProviderAuth <- envKeyAuth(Some{"key"})
+    +provider : Models.Provider <- testProvider("dynamic", auth, Nil{}, Some{CaptureStoreSignal{providerSignals}})
+    Models.setProvider(models, provider)
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    result : Models.ModelsRefreshResult <- Models.refresh(models, options(None{}, Some{["dynamic"]}, None{}, Some{Abort.signal(Unit, controller)}))
+    +stored : List<&2, Abort.AbortSignal<Unit>> <- R.read(List<&2, Abort.AbortSignal<Unit>>, storage)
+    +provided : List<&2, Abort.AbortSignal<Unit>> <- R.read(List<&2, Abort.AbortSignal<Unit>>, providerSignals)
+    before : List<&2, String> <- abortedAll(List.append(&2, Abort.AbortSignal<Unit>, stored, provided))
+    won : Bool <- Abort.abort(Unit, controller, Some{Unit{}})
+    after : List<&2, String> <- abortedAll(List.append(&2, Abort.AbortSignal<Unit>, stored, provided))
+    same(errorsText(result) ++ " | " ++ String.join(before, ",") ++ " | " ++ String.join(after, ","), "aborted False errors 0 | False,False,False,False,False | True,True,True,True,True", "binds model-store waits to the provider refresh signal")
+    Models.disposeModels(models)
+    Models.disposeProvider(provider)
+    Store.dispose(inner)
+    Abort.dispose(Unit, controller)
+
+def stopsWaitingOnAbortWhenAProviderIgnoresItsSignal() -> IO(Unit):
+  do IO<Unit>:
+    +wait : Gate <- gate()
+    auth : Auth.ProviderAuth <- ambientAuth()
+    +provider : Models.Provider <- testProvider("dynamic", auth, Nil{}, Some{BlockProvider{wait}})
+    +models : Models.Models <- fresh()
+    Models.setProvider(models, provider)
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    pending : Chan(Models.ModelsRefreshResult) <- IO.fork(Models.ModelsRefreshResult, Models.refresh(models, options(None{}, None{}, None{}, Some{Abort.signal(Unit, controller)})))
+    awaitStarted(wait)
+    won : Bool <- Abort.abort(Unit, controller, None{})
+    +result : Models.ModelsRefreshResult <- IO.join(Models.ModelsRefreshResult, pending)
+    same(errorsText(result), "aborted True errors 0", "stops waiting on abort when a provider ignores its signal")
+    releaseGate(wait)
+    Models.disposeModels(models)
+    same(errorsText(result), "aborted True errors 0", "late provider failure leaves the cancelled result unchanged")
+    Models.disposeProvider(provider)
+    Abort.dispose(Unit, controller)
+
+def isAbort(error: Resolve.ModelsError) -> Bool:
+  match error:
+    case Resolve.ModelsError{Resolve.AuthError{}, message}: String.contains(message, "operation was aborted")
+    case _: False{}
+
+def abortedAvailable(result: Models.AvailableResult()) -> Bool:
+  match result:
+    case Fail{error}: isAbort(error)
+    case _: False{}
+
+def abortedAuth(result: Resolve.Resolution()) -> Bool:
+  match result:
+    case Fail{error}: isAbort(error)
+    case _: False{}
+
+def stopsWaitingForNonCooperativeAuthCallbacks() -> IO(Unit):
+  do IO<Unit>:
+    +checkGate : Gate <- gate()
+    +resolveGate : Gate <- gate()
+    auth : Auth.ProviderAuth <- blockedAuth(BlockedAuth{checkGate, resolveGate})
+    +provider : Models.Provider <- testProvider("p1", auth, [testModel("p1", "model-a")], None{})
+    +models : Models.Models <- fresh()
+    Models.setProvider(models, provider)
+    +availableController : Abort.AbortController<Unit> <- Abort.new(Unit)
+    available : Chan(Models.AvailableResult()) <- IO.fork(Models.AvailableResult(), Models.getAvailable(models, None{}, Some{Abort.signal(Unit, availableController)}))
+    awaitStarted(checkGate)
+    won : Bool <- Abort.abort(Unit, availableController, None{})
+    availableResult : Models.AvailableResult() <- IO.join(Models.AvailableResult(), available)
+    +authController : Abort.AbortController<Unit> <- Abort.new(Unit)
+    pendingAuth : Chan(Resolve.Resolution()) <- IO.fork(Resolve.Resolution(), Models.getAuth(models, "p1", withSignal(Abort.signal(Unit, authController))))
+    awaitStarted(resolveGate)
+    won : Bool <- Abort.abort(Unit, authController, None{})
+    authResult : Resolve.Resolution() <- IO.join(Resolve.Resolution(), pendingAuth)
+    check(abortedAvailable(availableResult) && abortedAuth(authResult), "stops waiting for non-cooperative auth callbacks")
+    releaseGate(checkGate)
+    releaseGate(resolveGate)
+    Models.disposeModels(models)
+    Models.disposeProvider(provider)
+    Abort.dispose(Unit, availableController)
+    Abort.dispose(Unit, authController)
+
+type Mutation is Data:
+  Mutation{gate: Maybe<&2, Gate>, called: R.Ref<Nat>, credential: Maybe<&2, Auth.Credential>}
+
+def waitMutation(gate: Maybe<&2, Gate>) -> IO(Unit):
+  match gate:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{Gate{started, release, _}}:
+      do IO<Unit>:
+        sent : Bool <- Chan.send(Unit, started, Unit{})
+        received : Maybe<&1, Unit> <- Chan.recv(Unit, release)
+        return Unit{}
+
+def unchanged(unit: Unit, old: Maybe<&2, Auth.Credential>) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
+  IO.pure(Auth.StoreResult(Maybe<&2, Auth.Credential>), Done{None{}})
+
+def credentialBarrier(+credentials: Auth.CredentialStore) -> IO(Unit):
+  do IO<Unit>:
+    +callback : Auth.Modification() <- C.create(~Unit, ~Maybe<&2, Auth.Credential>, ~Auth.StoreResult(Maybe<&2, Auth.Credential>), ~unchanged, Unit{})
+    result : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.modify(credentials, "p1", callback, None{})
+    C.dispose(Maybe<&2, Auth.Credential>, Auth.StoreResult(Maybe<&2, Auth.Credential>), callback)
+    return Unit{}
+
+def mutation(script: Mutation, previous: Maybe<&2, Auth.Credential>) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
+  match script:
+    case Mutation{gate, called, credential}:
+      do IO<Auth.StoreResult(Maybe<&2, Auth.Credential>)>:
+        count : Nat <- R.modify(Nat, Nat, called, value => incremented(value))
+        waitMutation(gate)
+        return Done{credential}
+
+def mutationCallback(script: Mutation) -> IO(Auth.Modification()):
+  C.create(~Mutation, ~Maybe<&2, Auth.Credential>, ~Auth.StoreResult(Maybe<&2, Auth.Credential>), ~mutation, script)
+
+def mutationFailed(result: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> Bool:
+  match result:
+    case Fail{_}: True{}
+    case _: False{}
+
+def cancelsQueuedCredentialMutationsWithoutRunningThemLater() -> IO(Unit):
+  do IO<Unit>:
+    +credentials : Auth.CredentialStore <- Credentials.inMemoryCredentialStore()
+    +wait : Gate <- gate()
+    +firstCount : R.Ref<Nat> <- R.new(Nat, 0n)
+    +secondCount : R.Ref<Nat> <- R.new(Nat, 0n)
+    +firstUpdate : Auth.Modification() <- mutationCallback(Mutation{Some{wait}, firstCount, Some{Auth.ApiKeyCredential{Some{"first"}, None{}}}})
+    +secondUpdate : Auth.Modification() <- mutationCallback(Mutation{None{}, secondCount, Some{Auth.ApiKeyCredential{Some{"second"}, None{}}}})
+    first : Chan(Auth.StoreResult(Maybe<&2, Auth.Credential>)) <- IO.fork(Auth.StoreResult(Maybe<&2, Auth.Credential>), Auth.modify(credentials, "p1", firstUpdate, None{}))
+    awaitStarted(wait)
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    second : Chan(Auth.StoreResult(Maybe<&2, Auth.Credential>)) <- IO.fork(Auth.StoreResult(Maybe<&2, Auth.Credential>), Auth.modify(credentials, "p1", secondUpdate, Some{Abort.signal(Unit, controller)}))
+    IO.sleep(5)
+    won : Bool <- Abort.abort(Unit, controller, None{})
+    cancelled : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- IO.join(Auth.StoreResult(Maybe<&2, Auth.Credential>), second)
+    C.dispose(Maybe<&2, Auth.Credential>, Auth.StoreResult(Maybe<&2, Auth.Credential>), secondUpdate)
+    releaseGate(wait)
+    committed : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- IO.join(Auth.StoreResult(Maybe<&2, Auth.Credential>), first)
+    credentialBarrier(credentials)
+    called : Nat <- R.read(Nat, secondCount)
+    stored : Maybe<&2, Auth.Credential> <- readCredential(credentials, "p1")
+    check(mutationFailed(cancelled) && Nat.is_eq(called, 0n) && String.eq(credentialText(stored), "api_key first env False"), "cancels queued credential mutations without running them later")
+    C.dispose(Maybe<&2, Auth.Credential>, Auth.StoreResult(Maybe<&2, Auth.Credential>), firstUpdate)
+    Auth.disposeStore(credentials)
+    Abort.dispose(Unit, controller)
+
+def gateSignals(gate: Gate) -> IO(List<&2, Abort.AbortSignal<Unit>>):
+  match gate:
+    case Gate{_, _, signals}: R.read(List<&2, Abort.AbortSignal<Unit>>, signals)
+
+def suppliedUnit(reason: Maybe<&2, Abort.AbortReason<Unit>>) -> Bool:
+  match reason:
+    case Some{Abort.Supplied{Unit{}}}: True{}
+    case _: False{}
+
+def suppliedSignals(signals: List<&2, Abort.AbortSignal<Unit>>) -> IO(Bool):
+  match signals:
+    case Nil{}: IO.pure(Bool, True{})
+    case signal <> rest:
+      do IO<Bool>:
+        reason : Maybe<&2, Abort.AbortReason<Unit>> <- Abort.reason(Unit, signal)
+        others : Bool <- suppliedSignals(rest)
+        return suppliedUnit(reason) && others
+
+def passesCancellationToOAuthRefreshAndPreservesThePreviousCredential(fail: Bool) -> IO(Unit):
+  do IO<Unit>:
+    +credentials : Auth.CredentialStore <- Credentials.inMemoryCredentialStore()
+    storeCredential(credentials, "p1", Auth.OAuthCredential{"old-refresh", "old", U32.to_f64(0), Rec.new(V.Value)})
+    +wait : Gate <- gate()
+    +models : Models.Models <- oauthModels(credentials, BlockOAuth{wait, fail})
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    pending : Chan(Resolve.Resolution()) <- IO.fork(Resolve.Resolution(), Models.getAuth(models, "p1", withSignal(Abort.signal(Unit, controller))))
+    awaitStarted(wait)
+    won : Bool <- Abort.abort(Unit, controller, Some{Unit{}})
+    result : Resolve.Resolution() <- IO.join(Resolve.Resolution(), pending)
+    +received : List<&2, Abort.AbortSignal<Unit>> <- gateSignals(wait)
+    supplied : Bool <- suppliedSignals(received)
+    check(abortedAuth(result) && Nat.is_eq(List.length(&2, Abort.AbortSignal<Unit>, received), 1n) && supplied, "passes cancellation to OAuth refresh and preserves the previous credential")
+    releaseGate(wait)
+    credentialBarrier(credentials)
+    stored : Maybe<&2, Auth.Credential> <- readCredential(credentials, "p1")
+    same(credentialText(stored), "oauth old old-refresh", "late OAuth completion preserves the previous credential")
+    Models.disposeModels(models)
+    Auth.disposeStore(credentials)
+    Abort.dispose(Unit, controller)
+
 def main() -> IO(Unit):
   do IO<Unit>:
     enumeratesCredentialMetadata()
@@ -1232,3 +1562,10 @@ def main() -> IO(Unit):
     addsModelHeadersAndTransformsOnce()
     producesErrorStreamForUnknownProviders()
     streamsThroughTheProvider()
+    restoresCachedModelsBeforeWaitingForNetworkAuth()
+    bindsModelStoreWaitsToTheProviderRefreshSignal()
+    stopsWaitingOnAbortWhenAProviderIgnoresItsSignal()
+    stopsWaitingForNonCooperativeAuthCallbacks()
+    cancelsQueuedCredentialMutationsWithoutRunningThemLater()
+    passesCancellationToOAuthRefreshAndPreservesThePreviousCredential(False{})
+    passesCancellationToOAuthRefreshAndPreservesThePreviousCredential(True{})
