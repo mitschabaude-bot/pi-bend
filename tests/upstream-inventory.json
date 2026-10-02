@@ -2382,10 +2382,13 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-provider.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/sdk-stream-options.bend",
+        "tests/sdk_suites_check.py"
+      ],
       "sha256": "34724f24c570e7c6822e864f23374f9aa7d65ef2167980c5fa21708072c03141",
-      "notes": "Pending: the config form pi.registerProvider(name, ProviderConfig) (base-URL overrides of an existing provider, cases 1, 2 and 4) is not ported; native registerProvider takes Provider values (cases 3 and 5 would be portable once the harness can observe the request base URL)."
+      "notes": "All five named cases pass on native one/four through actual DefaultResourceLoader factories, extension APIs and SDK AgentSession. Config and native providers register during loading and commands; config also registers in session_start. Each case asserts the active claude-sonnet-4-5 model endpoint and the model endpoint passed through the real SDK prompt/provider dispatch, without reloading. The capturing provider returns a native completed event stream instead of throwing to stop the upstream capture."
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-tools.test.ts",
@@ -4578,10 +4581,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6768-copilot-compaction-base-url.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/sdk-stream-options.bend",
+        "tests/sdk_suites_check.py"
+      ],
       "sha256": "8a8c424bb9bea4328dd7dcb6e65cfd5da229ecaef8957122a4bb29fe891bbc5b",
-      "notes": "Pending: needs a test provider registered at runtime with OAuth toAuth returning a baseUrl, and the session stream routed through ModelRuntime.streamSimple so compaction requests use the auth-resolved base URL."
+      "notes": "The original named contract passes on native one/four through actual SDK AgentSession.compact and ModelRuntime streaming: a compactable in-memory session, individual catalog endpoint, stored valid OAuth credential and native provider toAuth returning the enterprise endpoint. The capturing stream observes the enterprise endpoint and returns a completed summary; compaction must also succeed. No external HTTP or host-language runtime behavior supplies the result."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6904-dns-transport-retry.test.ts",

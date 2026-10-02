@@ -1,4 +1,7 @@
 import Base
+import ../src/core/compaction/compaction.bend as Compaction
+import ../../ai/src/providers/anthropic.models.bend as AnthropicModels
+import ../../ai/src/utils/model-api.bend as Api
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/models.bend as AiModels
 import ../../ai/src/auth/types.bend as Auth
@@ -495,6 +498,219 @@ def extensionStreamingCase(+directory: String, raw: Bool) -> IO(Unit):
     oldReply : Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>> <- Rf.dispose(Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>, reply)
     return Unit{}
 
+# AgentSession dynamic provider registration uses the real resource loader,
+# extension actions, active-model rebinding and SDK stream wrapper.
+type RegistrationPhase is Data:
+  WhileLoading{}
+  AtSessionStart{}
+  InCommand{}
+
+type DynamicCase is Data:
+  DynamicCase{phase: RegistrationPhase, native: Bool, url: String, name: String}
+
+type DynamicRegistration is Data:
+  DynamicRegistration{provider: AiModels.Provider, stream: Composer.ProviderStream(), native: Bool, url: String}
+
+type DynamicBinding is Data:
+  DynamicBinding{registration: DynamicRegistration, api: Ext.ExtensionAPI}
+
+type DynamicFactoryEnv is Data:
+  DynamicFactoryEnv{phase: RegistrationPhase, registration: DynamicRegistration}
+
+def registerDynamic(registration: DynamicRegistration, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match registration:
+    case DynamicRegistration{AiModels.Provider{id, name, _, auth, model <> Nil{}, streams, refresh, filter}, stream, True{}, +url}:
+      Loader.registerStreamingProvider(api, AiModels.Provider{id, name, url, auth, [Models.withAuthBaseUrl(model, Some{url})], streams, refresh, filter}, stream)
+    case DynamicRegistration{AiModels.Provider{id, _, _, _, _, _, _, _}, _, False{}, url}:
+      Loader.registerProviderConfig(api, id, Composer.ProviderConfigInput{None{}, Some{url}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}})
+    case _: IO.die(Result<&2, &2, String, Unit>, 1, "expected singleton native provider")
+
+def dynamicStart(state: DynamicBinding, _: Ext.HandlerCall<Ext.SessionStartEvent>) -> IO(Result<&2, &2, String, Maybe<&2, Unit>>):
+  match state:
+    case DynamicBinding{registration, api}:
+      do IO<Result<&2, &2, String, Maybe<&2, Unit>>>:
+        result : Result<&2, &2, String, Unit> <- registerDynamic(registration, api)
+        return Result.map(&2, &2, String, Unit, Maybe<&2, Unit>, _ => None{}, result)
+
+def dynamicCommand(state: DynamicBinding, _: Ext.CommandCall) -> IO(Result<&2, &2, String, Unit>):
+  match state: case DynamicBinding{registration, api}: registerDynamic(registration, api)
+
+def dynamicFactory(state: DynamicFactoryEnv, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match state:
+    case DynamicFactoryEnv{WhileLoading{}, registration}: registerDynamic(registration, api)
+    case DynamicFactoryEnv{AtSessionStart{}, registration}:
+      do IO<Result<&2, &2, String, Unit>>:
+        +bindingApi : Ext.ExtensionAPI = api
+        handler : Ext.ExtensionHandler(Ext.SessionStartEvent, Unit) <- C.create(~DynamicBinding, ~Ext.HandlerCall<Ext.SessionStartEvent>, ~Result<&2, &2, String, Maybe<&2, Unit>>, ~dynamicStart, DynamicBinding{registration, bindingApi})
+        result : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(bindingApi, Ext.OnSessionStart{handler})
+        return Result.map(&2, &2, String, Loader.Unsubscribe, Unit, _ => Unit{}, result)
+    case DynamicFactoryEnv{InCommand{}, registration}:
+      do IO<Result<&2, &2, String, Unit>>:
+        +bindingApi : Ext.ExtensionAPI = api
+        handler : Ext.CommandHandler() <- C.create(~DynamicBinding, ~Ext.CommandCall, ~Result<&2, &2, String, Unit>, ~dynamicCommand, DynamicBinding{registration, bindingApi})
+        Loader.registerCommand(bindingApi, "use-proxy", Ext.CommandOptions{Some{"Use proxy"}, None{}, handler})
+
+def requestBaseUrl(model: Ai.Model<Ai.JsonValue>) -> String:
+  match model: case Ai.Model{_, _, _, _, url, _, _, _, _, _, _, _, _, _, _, _}: url
+
+def endpointRequest(slot: Rf.Ref<String>, request: Composer.StreamRequest()) -> IO(Composer.StreamOutput()):
+  match request:
+    case AgentTypes.StreamInput{+model, _, _}:
+      do IO<Composer.StreamOutput()>:
+        Rf.write(String, slot, requestBaseUrl(model))
+        +events : Events.AssistantMessageEventStream(V.Value, V.Value) <- Events.createAssistantMessageEventStream(~V.Value, ~V.Value)
+        reply : Ai.AssistantMessage<V.Value, V.Value> = Ai.AssistantMessage{[Ai.AssistantText{Ai.TextContent{"summary", None{}}}], Api.name(Api.modelApi(Ai.JsonValue, model)), Models.modelProvider(model), Models.modelId(model), None{}, None{}, None{}, None{}, warmUsage(), Ai.Stop{}, None{}, None{}, None{}, None{}, zero()}
+        Events.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.StreamDone{Ai.DoneStop{}, reply})
+        return Done{AgentTypes.StreamLease{events, releaseCompleted(events)}}
+
+def activeBaseUrl(model: Maybe<&2, Models.Model()>) -> String:
+  match model:
+    case None{}: "<missing>"
+    case Some{model}: requestBaseUrl(model)
+
+def runDynamicCommand(phase: RegistrationPhase, live: Session.AgentSession) -> IO(Result<&2, &2, String, Unit>):
+  match phase:
+    case InCommand{}: Session.prompt(live, "/use-proxy", Nil{}, None{})
+    case _: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+
+def checkDynamicSession(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, test: DynamicCase, slot: Rf.Ref<String>) -> IO(Unit):
+  match pair test:
+    case Tuple{owner, +live} DynamicCase{phase, _, +url, name}:
+      do IO<Unit>:
+        Session.bindExtensions(live, Ext.SessionStartEvent{Ext.StartupStart{}, None{}})
+        command : Result<&2, &2, String, Unit> <- runDynamicCommand(phase, live)
+        registration(command)
+        state : Session.AgentState() <- Agent.state(V.Value, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(live))
+        registration(Bool.pick(Result<&2, &2, String, Unit>, String.eq(activeBaseUrl(Session.stateModel(state)), url), Done{Unit{}}, Fail{"active model did not take the provider endpoint"}))
+        prompted : Result<&2, &2, String, Unit> <- Session.prompt(live, "hello", Nil{}, None{})
+        registration(prompted)
+        sent : String <- Rf.read(String, slot)
+        check(String.eq(sent, url), name)
+        Sdk.dispose(owner)
+
+def dynamicSessionResult(result: Sdk.Outcome(), test: DynamicCase, slot: Rf.Ref<String>) -> IO(Unit):
+  match result:
+    case Fail{error}: IO.die(Unit, 1, error)
+    case Done{owner}: checkDynamicSession(Sdk.sessionOf(owner), test, slot)
+
+def dynamicProviderCase(+directory: String, +model: Models.Model(), +test: DynamicCase) -> IO(Unit):
+  match test:
+    case DynamicCase{+phase, +native, +url, +name}:
+      do IO<Unit>:
+        +slot : Rf.Ref<String> <- Rf.new(String, "")
+        +stream : Composer.ProviderStream() <- C.create(~Rf.Ref<String>, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~endpointRequest, slot)
+        +key : Auth.ApiKeyAuth <- AuthHelpers.envApiKeyAuth("Test API key", ["PI_SDK_DYNAMIC_UNUSED"])
+        +base : AiModels.Provider = AiModels.Provider{Models.modelProvider(model), "Native Anthropic", requestBaseUrl(model), Auth.ProviderAuth{Some{key}, None{}}, [model], AiModels.ApiStreams{}, None{}, None{}}
+        +store : Auth.CredentialStore <- Credentials.inMemoryCredentialStore()
+        context : Auth.AuthContext <- AuthContext.defaultProviderAuthContext()
+        +models : Models.ModelRuntime <- Models.fromProviders([base], store, context)
+        Models.setApiStreams(models, Some{stream})
+        authorized : Models.CredentialOutcome(Unit) <- Models.setRuntimeApiKey(models, Models.modelProvider(model), "test-key", None{})
+        authorization(authorized)
+        pair : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(directory, directory, Settings.options())
+        +settings : Settings.SettingsManager = settingsOf(pair)
+        factory : Ext.ExtensionFactory() <- C.create(~DynamicFactoryEnv, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~dynamicFactory, DynamicFactoryEnv{phase, DynamicRegistration{base, stream, native, url}})
+        +loader : Resources.DefaultResourceLoader <- Resources.createDefaultResourceLoader(Paths.Environment{directory, directory, Runtime.urlContext()}, Resources.defaultResourceLoaderOptions(directory, directory, settings), [Ext.InlineExtension{"dynamic-provider", factory, False{}}])
+        Resources.reload(Resources.loaderOf(loader), Resources.ResourceLoaderReloadOptions{None{}})
+        created : Sdk.Outcome() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{directory}, Some{directory}, Some{models}, Some{model}, None{}, Nil{}, Some{Runtime.NoToolsAll{}}, None{}, None{}, Some{Resources.loaderOf(loader)}, None{}, Some{settings}, Nil{}, None{}})
+        dynamicSessionResult(created, DynamicCase{phase, native, url, name}, slot)
+        Resources.disposeDefaultResourceLoader(loader)
+        Models.dispose(models)
+        Auth.disposeStore(store)
+        captured : String <- Rf.dispose(String, slot)
+        return Unit{}
+
+
+def requiredDynamicModel(model: Maybe<&2, Models.Model()>) -> IO(Models.Model()):
+  match model:
+    case Some{model}: IO.pure(Models.Model(), model)
+    case None{}: IO.die(Models.Model(), 1, "missing upstream Anthropic model")
+
+def dynamicProviderCases(+directory: String) -> IO(Unit):
+  do IO<Unit>:
+    +model : Models.Model() <- requiredDynamicModel(Models.findModel(AnthropicModels.ANTHROPIC_MODELS(), "anthropic", "claude-sonnet-4-5"))
+    dynamicProviderCase(FS.child(directory, "dynamic-top-level"), model, DynamicCase{WhileLoading{}, False{}, "http://localhost:8080/top-level", "applies top-level registerProvider overrides to the active model"})
+    dynamicProviderCase(FS.child(directory, "dynamic-session-start"), model, DynamicCase{AtSessionStart{}, False{}, "http://localhost:8080/session-start", "applies session_start registerProvider overrides to the active model"})
+    dynamicProviderCase(FS.child(directory, "dynamic-native-top-level"), model, DynamicCase{WhileLoading{}, True{}, "http://localhost:8080/native-top-level", "registers native pi-ai providers during extension loading"})
+    dynamicProviderCase(FS.child(directory, "dynamic-command"), model, DynamicCase{InCommand{}, False{}, "http://localhost:8080/command", "applies command-time registerProvider overrides without reload"})
+    dynamicProviderCase(FS.child(directory, "dynamic-native-command"), model, DynamicCase{InCommand{}, True{}, "http://localhost:8080/native-command", "registers native pi-ai providers at command time"})
+
+# Regression 6768: compaction goes through the SDK ModelRuntime stream wrapper,
+# so provider OAuth may replace the catalog endpoint for this request.
+def endpointLogin(_: Unit, _: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  IO.pure(Auth.LoginOutcome(), Fail{"unused login"})
+
+def endpointRefresh(_: Unit, request: Auth.RefreshInput) -> IO(Result<&2, &2, String, Auth.Credential>):
+  match request: case Auth.RefreshInput{credential, _}: IO.pure(Result<&2, &2, String, Auth.Credential>, Done{credential})
+
+def endpointAuth(_: Unit, credential: Auth.Credential) -> IO(Result<&2, &2, String, Auth.ModelAuth>):
+  match credential:
+    case Auth.OAuthCredential{_, access, _, _}: IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Done{Auth.ModelAuth{Some{access}, None{}, Some{"https://api.enterprise.githubcopilot.com"}}})
+    case _: IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Fail{"expected OAuth credential"})
+
+def endpointCredential(value: Auth.Credential, _: Maybe<&2, Auth.Credential>) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
+  IO.pure(Auth.StoreResult(Maybe<&2, Auth.Credential>), Done{Some{value}})
+
+def compactableRecord(record: Session.Session(), +now: F64) -> IO(Session.Session()):
+  match record:
+    case Persistence.Session{state, cwd, directory, file, persist, flushed, ids}:
+      do IO<Session.Session()>:
+        user : Session.State() <- requiredState(Manager.appendMessage(V.Value, Tools.ToolDetails, V.Value, state, warmStamp("user", F.subtract(now, number(1000))), AgentTypes.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{"message to compact"}, F.subtract(now, number(1000))}}}))
+        assistant : Session.State() <- requiredState(Manager.appendMessage(V.Value, Tools.ToolDetails, V.Value, user, warmStamp("assistant", F.subtract(now, number(500))), AgentTypes.LlmMessage{Ai.Assistant{warmReply(F.subtract(now, number(500)))}}))
+        return Persistence.Session{assistant, cwd, directory, file, persist, flushed, ids}
+
+def checkEndpointCompaction(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, slot: Rf.Ref<String>) -> IO(Unit):
+  match pair:
+    case Tuple{owner, live}:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Compaction.CompactionResult> <- Session.compact(live, None{})
+        sent : String <- Rf.read(String, slot)
+        check(Result.is_done(&2, &2, String, Compaction.CompactionResult, result) && String.eq(sent, "https://api.enterprise.githubcopilot.com"), "uses the auth-resolved base URL through the SDK-style stream wrapper")
+        Sdk.dispose(owner)
+
+def endpointCompactionResult(result: Sdk.Outcome(), slot: Rf.Ref<String>) -> IO(Unit):
+  match result:
+    case Fail{error}: IO.die(Unit, 1, error)
+    case Done{owner}: checkEndpointCompaction(Sdk.sessionOf(owner), slot)
+
+def endpointCompactionCase(+directory: String) -> IO(Unit):
+  do IO<Unit>:
+    made : Result<&2, &2, FS.Error, Unit> <- FS.mkdir(directory)
+    written(made)
+    wrote : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(FS.child(directory, "settings.json"), "{\"compaction\":{\"keepRecentTokens\":1}}")
+    written(wrote)
+    +slot : Rf.Ref<String> <- Rf.new(String, "")
+    +stream : Composer.ProviderStream() <- C.create(~Rf.Ref<String>, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~endpointRequest, slot)
+    login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~Unit, ~Auth.ProviderAuthInteraction, ~Auth.LoginOutcome(), ~endpointLogin, Unit{})
+    refresh : C.Callback<Auth.RefreshInput, Result<&2, &2, String, Auth.Credential>> <- C.create(~Unit, ~Auth.RefreshInput, ~Result<&2, &2, String, Auth.Credential>, ~endpointRefresh, Unit{})
+    toAuth : C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>> <- C.create(~Unit, ~Auth.Credential, ~Result<&2, &2, String, Auth.ModelAuth>, ~endpointAuth, Unit{})
+    +oauth : Auth.OAuthAuth = Auth.OAuthAuth{"Copilot OAuth", False{}, None{}, login, refresh, toAuth}
+    +model : Models.Model() = Models.withAuthBaseUrl(warmModel(), Some{"https://api.individual.githubcopilot.com"})
+    native : AiModels.Provider = AiModels.Provider{"capture-provider", "Copilot regression provider", "https://api.individual.githubcopilot.com", Auth.ProviderAuth{None{}, Some{oauth}}, [model], AiModels.ApiStreams{}, None{}, None{}}
+    +store : Auth.CredentialStore <- Credentials.inMemoryCredentialStore()
+    +now : F64 <- Date.now()
+    +update : Auth.Modification() <- C.create(~Auth.Credential, ~Maybe<&2, Auth.Credential>, ~Auth.StoreResult(Maybe<&2, Auth.Credential>), ~endpointCredential, Auth.OAuthCredential{"refresh-token", "enterprise-token", F.add(now, number(3600000)), Record.new(V.Value)})
+    saved : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.modify(store, "capture-provider", update, None{})
+    registration(Result.map(&2, &2, String, Maybe<&2, Auth.Credential>, Unit, _ => Unit{}, saved))
+    C.dispose(Maybe<&2, Auth.Credential>, Auth.StoreResult(Maybe<&2, Auth.Credential>), update)
+    context : Auth.AuthContext <- AuthContext.defaultProviderAuthContext()
+    +models : Models.ModelRuntime <- Models.fromProviders(Nil{}, store, context)
+    registered : Result<&2, &2, String, Unit> <- Models.registerNativeProviderStream(models, native, Some{stream})
+    registration(registered)
+    +ids : Uuid.Generator <- Uuid.generator()
+    blank : Session.Session() <- IO.bind(Persistence.Outcome(Session.Session()), Session.Session(), Session.memorySession(ids, directory, Persistence.noOptions()), requiredRecord)
+    record : Session.Session() <- compactableRecord(blank, now)
+    pair : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(directory, directory, Settings.options())
+    created : Sdk.Outcome() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{directory}, Some{directory}, Some{models}, Some{model}, None{}, Nil{}, Some{Runtime.NoToolsAll{}}, None{}, None{}, None{}, Some{record}, Some{settingsOf(pair)}, Nil{}, None{}})
+    endpointCompactionResult(created, slot)
+    Models.dispose(models)
+    Auth.disposeStore(store)
+    Auth.disposeOAuthAuth(oauth)
+    C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), stream)
+    captured : String <- Rf.dispose(String, slot)
+    disposeIds(ids)
+
+
 def run(+directory: String) -> IO(Unit):
   do IO<Unit>:
     wrote : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(FS.child(directory, "settings.json"), "{\"httpIdleTimeoutMs\":1234,\"websocketConnectTimeoutMs\":1234,\"retry\":{\"provider\":{\"maxRetries\":2,\"maxRetryDelayMs\":3000}}}")
@@ -528,6 +744,8 @@ def run(+directory: String) -> IO(Unit):
     cacheWarmingCase(directory, True{})
     extensionStreamingCase(FS.child(directory, "extension-streaming"), False{})
     extensionStreamingCase(FS.child(directory, "extension-raw-streaming"), True{})
+    dynamicProviderCases(directory)
+    endpointCompactionCase(FS.child(directory, "copilot-compaction"))
 
 def runArgs(args: List<String>) -> IO(Unit):
   match args:

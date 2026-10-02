@@ -69,6 +69,12 @@ SUITES = {
         'waits for the next request instead of restoring cache warming',
         'allows an extension command to use ctx.modelRegistry.streamSimple',
         'allows an extension command to use ctx.modelRegistry.stream',
+        'applies top-level registerProvider overrides to the active model',
+        'applies session_start registerProvider overrides to the active model',
+        'registers native pi-ai providers during extension loading',
+        'applies command-time registerProvider overrides without reload',
+        'registers native pi-ai providers at command time',
+        'uses the auth-resolved base URL through the SDK-style stream wrapper',
     ], True, set()),
     'sdk-provider-events': ([
         'payload handlers replace in order, retain None, and continue after failure',
