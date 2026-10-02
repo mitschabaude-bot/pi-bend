@@ -25,13 +25,13 @@ import ../packages/ai/src/api/openai-completions.bend as Request
 # the final message are reported as JSON.
 
 def Error() -> Data: Tools.ToolError
-def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<Unit, Error()>>
-def StreamEvent() -> Data: Ai.AssistantMessageEvent<V.Value, Unit>
-def Message() -> Data: Ai.AssistantMessage<V.Value, Unit>
+def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<V.Value, Error()>>
+def StreamEvent() -> Data: Ai.AssistantMessageEvent<V.Value, V.Value>
+def Message() -> Data: Ai.AssistantMessage<V.Value, V.Value>
 
-def noDetails(value: Unit) -> V.Value: V.Null{}
+def details(value: V.Value) -> V.Value: value
 
-def eventJson(event: StreamEvent()) -> V.Value: MessageJson.assistantMessageEvent(~Unit, ~noDetails, event)
+def eventJson(event: StreamEvent()) -> V.Value: MessageJson.assistantMessageEvent(~V.Value, ~details, event)
 
 # `abortAfter` names the event type after whose first occurrence the case
 # aborts its request signal, as a caller cancelling mid-stream would.
@@ -63,7 +63,7 @@ def fired(controller: Abort.AbortController<Unit>, fire: Bool) -> IO(Unit):
         return List.reverse(&2, V.Value, reversed)
 
 def report(events: List<&2, V.Value>, message: Message()) -> V.Value:
-  V.ObjectValue{R.Record{R.Property{"events", V.ArrayValue{events}} <> R.Property{"message", MessageJson.assistantMessage(~Unit, ~noDetails, message)} <> Nil{}}}
+  V.ObjectValue{R.Record{R.Property{"events", V.ArrayValue{events}} <> R.Property{"message", MessageJson.assistantMessage(~V.Value, ~details, message)} <> Nil{}}}
 
 def consumed(+controller: Abort.AbortController<Unit>, trigger: Maybe<&2, String>, output: Output()) -> IO(V.Value):
   match output:
@@ -124,8 +124,12 @@ def initialized(arguments: List<String>, result: Result<&2, &1, Fetch.InitError,
         pair : Fetch.Runtime & Fetch.Fetch(Unit) <- Fetch.callback(~Unit, runtime)
         borrowed(arguments, pair)
 
+def arguments(values: List<String>) -> IO(Unit):
+  do IO<Unit>:
+    runtime : Result<&2, &1, Fetch.InitError, Fetch.Runtime> <- Fetch.create(Fetch.linuxFiles(), Network.networkOptions())
+    initialized(values, runtime)
+
 def main() -> IO(Unit):
   do IO<Unit>:
-    arguments : List<String> <- IO.args()
-    runtime : Result<&2, &1, Fetch.InitError, Fetch.Runtime> <- Fetch.create(Fetch.linuxFiles(), Network.networkOptions())
-    initialized(arguments, runtime)
+    values : List<String> <- IO.args()
+    arguments(values)

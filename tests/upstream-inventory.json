@@ -1723,12 +1723,16 @@
     },
     {
       "source": "packages/ai/test/openai-responses-terminal-event.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
-        "packages/ai/test/openai-responses-terminal-event.bend"
+        "packages/ai/test/openai-responses-terminal-event.bend",
+        "tests/responses_terminal_named.py",
+        "tests/openai-responses.bend",
+        "tests/openai_responses_check.py",
+        "tests/openai_provider_driver_reference.mts"
       ],
       "sha256": "ad1fed93b94223076b73b0f319f7f3e6502203f77a4e9c30162fc70721d1af66",
-      "notes": "Ten of eleven original test instances pass through the public processResponsesStream on one/four threads: early EOF rejection, all three message-phase rows, terminal stop override, completed/incomplete usage and raw reasons, filtered/unknown incomplete errors and provider failure. Native immutable event snapshots and typed errors replace aliased mutable messages and thrown exceptions. The provider-wrapper early-EOF test remains pending; no request/HTTP/SSE/provider-wrapper parity is claimed. Exact source test names and phase rows are checked by tests/responses_terminal_named.py."
+      "notes": "All eleven original instances pass on native one/four threads. Ten exercise the public processResponsesStream directly: early EOF rejection, all three message-phase rows, terminal stop override, completed/incomplete usage and raw reasons, filtered/unknown incomplete errors and provider failure. The wrapper early-EOF case is mode 9 of tests/openai_responses_check.py, which sends a partial response over real HTTP/SSE and checks the initial pending event, terminal error event and exact final message against the pinned wrapper. Native immutable event snapshots and typed errors replace aliased mutable messages and thrown exceptions."
     },
     {
       "source": "packages/ai/test/openai-responses-tool-result-images.test.ts",
@@ -1848,14 +1852,20 @@
     },
     {
       "source": "packages/ai/test/provider-error-body-regression.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/openai-completions-stream.bend",
         "tests/openai_completions_stream_check.py",
-        "tests/openai_completions_stream_reference.ts"
+        "tests/openai_completions_stream_reference.ts",
+        "tests/openai-responses.bend",
+        "tests/openai_responses_check.py",
+        "tests/openai_provider_driver_reference.mts",
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
       ],
       "sha256": "3630f6093ae3bc6033d0ca4d879c7439540530823f578ce56c08754137bbd69a",
-      "notes": "The two openai-completions tests pass on Bun and native 1/4 threads as named cases in tests/openai_completions_stream_check.py: a real 403 response carries the parsed body through the SDK error path (upstream mocks the SDK APIError) and the message matches pinned pi-mono. Pending: the openai-responses case (its 403 body formatting is compared with pi's normalization in tests/openai_http_error_check.py but not through the named streaming path) and the two Bedrock cases (Bedrock port)."
+      "notes": "All five original cases pass on native one/four threads through real provider request paths. The two OpenAI Completions cases and the Responses case return scripted 403 JSON responses; the first two match pinned pi-mono and the Responses wrapper preserves both its 'OpenAI API error (403)' prefix and the gateway reason. The two Bedrock cases use typed native service failures from real HTTP responses: an unmodeled 403 retains its status and gateway body, while a ValidationException preserves the inference-profile message. This replaces the upstream suite's JavaScript SDK exception and Readable-stream mocks with the observable native behavior they specify."
     },
     {
       "source": "packages/ai/test/provider-retry.test.ts",

@@ -74,6 +74,7 @@ add(33,normal,[200])
 add(34,normal,[200],oracle=0);
 for c in cases:
     if c['mode']==34:c['slow']=True
+add(35,[],[403],errorBody={'error':{'message':'blocked by gateway WAF'}})
 def oracle(name,value):return json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','tests/'+name],cwd=ROOT,input=json.dumps(value),text=True))
 model=dict(id='test',name='Test',api='openai-responses',provider='openai',baseUrl='http://127.0.0.1/v1',reasoning=False,input=['text'],cost=dict(input=1000000,output=2000000,cacheRead=3000000,cacheWrite=4000000),contextWindow=128000,maxTokens=4096,compat=dict(supportsOpenAIGrammarTools=True))
 tool=dict(name='tool',description='A tool',parameters=dict(type='object',properties=dict(program=dict(type='string')),required=['program']),constrainedSampling=dict(type='grammar',variants=dict(openai_lark='start: /[a-z]+/')))
@@ -84,11 +85,17 @@ assert prepared[1]['grammar']=={'tool':'program'} and grammar['content'][0]['arg
 reference_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()
 assert reference_commit.startswith(PIN[:9])
 def oracle_case(c,p):
-    value=dict(mode=c['oracle'],events=[] if c['mode']==32 else c['events'],statuses=c['statuses'],supplied=c['supplied'],defaultPricing=True,sdkStatusError=True,abortCallerOnIteratorClose=False,preaborted=c.get('preaborted',False),structuredPayload=True,params=p.get('payload'),serviceTier=c.get('serviceTier'),modelId=c.get('modelId'),grammar=p.get('grammar',{}))
+    value=dict(mode=c['oracle'],events=[] if c['mode']==32 else c['events'],statuses=c['statuses'],supplied=c['supplied'],defaultPricing=True,sdkStatusError=True,abortCallerOnIteratorClose=False,preaborted=c.get('preaborted',False),structuredPayload=True,params=p.get('payload'),serviceTier=c.get('serviceTier'),modelId=c.get('modelId'),grammar=p.get('grammar',{}),errorBody=c.get('errorBody'))
     if 'error' in p:value['preparationError']=p['error']
     if c['mode']==31:value['requestError']=c['placeholder']
     return value
 reference=oracle('openai_provider_driver_reference.mts',[oracle_case(c,p) for c,p in zip(cases,prepared,strict=True)])['results']
+for case, result in zip(cases, reference, strict=True):
+    if case['mode']==9:
+        assert result['error']=='OpenAI Responses stream ended before a terminal response event', result
+        assert result['retained'][0].startswith('retained:start:') and result['retained'][-1].startswith('retained:error:'), result
+    if case['mode']==35:
+        assert result['error'] and 'OpenAI API error (403)' in result['error'] and 'blocked by gateway WAF' in result['error'], result
 frame=lambda event:('data: '+json.dumps(event,ensure_ascii=False,separators=(',',':'))+'\n\n').encode()
 def canonical(line):
     if line.startswith('payload:') and line.endswith(':model'):return 'payload:'+json.dumps(json.loads(line[8:-6]),sort_keys=True,separators=(',',':'))+':model'
@@ -140,7 +147,7 @@ for backend in args.backends:
                             if status==200:
                                 response=b''.join(map(frame,c['events']))+(b'data: {\n\n' if c['mode']==10 else b'data: {broken\n\n' if c['mode']==32 else b'data: [DONE]\n\n')
                                 content_type='text/event-stream'
-                            else:response=b'{"error":{"message":"original"}}';content_type='application/json'
+                            else:response=json.dumps(c.get('errorBody',{'error':{'message':'original'}}),separators=(',',':')).encode();content_type='application/json'
                             peer.sendall(f'HTTP/1.1 {status} Response\r\nContent-Type: {content_type}\r\nContent-Length: {len(response)}\r\nx-response: ok\r\n\r\n'.encode())
                             if c['slow']:time.sleep(1.15)
                             peer.sendall(response)
@@ -173,6 +180,8 @@ for backend in args.backends:
         assert actual==wanted,(backend,c['mode'],c['supplied'],actual,wanted)
         runs.append(dict(backend=backend,audited=args.audit,case=c,trace=actual,requests=requests,peers=peers))
     print(backend,len(cases),'OpenAI Responses provider cases PASS',flush=True)
+    print(f'PASS {backend}: emits an error final result when the wrapper stream ends before a terminal response event',flush=True)
+    print(f'PASS {backend}: openai-responses (status-only) keeps the prefix and surfaces the body',flush=True)
 fixture.cleanup()
 pending=[ROOT/'tests/openai-responses.bend'];seen=set()
 while pending:

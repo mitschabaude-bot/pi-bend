@@ -1,7 +1,7 @@
 """Original terminal-event contracts through the public async processor.
 
-The provider wrapper early-EOF case stays pending; all three it.each phase
-rows are retained. Inventory changes require this native run to pass.
+All three it.each phase rows are retained here. The provider-wrapper early-EOF
+case runs through tests/openai_responses_check.py's real HTTP/SSE mode 9.
 """
 from upstream_pin import UPSTREAM
 import argparse,re,subprocess
@@ -33,4 +33,4 @@ for start in range(0,len(functions),args.batch_size):
         result=subprocess.check_output([str(out),'--threads',threads],cwd=ROOT,text=True,timeout=120)
         assert result.splitlines()==['PASS '+name for name in ported[start:start+args.batch_size]],result
         print(result,end='',flush=True)
-print('PASS original Responses terminal contracts (10/11 instances; wrapper case pending)',flush=True)
+print('PASS original Responses processor contracts (10 instances; wrapper case runs in openai_responses_check.py)',flush=True)

@@ -48,7 +48,7 @@ for(const c of input){
   if(c.requestError!==undefined)throw Error(c.requestError);
   trace.push('request:'+(c.structuredPayload?JSON.stringify(payload):String(payload)));sent.push(JSON.stringify(payload));
   const status=c.statuses[attempt++];if(status===undefined)throw Error('unexpected attempt');
-  if(status<200||status>=300)throw c.sdkStatusError?StatusError.generate(status,{error:{message:'original'}},undefined,new Headers()):Object.assign(Error('original'),{status,headers:new Headers()});
+  if(status<200||status>=300)throw c.sdkStatusError?StatusError.generate(status,c.errorBody??{error:{message:'original'}},undefined,new Headers()):Object.assign(Error('original'),{status,headers:new Headers()});
   return {data:read(),response:{status,headers:new Headers({'x-response':'ok'})}};
  }})}};
  const stream={push(e){const m=e.partial??e.message??e.error;trace.push('emit:'+e.type+':'+shownMessage(m));

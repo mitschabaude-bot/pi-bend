@@ -62,9 +62,9 @@ import ../packages/runtime/test/utf8-runner.bend as Text
 
 def Details() -> Data: Tools.ToolDetails
 def Error() -> Data: Tools.ToolError
-def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>
+def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>
 def Captured() -> Data: Maybe<&2, V.Value>
-def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<Unit, Error()>>
+def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<V.Value, Error()>>
 
 def urls() -> URL.Context:
   URL.Context{IDNA.Context{Mapping.table(), Normalization.tables(), Properties.table()}, IDNA.Options{IDNA.LabelOptions{False{}, False{}, True{}, IDNA.Nontransitional{}}, True{}, False{}}}
@@ -184,18 +184,17 @@ def model(+value: V.Value) -> Ai.Model<Ai.JsonValue>:
 def noDetails(value: V.Value) -> MessageJson.Decoded(Details()):
   Fail{Decode.WrongType{Nil{}, "no tool details"}}
 
-def noDiagnostics(value: V.Value) -> MessageJson.Decoded(Unit):
-  Fail{Decode.WrongType{Nil{}, "no diagnostic details"}}
+def diagnostics(value: V.Value) -> MessageJson.Decoded(V.Value): Done{value}
 
-def decodedMessage(value: MessageJson.Decoded(Ai.Message<V.Value, V.Value, Unit, Details()>), rest: List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>:
+def decodedMessage(value: MessageJson.Decoded(Ai.Message<V.Value, V.Value, V.Value, Details()>), rest: List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>) -> List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>:
   match value:
     case Done{message}: message <> rest
     case Fail{_}: rest
 
-def messages(values: List<&2, V.Value>) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>:
+def messages(values: List<&2, V.Value>) -> List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>:
   match values:
     case Nil{}: Nil{}
-    case +first <> rest: decodedMessage(MessageJson.decodeMessage(~Unit, ~Details(), ~noDiagnostics, ~noDetails, first), messages(rest))
+    case +first <> rest: decodedMessage(MessageJson.decodeMessage(~V.Value, ~Details(), ~diagnostics, ~noDetails, first), messages(rest))
 
 def decodedTool(value: MessageJson.Decoded(Ai.Tool<V.Value>), rest: List<&2, Ai.Tool<V.Value>>) -> List<&2, Ai.Tool<V.Value>>:
   match value:
@@ -218,7 +217,7 @@ def toolList(value: Maybe<&2, V.Value>) -> Maybe<&2, List<&2, Ai.Tool<V.Value>>>
     case _: None{}
 
 def context(+value: V.Value) -> Context():
-  Transcript.normalizeContext(V.Value, V.Value, Unit, Details(), Ai.Context{text(field(value, "systemPrompt")), messages(items(field(value, "messages"))), toolList(field(value, "tools"))})
+  Transcript.normalizeContext(V.Value, V.Value, V.Value, Details(), Ai.Context{text(field(value, "systemPrompt")), messages(items(field(value, "messages"))), toolList(field(value, "tools"))})
 
 # Options
 # -------
@@ -252,7 +251,7 @@ def capture(slot: Ref.Ref<Captured()>, input: Fetch.Input<Unit>) -> IO(Fetch.Res
         Ref.write(Captured(), slot, Some{object([R.Property{"url", V.Text{URL.serialize(url, False{})}}, R.Property{"headers", object(headerFields(Message.entries(headers)))}, R.Property{"body", bodyText(body)}])})
         return Fail{Fetch.Rejected{Message.TLSRequired{}}}
 
-def failureText(message: Ai.AssistantMessage<V.Value, Unit>) -> V.Value:
+def failureText(message: Ai.AssistantMessage<V.Value, V.Value>) -> V.Value:
   match message:
     case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, Some{content}, _, _, _}: V.Text{content}
     case _: V.Null{}
@@ -262,7 +261,7 @@ def settled(output: Output()) -> IO(V.Value):
     case Fail{_}: IO.pure(V.Value, V.Text{"provider failed to open"})
     case Done{Agent.StreamLease{events, release}}:
       do IO<V.Value>:
-        message : Ai.AssistantMessage<V.Value, Unit> <- Events.resultValue(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, events)
+        message : Ai.AssistantMessage<V.Value, V.Value> <- Events.resultValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events)
         result : Result<&2, &2, Error(), Unit> <- release
         return failureText(message)
 
@@ -294,7 +293,7 @@ def converted(result: Request.Converted()) -> V.Value:
 def conversion(+value: V.Value) -> IO(V.Value):
   +selected = model(value)
   do IO<V.Value>:
-    result : Request.Converted() <- Request.convertMessages(~Unit, ~Details(), selected, context(value), Request.getCompat(selected), R.new(String))
+    result : Request.Converted() <- Request.convertMessages(~V.Value, ~Details(), selected, context(value), Request.getCompat(selected), R.new(String))
     return converted(result)
 
 def built(result: Request.ParamsResult()) -> V.Value:
@@ -307,10 +306,10 @@ def withGrammar(+selected: Ai.Model<Ai.JsonValue>, +normalized: Context(), optio
     case Fail{error}: IO.pure(V.Value, object([R.Property{"error", V.Text{Sampling.errorMessage(error)}}]))
     case Done{selectedProperties}:
       do IO<V.Value>:
-        result : Request.ParamsResult() <- Request.buildParams(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), selected, normalized, options, compat, retention, selectedProperties)
+        result : Request.ParamsResult() <- Request.buildParams(~V.Value, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), selected, normalized, options, compat, retention, selectedProperties)
         return built(result)
 
-def contextMessages(context: Context()) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>:
+def contextMessages(context: Context()) -> List<&2, Ai.Message<V.Value, V.Value, V.Value, Details()>>:
   match context:
     case Ai.TranscriptContext{transcript}: transcript
 
@@ -318,12 +317,12 @@ def contextMessages(context: Context()) -> List<&2, Ai.Message<V.Value, V.Value,
 def parameters(+value: V.Value) -> IO(V.Value):
   +selected = model(value)
   +compat = Request.getCompat(selected)
-  +normalized = Transcript.resolveTranscript(V.Value, V.Value, Unit, Details(), context(value), Some{Request.supportsMidConvoSystemMessages(compat)})
+  +normalized = Transcript.resolveTranscript(V.Value, V.Value, V.Value, Details(), context(value), Some{Request.supportsMidConvoSystemMessages(compat)})
   +options = streamOptions(settings(value), None{})
   +shared = Completions.base(options)
   do IO<V.Value>:
     retention : Ai.CacheRetention <- Request.resolveCacheRetention(Completions.retentionOf(shared), Completions.envOf(shared))
-    withGrammar(selected, normalized, options, compat, retention, Sampling.createGrammarToolInputProperties(Some{Transcript.getDeclaredTools(V.Value, V.Value, Unit, Details(), contextMessages(normalized))}, Request.supportsOpenAIGrammarTools(compat)))
+    withGrammar(selected, normalized, options, compat, retention, Sampling.createGrammarToolInputProperties(Some{Transcript.getDeclaredTools(V.Value, V.Value, V.Value, Details(), contextMessages(normalized))}, Request.supportsOpenAIGrammarTools(compat)))
 
 def metadata(value: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> V.Value:
   match value:

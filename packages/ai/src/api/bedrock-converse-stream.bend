@@ -1230,6 +1230,9 @@ def safeJson(value: J()) -> String: Maybe.default(&2, String, JsonWire.stringify
 # upstream formatBedrockError.
 def formatBedrockError(failure: Failure) -> String:
   match failure:
+    case ServiceFailure{status, "Unknown", +message, _}:
+      +core = U32.show(status) ++ ": " ++ message
+      core ++ dataRetentionHint(core)
     case ServiceFailure{_, +name, +message, _}: BEDROCK_ERROR_PREFIX(name) ++ ": " ++ message ++ dataRetentionHint(message)
     case StreamException{+name, +message}: BEDROCK_ERROR_PREFIX(name) ++ ": " ++ message ++ dataRetentionHint(message)
     case StreamErrorFrame{_, +message}: message ++ dataRetentionHint(message)

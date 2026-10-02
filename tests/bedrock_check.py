@@ -451,7 +451,29 @@ def aborted_turn(lines, _requests):
 
 case("bedrock-error-metadata", "emits no diagnostic for an aborted turn", {"model": {"catalog": "us.anthropic.claude-opus-4-8"}, "context": hello(), "options": {"cacheRetention": "none"}, "abort": True}, aborted_turn, server=validation_server())
 stream_case("bedrock-error-metadata", "drops header-derived values that exceed the length bound", details({"status": 400}), server=lambda: Server(status=400, headers={"x-amzn-errortype": "E" * 5000 + "Exception", "x-amzn-requestid": "R" * 5000}, body=json.dumps({"message": VALIDATION_MESSAGE})), differential=False)
-stream_case("bedrock-error-metadata", "omits the SDK's Unknown placeholder instead of reporting it as a code", details({"status": 403, "requestId": REQUEST_ID}), server=lambda: Server(status=403, body=json.dumps({"message": "Forbidden"})))
+stream_case("bedrock-error-metadata", "omits the SDK's Unknown placeholder instead of reporting it as a code", details({"status": 403, "requestId": REQUEST_ID}), server=lambda: Server(status=403, body=json.dumps({"message": "Forbidden"})), differential=False)
+
+
+# provider-error-body-regression.test.ts: exercise the real AWS HTTP error
+# conversion in place of the suite's mocked SDK exception shapes.
+def gateway_body(lines, _requests):
+    result = message(lines)
+    text = result.get("errorMessage", "")
+    expect(result["stopReason"] == "error" and "403" in text and "blocked by gateway WAF" in text and "Unknown:" not in text, result)
+
+
+stream_case("provider-error-body-regression", "bedrock (body-blind) surfaces the gateway body instead of Unknown: UnknownError", gateway_body, server=lambda: Server(status=403, body=json.dumps({"message": "blocked by gateway WAF"})), differential=False)
+
+INFERENCE_PROFILE_MESSAGE = "Invocation of model ID anthropic.claude-opus-5 with on-demand throughput isn't supported. Retry with an inference profile."
+
+
+def inference_profile_message(lines, _requests):
+    result = message(lines)
+    text = result.get("errorMessage", "")
+    expect(result["stopReason"] == "error" and "on-demand throughput isn't supported" in text and "inference profile" in text and "_readableState" not in text, result)
+
+
+stream_case("provider-error-body-regression", "bedrock preserves the SDK validation message when the response body is a stream", inference_profile_message, spec={"model": {"catalog": "global.anthropic.claude-opus-5"}, "context": hello(), "options": {"cacheRetention": "none"}}, server=lambda: Server(status=400, headers={"x-amzn-errortype": "ValidationException"}, body=json.dumps({"message": INFERENCE_PROFILE_MESSAGE})))
 
 
 def no_metadata(lines, _requests):
