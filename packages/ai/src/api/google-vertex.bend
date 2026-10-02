@@ -487,13 +487,27 @@ def setupAgent(-Reason: Data, setup: Setup<Reason>) -> String:
   match setup:
     case Setup{_, agent, _}: agent
 
+# As in the Generative adapter, explicitly selecting the SDK's own fetch
+# is allowed; a different capability must be rejected before authentication.
+def ambientFetch(-Reason: Data, setup: Setup<Reason>, fetch: Maybe<&2, Fetch.Fetch(Reason)>) -> Bool:
+  match fetch setup:
+    case None{} _: True{}
+    case Some{selected} Setup{_, _, ambient}: C.same(Fetch.Input<Reason>, Fetch.Result_(Reason), selected, ambient)
+
+def fetchAccepted(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Options(Reason, Telemetry, E), +state: Fold.State<G>, ambient: Bool) -> IO(Unit):
+  match options:
+    case GoogleVertexOptions{Google.GoogleOptions{T.StreamOptions{_, _, key, _, env, _, _, headers, _, _, _, _, _, _, _, _, _, _, _}, _, _}, project, location}:
+      match ambient:
+        case False{}: GoogleClient.fail(~Reason, ~G, events, state, parent, "Custom fetch is not supported by the Google Vertex adapter")
+        case True{}:
+          do IO<Unit>:
+            config : Result<&2, &2, String, ClientConfig> <- clientConfig(setupAgent(Reason, setup), model, key, project, location, headers, env)
+            configured(~Reason, ~Telemetry, ~E, ~G, ~D, ~render, events, parent, setup, model, context, options, state, config)
+
 def fetchChecked(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Options(Reason, Telemetry, E), +state: Fold.State<G>) -> IO(Unit):
   match options:
-    case GoogleVertexOptions{Google.GoogleOptions{T.StreamOptions{_, _, _, Some{_}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _}, _, _}: GoogleClient.fail(~Reason, ~G, events, state, parent, "Custom fetch is not supported by the Google Vertex adapter")
-    case GoogleVertexOptions{Google.GoogleOptions{T.StreamOptions{signal, telemetry, key, None{}, env, onPayload, onResponse, headers, timeout, retries, delay, temperature, sampling, maxTokens, transport, cache, session, ws, metadata}, choice, thinking}, project, location}:
-      do IO<Unit>:
-        config : Result<&2, &2, String, ClientConfig> <- clientConfig(setupAgent(Reason, setup), model, key, project, location, headers, env)
-        configured(~Reason, ~Telemetry, ~E, ~G, ~D, ~render, events, parent, setup, model, context, GoogleVertexOptions{Google.GoogleOptions{T.StreamOptions{signal, telemetry, key, None{}, env, onPayload, onResponse, headers, timeout, retries, delay, temperature, sampling, maxTokens, transport, cache, session, ws, metadata}, choice, thinking}, project, location}, state, config)
+    case GoogleVertexOptions{Google.GoogleOptions{T.StreamOptions{_, _, _, fetch, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _}, _, _}:
+      fetchAccepted(~Reason, ~Telemetry, ~E, ~G, ~D, ~render, events, parent, setup, model, context, options, state, ambientFetch(Reason, setup, fetch))
 
 # upstream `stream`: the producer's work up to `stream.end()` over the
 # collapsed transcript. `parent` is the request's abort signal.

@@ -5,8 +5,8 @@ import ./google-harness.bend as H
 import ../../runtime/src/fetch.bend as Fetch
 
 # pi-mono f07218c4d packages/ai/test/fetch-option.test.ts, the Google
-# Generative AI cases (the Vertex half of the rejection test waits for the
-# Vertex adapter). The setup's process fetch stands for globalThis.fetch.
+# Generative AI cases; fetch-option.bend covers Vertex and the other APIs.
+# The setup's process fetch stands for globalThis.fetch.
 def model() -> T.Model<T.JsonValue>:
   H.model(T.GoogleGenerativeAiApi{}, "test-model", "Test Model", "test-provider", "https://upstream.test/v1", False{}, 1000, 10000, None{})
 

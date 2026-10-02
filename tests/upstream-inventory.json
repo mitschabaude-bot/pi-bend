@@ -1065,8 +1065,9 @@
     },
     {
       "source": "packages/ai/test/fetch-option.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
+        "packages/ai/test/fetch-option.bend",
         "packages/ai/test/anthropic-fetch-option.bend",
         "packages/ai/test/google-fetch-option.bend",
         "packages/ai/test/anthropic-harness.bend",
@@ -1075,7 +1076,7 @@
         "tests/google-suites.bend"
       ],
       "sha256": "45baf2e0c0f26d5d961b7af69d91f838243ab8579a1505410ec07da2434f20d0",
-      "notes": "Three of six tests pass on Bun and native 1/4 threads: the Anthropic case (packages/ai/test/anthropic-fetch-option.bend, tests/anthropic_messages_check.py) and both Google cases (packages/ai/test/google-fetch-option.bend, tests/google_generative_ai_check.py); the process fetch stands for globalThis.fetch and handle identity (C.same) decides which fetch is ambient. The rejection test's Vertex half waits for the Vertex adapter. Pending: the OpenAI-family adapters, Mistral/Codex/pi-messages, and image generation."
+      "notes": "All six original tests pass on native one/four threads through the production adapters: Anthropic; OpenAI Completions, Responses and Azure; Mistral, Codex SSE and pi-messages; Google Generative AI and Vertex rejection; explicit ambient Google fetch; and image generation. Native clients have no mutable global fetch, so their explicit default fetch capability represents globalThis.fetch; handle identity (C.same) distinguishes that capability from a custom fetch. The fixture additionally checks that Vertex accepts its own explicit ambient handle."
     },
     {
       "source": "packages/ai/test/fireworks-model-generation.test.ts",
