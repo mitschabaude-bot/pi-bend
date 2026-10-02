@@ -1,5 +1,7 @@
 import Base
 import ../src/types.bend as T
+import ../src/models.bend as Models
+import ../src/auth/types.bend as Auth
 import ../src/providers/faux.bend as Faux
 import ../src/utils/event-stream.bend as Events
 import ../src/utils/json.bend as Wire
@@ -16,8 +18,8 @@ import ../../runtime/src/utf16.bend as Utf16
 
 # pi-mono f07218c4d packages/ai/test/faux-provider.test.ts. Upstream registers
 # the faux in the process api registry and calls complete/stream; here each
-# test creates a FauxCore and streams through it directly. 'unregisters the
-# provider' has no counterpart (no api registry in the Bend ai package).
+# stream test owns its FauxCore, while provider lifetime uses the explicit
+# Models collection.
 def J() -> Data: T.JsonValue
 def Core() -> Data: Faux.FauxCore<Unit, Unit, String>
 def Message() -> Data: T.AssistantMessage<V.Value, Unit>
@@ -511,6 +513,26 @@ def abortMid(+name: String, response: Step(), +delta: String, +started: String, 
     check(Nat.is_eq(count(events, delta), 1n) && contains(events, started) && contains(events, delta) && contains(events, "error") && Bool.not(contains(events, ended)), name, shownNames(outcome))
     pass(name)
 
+def registryContext() -> T.Context<V.Value, V.Value, V.Value, V.Value>:
+  T.Context{None{}, T.User{T.UserMessage{T.UserText{"hi"}, F.fromU32(1)}} <> Nil{}, None{}}
+
+def unregistersProvider() -> IO(Unit):
+  +name = {"unregisters the provider" : String}
+  do IO<Unit>:
+    +model : T.Model<J()> <- IO.pure(T.Model<J()>, Faux.modelOf("faux", "faux", Faux.defaultDefinition()))
+    +models : Models.Models <- Models.createModels(Models.createModelsOptions())
+    +provider : Models.Provider = Models.Provider{"faux", "Faux", "http://localhost:0", Auth.ProviderAuth{None{}, None{}}, [model], Models.ApiStreams{}, None{}, None{}}
+    Models.setProvider(models, provider)
+    registered : Maybe<&2, Models.Provider> <- Models.getProvider(models, "faux")
+    Models.deleteProvider(models, "faux")
+    removed : Maybe<&2, Models.Provider> <- Models.getProvider(models, "faux")
+    message : T.AssistantMessage<V.Value, V.Value> <- Models.completeSimple(models, model, registryContext(), None{})
+    +error : String <- IO.pure(String, Maybe.default(&2, String, T.assistantErrorMessage(V.Value, V.Value, message), "(none)"))
+    check(Maybe.is_some(&2, Models.Provider, registered) && Maybe.is_none(&2, Models.Provider, removed) && String.eq(error, "Unknown provider: faux"), name, error)
+    Models.disposeModels(models)
+    Models.disposeProvider(provider)
+    pass(name)
+
 def run_all() -> IO(Unit):
   do IO<Unit>:
     registersProvider()
@@ -535,6 +557,7 @@ def run_all() -> IO(Unit):
     abortMid("supports aborting mid-text stream when paced", plain("abcdefghijklmnopqrstuvwxyz"), "text_delta", "text_start", "text_end")
     abortMid("supports aborting mid-thinking stream when paced", reply(Faux.fauxThinking("abcdefghijklmnopqrstuvwxyz") <> Nil{}, None{}, None{}), "thinking_delta", "thinking_start", "thinking_end")
     abortMid("supports aborting mid-toolcall stream when paced", reply(Faux.fauxToolCallWithId("echo", args("{\"text\":\"abcdefghijklmnopqrstuvwxyz\",\"count\":123456789}"), "tool-1") <> Nil{}, Some{T.ToolUse{}}, None{}), "toolcall_delta", "toolcall_start", "toolcall_end")
+    unregistersProvider()
 
 # Differential mode (tests/faux_provider_check.py): usage estimates for the
 # contexts tests/faux_provider_reference.ts runs through upstream's core.

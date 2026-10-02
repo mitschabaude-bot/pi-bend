@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """faux-provider.test.ts versus pinned pi-mono.
 
-Runs the ported named suite (every upstream test name except "unregisters the
-provider", which needs upstream's dynamic api registry; the port dispatches
-provider APIs statically), then compares usage estimates and chunking against
-upstream's createFauxCore (tests/faux_provider_reference.ts). The split case
+Runs every named upstream test, then compares usage estimates and chunking
+against upstream's createFauxCore (tests/faux_provider_reference.ts). The
+provider-lifetime case uses Bend's explicit Models collection in place of
+the process-global compat registry. The split case
 cuts a surrogate pair between two text deltas; the Bun backend cannot hold a
 lone surrogate, so it runs on native backends only.
 """
@@ -18,7 +18,7 @@ from upstream_pin import UPSTREAM
 
 ROOT = Path(__file__).resolve().parents[1]
 ENTRY = 'packages/ai/test/faux-provider.bend'
-PENDING = {'unregisters the provider'}
+PENDING = set()
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--prefix', default='build/faux-provider')
 parser.add_argument('--backends', nargs='+', choices=['bun', 'native-1', 'native-4'], default=['bun'])
@@ -51,7 +51,7 @@ for backend in arguments.backends:
         failures += 1
         print(f'FAIL {backend} named suite: missing {sorted(set(wanted) - set(passed))}; {"; ".join(l for l in out if not l.startswith("PASS "))[-800:]} {err[-800:]}')
     else:
-        print(f'{backend}: {len(passed)} of {len(names)} upstream faux-provider tests pass (pending: {", ".join(sorted(PENDING))})')
+        print(f'{backend}: all {len(passed)} upstream faux-provider tests pass')
     code, out, err = lines(command + ['diff'])
     got = [line for line in out if line.startswith('D ')]
     if code != 0 or got != estimates:

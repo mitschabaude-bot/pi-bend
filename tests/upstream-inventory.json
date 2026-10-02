@@ -1054,14 +1054,14 @@
     },
     {
       "source": "packages/ai/test/faux-provider.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/ai/test/faux-provider.bend",
         "tests/faux_provider_check.py",
         "tests/faux_provider_reference.ts"
       ],
       "sha256": "fea06efc607060cbad9885d7cc9bff5151f0a0510d3631e7bb8bbc7e547ab999",
-      "notes": "22 of 23 upstream tests ported (tests/faux_provider_check.py, bun and native); usage estimates and mid-pair chunking also differential against upstream createFauxCore. Pending: 'unregisters the provider' needs upstream's dynamic api registry (registerApiProvider/unregisterApiProviders), which the port replaces with static provider dispatch; registerFauxProvider/deferred responses are not ported."
+      "notes": "All 23 upstream tests pass on native one/four; usage estimates and mid-pair chunking also match upstream createFauxCore. The registration-lifetime case uses Bend's explicit Models collection: the provider is present before deletion, absent afterward, and a retained model cannot dispatch. Its terminal error is 'Unknown provider: faux' rather than compat.ts's process-global API-registry error. This covers the suite contract without introducing global mutable dispatch; deferred faux responses remain a source-module gap tracked separately."
     },
     {
       "source": "packages/ai/test/fetch-option.test.ts",

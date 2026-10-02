@@ -1236,7 +1236,7 @@
     },
     "packages/ai/src/providers/faux.ts": {
       "state": "partial",
-      "note": "createFauxCore ported as a FauxCore record with Ref state (queued responses, counters, per-session prompt cache); helpers, usage estimates over UTF-16 units (walked by scalar, surrogates only materialized at a mid-pair chunk boundary), random token-size chunking, pacing, abort and terminal errors match upstream (tests/faux_provider_check.py, 22/23 named plus differential). Not ported: deferred responses (fetchDeferred/cancelDeferred, the deferred stream option) and fauxProvider/createProvider wrapping, since the port dispatches provider APIs statically.",
+      "note": "createFauxCore is ported as a FauxCore record with Ref state (queued responses, counters, per-session prompt cache); helpers, usage estimates over UTF-16 units (walked by scalar, surrogates only materialized at a mid-pair chunk boundary), random token-size chunking, pacing, abort and terminal errors match upstream (tests/faux_provider_check.py, all 23 named plus differential). Provider removal uses the explicit Models collection rather than compat.ts's process-global registry. Remaining: deferred responses (fetchDeferred/cancelDeferred and the deferred stream option) and fauxProvider/createProvider wrapping.",
       "source_sha256": "dcf37d154680cef0fa5188efd4881450073c5342a9b56cc9e25cee9b9f1ccfcc",
       "port_sha256": {
         "packages/ai/src/providers/faux.bend": "018e195d8f364a8e0b90fa66acc86162680387149be57dedb355151cc6fe442d"
