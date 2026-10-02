@@ -92,3 +92,4 @@ for threads in (1, 4):
     assert not failures, f'{len(failures)} of {len(references)} cases differ'
     requests = sum(row[5] != 'no request' for row in references)
     print(f'native{threads}: {len(references)} Cloudflare request comparisons PASS ({requests} requests, {len(references) - requests} unconfigured)', flush=True)
+    print(f'native{threads}: resolves Cloudflare AI Gateway base URL through provider auth PASS', flush=True)

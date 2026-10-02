@@ -38,10 +38,7 @@ NAMED = {
     'anthropic-mid-conversation-effort': {'each': {'preserves native effort %s': ['low', 'medium', 'high', 'xhigh', 'max']}},
     'anthropic-eager-tool-input-compat': {},
     'github-copilot-anthropic': {},
-    'anthropic-auth-token': {'skipped': {
-        'threads authContext ANTHROPIC_AUTH_TOKEN through request headers': 'needs the Models registry streamSimple (createModels/setProvider), not ported',
-        'preserves OAuth request shaping for ANTHROPIC_OAUTH_TOKEN': 'needs the Models registry streamSimple (createModels/setProvider), not ported',
-        'lets explicit request headers override ANTHROPIC_AUTH_TOKEN': 'needs the Models registry streamSimple (createModels/setProvider), not ported'}},
+    'anthropic-auth-token': {},
     'sampling-options': {'skipped': {name: 'Chat Completions case: tests/openai_completions_request_check.py' for name in (
         'merges stream-option sampling params into the request body', 'omits sampling params when neither options nor model set them',
         'applies model-level sampling params', 'merges stream-option keys over model-level keys', 'overrides named request fields')}},

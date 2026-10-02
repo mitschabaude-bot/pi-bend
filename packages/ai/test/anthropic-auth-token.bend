@@ -1,5 +1,8 @@
 import Base
 import ../src/auth/types.bend as Auth
+import ../src/auth/resolve.bend as Resolve
+import ../src/api/options.bend as Options
+import ../src/api/lazy.bend as Lazy
 import ../src/models.bend as Models
 import ../src/providers/anthropic.bend as Anthropic
 import ../src/types.bend as T
@@ -8,11 +11,14 @@ import ../../runtime/src/abort.bend as Abort
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/record.bend as R
+import ../../runtime/src/ref.bend as Ref
+import ../../runtime/src/schema-value.bend as V
 
 # pi-mono f07218c4d packages/ai/test/anthropic-auth-token.test.ts. upstream
 # mocks the SDK constructor; natively the recording fetch observes the same
-# request headers and body. The `createModels(...).streamSimple` cases need
-# the Models registry's stream convenience, which is not ported.
+# request headers and body. Collection cases pass through Models.streamSimple,
+# capture its provider dispatch, then send those applied options through the
+# same real Anthropic request path.
 def environment(values: R.Record<String>, name: String) -> IO(Maybe<&2, String>): IO.pure(Maybe<&2, String>, R.get(String, values, name))
 
 def noFiles(unused: Unit, path: String) -> IO(Bool): IO.pure(Bool, False{})
@@ -67,8 +73,63 @@ def kimiCodingModel() -> T.Model<T.JsonValue>: model("kimi-for-coding", "kimi-co
 
 def context() -> H.Context(): H.contextWith(Some{"System prompt."}, H.user("Hello", 1) <> Nil{}, None{})
 
+def collectionContext() -> T.Context<V.Value, V.Value, V.Value, V.Value>:
+  T.Context{Some{"System prompt."}, T.User{T.UserMessage{T.UserText{"Hello"}, F.fromU32(1)}} <> Nil{}, None{}}
+
 def send(+selected: T.Model<T.JsonValue>, apiKey: Maybe<&2, String>, headers: Maybe<&2, T.ProviderHeaders()>, mode: H.Mode) -> IO(H.Outcome):
   H.run(selected, context(), H.direct(H.streamOptions(apiKey, None{}, headers), None{}, None{}), mode)
+
+type Applied is Data:
+  Applied{apiKey: Maybe<&2, String>, headers: Maybe<&2, T.ProviderHeaders()>}
+
+def capture(slot: Ref.Ref<Maybe<&2, Models.StreamInput>>, input: Models.StreamInput) -> IO(Lazy.OpenResult()):
+  do IO<Lazy.OpenResult()>:
+    Ref.write(Maybe<&2, Models.StreamInput>, slot, Some{input})
+    return Fail{Resolve.ModelsError{Resolve.ProviderError{}, "request captured"}}
+
+def withStreams(+provider: Models.Provider, raw: Models.ProviderStream(), simple: Models.ProviderStream()) -> Models.Provider:
+  match provider:
+    case Models.Provider{id, name, base, auth, models, _, refresh, filter}:
+      Models.Provider{id, name, base, auth, models, Models.NativeStreams{[T.AnthropicMessagesApi{}], raw, simple}, refresh, filter}
+
+def requestOptions(headers: Maybe<&2, T.ProviderHeaders()>) -> Maybe<&2, Models.ModelsSimpleStreamOptions()>:
+  match headers:
+    case None{}: None{}
+    case Some{values}: Some{Models.ModelsRequestOptions{T.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{values}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, None{}}}
+
+def appliedBase(base: Options.BaseOptions(Resolve.ModelsError)) -> IO(Applied):
+  match base:
+    case T.StreamOptions{_, _, key, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _}: IO.pure(Applied, Applied{key, headers})
+
+def applied(input: Maybe<&2, Models.StreamInput>) -> IO(Applied):
+  match input:
+    case Some{Models.StreamInput{_, _, options}}: appliedBase(Options.requestBase(Resolve.ModelsError, options))
+    case None{}: IO.die(Applied, 1, "Models.streamSimple did not dispatch the provider")
+
+def sendApplied(selected: Applied) -> IO(H.Outcome):
+  match selected:
+    case Applied{key, headers}: send(anthropicModel(), key, headers, H.Send{})
+
+def collectionSend(+values: R.Record<String>, headers: Maybe<&2, T.ProviderHeaders()>) -> IO(H.Outcome):
+  do IO<H.Outcome>:
+    +envCallback : C.Callback<String, Maybe<&2, String>> <- C.create(~R.Record<String>, ~String, ~Maybe<&2, String>, ~environment, values)
+    +files : C.Callback<String, Bool> <- C.create(~Unit, ~String, ~Bool, ~noFiles, Unit{})
+    +models : Models.Models <- Models.createModels(Models.CreateModelsOptions{None{}, None{}, Some{Auth.AuthContext{envCallback, files}}})
+    +slot : Ref.Ref<Maybe<&2, Models.StreamInput>> <- Ref.new(Maybe<&2, Models.StreamInput>, None{})
+    +raw : Models.ProviderStream() <- C.create(~Ref.Ref<Maybe<&2, Models.StreamInput>>, ~Models.StreamInput, ~Lazy.OpenResult(), ~capture, slot)
+    +simple : Models.ProviderStream() <- C.create(~Ref.Ref<Maybe<&2, Models.StreamInput>>, ~Models.StreamInput, ~Lazy.OpenResult(), ~capture, slot)
+    +provider : Models.Provider <- Anthropic.anthropicProvider(None{})
+    +routed : Models.Provider = withStreams(provider, raw, simple)
+    Models.setProvider(models, routed)
+    ignored : Lazy.Message() <- Models.completeSimple(models, anthropicModel(), collectionContext(), requestOptions(headers))
+    seen : Maybe<&2, Models.StreamInput> <- Ref.read(Maybe<&2, Models.StreamInput>, slot)
+    selected : Applied <- applied(seen)
+    Models.disposeModels(models)
+    Models.disposeProvider(routed)
+    C.dispose(Models.StreamInput, Lazy.OpenResult(), raw)
+    C.dispose(Models.StreamInput, Lazy.OpenResult(), simple)
+    previous : Maybe<&2, Models.StreamInput> <- Ref.dispose(Maybe<&2, Models.StreamInput>, slot)
+    sendApplied(selected)
 
 def textOf(value: Maybe<&2, T.JsonValue>, rest: List<&2, String>) -> List<&2, String>:
   match value:
@@ -95,6 +156,33 @@ def headerAuth() -> IO(Unit):
     H.check(Bool.not(H.contains(H.header(H.requestOf(outcome), "anthropic-beta"), "oauth-2025-04-20")), name ++ ": no OAuth beta")
     H.check(Bool.not(H.containsString(H.elements(H.fieldOf(request, "betas")), "oauth-2025-04-20")), name ++ ": no OAuth beta in body")
     H.equalJson(Some{T.JsonArray{strings(systemTexts(H.elements(H.fieldOf(request, "system"))))}}, "[\"System prompt.\"]", name ++ ": system")
+    H.pass(name)
+
+def contextualAuthToken() -> IO(Unit):
+  +name = {"threads authContext ANTHROPIC_AUTH_TOKEN through request headers" : String}
+  do IO<Unit>:
+    +outcome : H.Outcome <- collectionSend(env([R.Property{"ANTHROPIC_AUTH_TOKEN", "ctx-token"}]), None{})
+    +request : Maybe<&2, T.JsonValue> <- IO.pure(Maybe<&2, T.JsonValue>, H.requestBody(H.requestOf(outcome)))
+    H.equalText(H.header(H.requestOf(outcome), "x-api-key"), None{}, name ++ ": apiKey")
+    H.equalText(H.header(H.requestOf(outcome), "authorization"), Some{"Bearer ctx-token"}, name ++ ": Authorization")
+    H.check(Bool.not(H.contains(H.header(H.requestOf(outcome), "anthropic-beta"), "oauth-2025-04-20")), name ++ ": no OAuth beta")
+    H.equalJson(Some{T.JsonArray{strings(systemTexts(H.elements(H.fieldOf(request, "system"))))}}, "[\"System prompt.\"]", name ++ ": system")
+    H.pass(name)
+
+def contextualOAuthToken() -> IO(Unit):
+  +name = {"preserves OAuth request shaping for ANTHROPIC_OAUTH_TOKEN" : String}
+  do IO<Unit>:
+    +outcome : H.Outcome <- collectionSend(env([R.Property{"ANTHROPIC_OAUTH_TOKEN", "sk-ant-oat-test"}]), None{})
+    H.equalText(H.header(H.requestOf(outcome), "x-api-key"), None{}, name ++ ": apiKey")
+    H.equalText(H.header(H.requestOf(outcome), "authorization"), Some{"Bearer sk-ant-oat-test"}, name ++ ": authToken")
+    H.check(H.contains(H.header(H.requestOf(outcome), "anthropic-beta"), "oauth-2025-04-20"), name ++ ": OAuth header beta")
+    H.pass(name)
+
+def explicitOverContextualAuth() -> IO(Unit):
+  +name = {"lets explicit request headers override ANTHROPIC_AUTH_TOKEN" : String}
+  do IO<Unit>:
+    +outcome : H.Outcome <- collectionSend(env([R.Property{"ANTHROPIC_AUTH_TOKEN", "ctx-token"}]), Some{H.headersOf([H.present("Authorization", "Bearer explicit-token")])})
+    H.equalText(H.header(H.requestOf(outcome), "authorization"), Some{"Bearer explicit-token"}, name)
     H.pass(name)
 
 def defaultAgent() -> IO(Unit):
@@ -133,6 +221,9 @@ def run() -> IO(Unit):
     authToken()
     oauthToken()
     headerAuth()
+    contextualAuthToken()
+    contextualOAuthToken()
+    explicitOverContextualAuth()
     defaultAgent()
     customAgent()
     replacedBeta()

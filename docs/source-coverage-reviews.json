@@ -413,8 +413,8 @@
       }
     },
     "packages/ai/src/providers/cloudflare-auth.ts": {
-      "state": "partial",
-      "note": "Workers AI and AI Gateway resolve per-field stored and ambient values; native login prompts for key, account ID and optional gateway ID. Focused Bend tests exercise both login credential shapes and the existing resolver cases; broader model-runtime integration remains partial.",
+      "state": "ported",
+      "note": "Workers AI and AI Gateway resolve each stored or ambient key/account/gateway field in upstream order, reject incomplete configuration, preserve source labels and cancellation, and produce the provider env and nullable gateway headers. Native login prompts for the same required fields. Focused auth cases cover resolution and both credential shapes; the 24-case ModelRuntime differential covers stored, ambient and mixed credentials through endpoint materialization and request dispatch on native one/four.",
       "source_sha256": "d0532efb4f00126286d71dbce6fcb95e581cd9477467dc4bd20f1df1a466f03e",
       "port_sha256": {
         "packages/ai/src/providers/cloudflare-auth.bend": "f9d86a9af39f4ee897d2c35a60cb58d44f4b8dc8a851567b3bd6d621b0c47693"
