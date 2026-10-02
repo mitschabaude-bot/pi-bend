@@ -1,5 +1,8 @@
 import Base
 import ./types.bend as T
+import ./api/options.bend as Options
+import ./api/lazy.bend as Lazy
+import ./utils/transcript.bend as Transcript
 import ./utils/event-stream.bend as Stream
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/fetch.bend as Fetch
@@ -33,13 +36,15 @@ type DeferredFetchInput is Data:
 type DeferredCancelInput is Data:
   DeferredCancelInput{model: Model(), handle: T.DeferredHandle, options: Maybe<&2, DeferredCancelOptions()>}
 
-type DeferredStream is Type:
-  DeferredStream{events: Stream.AssistantMessageEventStream(V.Value, V.Value), release: IO(Result<&2, &2, Resolve.ModelsError, Unit>)}
-
-def DeferredFetchResult() -> Type: Result<&2, &1, Resolve.ModelsError, DeferredStream>
+def DeferredFetchResult() -> Type: Lazy.OpenResult()
 def DeferredCancelResult() -> Data: Result<&2, &2, Resolve.ModelsError, Unit>
 def FetchDeferred() -> Data: C.Callback<DeferredFetchInput, DeferredFetchResult()>
 def CancelDeferred() -> Data: C.Callback<DeferredCancelInput, DeferredCancelResult()>
+
+type StreamInput is Data:
+  StreamInput{model: Model(), context: T.TranscriptContext<V.Value, V.Value, V.Value, V.Value>, options: Options.RequestOptions<Resolve.ModelsError>}
+
+def ProviderStream() -> Data: C.Callback<StreamInput, Lazy.OpenResult()>
 
 # upstream Provider.api, reduced to what differs between providers: requests
 # stream through the shared implementation of the model's api, the
@@ -48,6 +53,7 @@ def CancelDeferred() -> Data: C.Callback<DeferredCancelInput, DeferredCancelResu
 # session routing header for theirs (upstream withOpenCodeSessionHeader).
 type ProviderStreams is Data:
   ApiStreams{}
+  NativeStreams{apis: List<&2, T.ModelApi>, stream: ProviderStream(), streamSimple: ProviderStream()}
   CloudflareStreams{apis: List<&2, T.ModelApi>}
   OpenCodeStreams{apis: List<&2, T.ModelApi>}
   DeferredStreams{base: ProviderStreams, fetchDeferred: Maybe<&2, FetchDeferred()>, cancelDeferred: Maybe<&2, CancelDeferred()>}
@@ -187,6 +193,7 @@ def usedApis(apis: List<&2, T.ModelApi>, +models: List<&2, T.Model<T.JsonValue>>
 def inheritedRouting(streams: ProviderStreams, +models: List<&2, Model()>) -> ProviderStreams:
   match streams:
     case ApiStreams{}: ApiStreams{}
+    case NativeStreams{apis, stream, simple}: NativeStreams{usedApis(apis, models), stream, simple}
     case CloudflareStreams{apis}: CloudflareStreams{usedApis(apis, models)}
     case OpenCodeStreams{apis}: OpenCodeStreams{usedApis(apis, models)}
     case DeferredStreams{base, fetch, cancel}: DeferredStreams{inheritedRouting(base, models), fetch, cancel}
@@ -352,9 +359,8 @@ def fetchedRefresh(id: String, baseline: List<&2, Model()>, fetch: FetchModels()
 # which belongs to the provider registered under that id: replacing or
 # deleting the provider drops it and supersedes the provider's refreshes.
 # Refreshes run one provider at a time; a superseded refresh keeps running
-# but can no longer publish. Request dispatch (upstream stream/streamSimple
-# and the deferred calls) stays with the application's stream functions,
-# which apply getAuth themselves (coding-agent agent-runtime).
+# but can no longer publish. Collection requests resolve auth and dispatch
+# through the provider's borrowed native stream methods.
 
 type ModelsState is Data:
   ModelsState{providers: List<&2, Provider>, published: R.Record<List<&2, Model()>>, generations: R.Record<Nat>}
@@ -1154,3 +1160,201 @@ def refreshWithSignal(+models: Models, filter: Maybe<&2, List<&2, String>>, allo
 def refresh(+models: Models, options: ModelsRefreshOptions) -> IO(ModelsRefreshResult):
   match options:
     case ModelsRefreshOptions{allowNetwork, filter, force, signal}: signalled(ModelsRefreshResult, signal, given => refreshWithSignal(models, filter, Maybe.default(&2, Bool, allowNetwork, True{}), force, given))
+
+# Collection requests keep their header transform outside provider options.
+def BaseResult() -> Data: Result<&2, &2, Resolve.ModelsError, Options.BaseOptions(Resolve.ModelsError)>
+
+def HeadersResult() -> Data: Result<&2, &2, Resolve.ModelsError, T.ProviderHeaders()>
+def TransformHeaders() -> Data: C.Callback<T.ProviderHeaders(), HeadersResult()>
+
+type ModelsRequestOptions<-Options: Data> is Data:
+  ModelsRequestOptions{options: Options, transformHeaders: Maybe<&2, TransformHeaders()>}
+
+def ModelsApiStreamOptions() -> Data: ModelsRequestOptions<Options.ApiStreamOptions<Resolve.ModelsError>>
+def ModelsSimpleStreamOptions() -> Data: ModelsRequestOptions<Options.StreamOptions(Resolve.ModelsError)>
+def ModelsDeferredFetchOptions() -> Data: ModelsRequestOptions<DeferredFetchOptions()>
+def ModelsDeferredCancelOptions() -> Data: ModelsRequestOptions<DeferredCancelOptions()>
+
+type PreparedRequest is Data:
+  PreparedRequest{model: Model(), options: Options.BaseOptions(Resolve.ModelsError)}
+
+def PreparedResult() -> Data: Result<&2, &2, Resolve.ModelsError, PreparedRequest>
+
+def requestOverrides(options: Options.BaseOptions(Resolve.ModelsError)) -> Resolve.AuthResolutionOverrides:
+  match options:
+    case T.StreamOptions{signal, _, key, _, env, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: Resolve.AuthResolutionOverrides{key, env, None{}, signal}
+
+def withBaseUrl(model: Model(), url: Maybe<&2, String>) -> Model():
+  match model url:
+    case model None{}: model
+    case T.Model{id, name, api, provider, _, reasoning, levels, input, limits, cost, cache, window, tokens, sampling, headers, compat} Some{url}:
+      T.Model{id, name, api, provider, url, reasoning, levels, input, limits, cost, cache, window, tokens, sampling, headers, compat}
+
+def authorizedBase(auth: Auth.AuthResult, options: Options.BaseOptions(Resolve.ModelsError)) -> Options.BaseOptions(Resolve.ModelsError):
+  match auth options:
+    case Auth.AuthResult{Auth.ModelAuth{key, authHeaders, _}, authEnv, _} T.StreamOptions{signal, telemetry, explicitKey, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, tokens, transport, retention, session, connect, metadata}:
+      T.StreamOptions{signal, telemetry, Maybe.or(&2, String, explicitKey, key), fetch, Resolve.mergedEnv(authEnv, env), payload, response, mergeHeaders(authHeaders, headers), timeout, retries, delay, temperature, sampling, tokens, transport, retention, session, connect, metadata}
+
+def baseHeaders(options: Options.BaseOptions(Resolve.ModelsError)) -> Maybe<&2, T.ProviderHeaders()>:
+  match options:
+    case T.StreamOptions{_, _, _, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _}: headers
+
+def withBaseHeaders(options: Options.BaseOptions(Resolve.ModelsError), headers: T.ProviderHeaders()) -> Options.BaseOptions(Resolve.ModelsError):
+  match options:
+    case T.StreamOptions{signal, telemetry, key, fetch, env, payload, response, _, timeout, retries, delay, temperature, sampling, tokens, transport, retention, session, connect, metadata}:
+      T.StreamOptions{signal, telemetry, key, fetch, env, payload, response, Some{headers}, timeout, retries, delay, temperature, sampling, tokens, transport, retention, session, connect, metadata}
+
+def transformedBase(+options: Options.BaseOptions(Resolve.ModelsError), transform: Maybe<&2, TransformHeaders()>) -> IO(BaseResult()):
+  match transform:
+    case None{}: IO.pure(BaseResult(), Done{options})
+    case Some{transform}:
+      do IO<BaseResult()>:
+        final : HeadersResult() <- C.call(T.ProviderHeaders(), HeadersResult(), transform, Maybe.default(&2, T.ProviderHeaders(), baseHeaders(options), R.new(T.Nullable<String>)))
+        return Result.map(&2, &2, Resolve.ModelsError, T.ProviderHeaders(), Options.BaseOptions(Resolve.ModelsError), headers => withBaseHeaders(options, headers), final)
+
+def authPrepared(model: Model(), options: Options.BaseOptions(Resolve.ModelsError), transform: Maybe<&2, TransformHeaders()>, resolution: Resolve.Resolution()) -> IO(PreparedResult()):
+  match resolution:
+    case Fail{error}: IO.pure(PreparedResult(), Fail{error})
+    case Done{None{}}: IO.pure(PreparedResult(), Fail{Resolve.ModelsError{Resolve.AuthError{}, "Provider is not configured: " ++ T.modelProvider(model)}})
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{key, headers, +url}, env, source}}}:
+      do IO<PreparedResult()>:
+        final : BaseResult() <- transformedBase(authorizedBase(Auth.AuthResult{Auth.ModelAuth{key, headers, url}, env, source}, options), transform)
+        return Result.map(&2, &2, Resolve.ModelsError, Options.BaseOptions(Resolve.ModelsError), PreparedRequest, base => PreparedRequest{withBaseUrl(model, url), base}, final)
+
+def applyAuth(+models: Models, +model: Model(), +options: Options.BaseOptions(Resolve.ModelsError), transform: Maybe<&2, TransformHeaders()>) -> IO(PreparedResult()):
+  do IO<PreparedResult()>:
+    resolution : Resolve.Resolution() <- getModelAuth(models, model, requestOverrides(options))
+    authPrepared(model, options, transform, resolution)
+
+# Native callbacks are borrowed from the provider's owner, like its auth,
+# filter and deferred callbacks. Overlaying models limits their API domain.
+def streamMethod(streams: ProviderStreams, +api: T.ModelApi, simple: Bool) -> Maybe<&2, ProviderStream()>:
+  match streams:
+    case DeferredStreams{base, _, _}: streamMethod(base, api, simple)
+    case NativeStreams{apis, raw, normal}: Bool.pick(Maybe<&2, ProviderStream()>, wraps(apis, Api.name(api)), Some{Bool.pick(ProviderStream(), simple, normal, raw)}, None{})
+    case _: None{}
+
+def baseEnv(options: Options.BaseOptions(Resolve.ModelsError)) -> Maybe<&2, T.ProviderEnv()>:
+  match options:
+    case T.StreamOptions{_, _, _, _, env, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: env
+
+def dispatchedMethod(+streams: ProviderStreams, +model: Model(), context: T.TranscriptContext<V.Value, V.Value, V.Value, V.Value>, request: Options.RequestOptions<Resolve.ModelsError>, +base: Options.BaseOptions(Resolve.ModelsError), method: Maybe<&2, ProviderStream()>) -> IO(Lazy.OpenResult()):
+  match method:
+    case None{}: IO.pure(Lazy.OpenResult(), Fail{Resolve.ModelsError{Resolve.ProviderError{}, "No API provider registered for api: " ++ Api.name(Api.modelApi(T.JsonValue, model))}})
+    case Some{method}:
+      C.call(StreamInput, Lazy.OpenResult(), method, StreamInput{streamModel(T.JsonValue, streams, model, baseEnv(base)), context, Options.withRequestBase(Resolve.ModelsError, request, streamOptions(T.JsonValue, T.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Resolve.ModelsError, streams, model, base))})
+
+def dispatchedStream(provider: Provider, context: T.TranscriptContext<V.Value, V.Value, V.Value, V.Value>, request: Options.RequestOptions<Resolve.ModelsError>, simple: Bool, prepared: PreparedResult()) -> IO(Lazy.OpenResult()):
+  match prepared provider:
+    case Fail{error} _: IO.pure(Lazy.OpenResult(), Fail{error})
+    case Done{PreparedRequest{+model, base}} Provider{_, _, _, _, _, +streams, _, _}:
+      dispatchedMethod(streams, model, context, request, base, streamMethod(streams, Api.modelApi(T.JsonValue, model), simple))
+
+def streamKnown(+models: Models, +model: Model(), context: T.TranscriptContext<V.Value, V.Value, V.Value, V.Value>, +request: Options.RequestOptions<Resolve.ModelsError>, transform: Maybe<&2, TransformHeaders()>, simple: Bool, provider: Maybe<&2, Provider>) -> IO(Lazy.OpenResult()):
+  match provider:
+    case None{}: IO.pure(Lazy.OpenResult(), Fail{Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ T.modelProvider(model)}})
+    case Some{found}:
+      do IO<Lazy.OpenResult()>:
+        prepared : PreparedResult() <- applyAuth(models, model, Options.requestBase(Resolve.ModelsError, request), transform)
+        dispatchedStream(found, context, request, simple, prepared)
+
+def streamSetup(+models: Models, +model: Model(), context: T.TranscriptContext<V.Value, V.Value, V.Value, V.Value>, request: Options.RequestOptions<Resolve.ModelsError>, transform: Maybe<&2, TransformHeaders()>, simple: Bool) -> IO(Lazy.OpenResult()):
+  do IO<Lazy.OpenResult()>:
+    provider : Maybe<&2, Provider> <- getProvider(models, T.modelProvider(model))
+    streamKnown(models, model, context, request, transform, simple, provider)
+
+def rawRequest(options: Maybe<&2, ModelsApiStreamOptions()>) -> ModelsRequestOptions<Options.RequestOptions<Resolve.ModelsError>>:
+  match options:
+    case None{}: ModelsRequestOptions{Options.RawOptions{Options.CommonOptions{Options.emptyBase(Resolve.ModelsError)}}, None{}}
+    case Some{ModelsRequestOptions{options, transform}}: ModelsRequestOptions{Options.RawOptions{options}, transform}
+
+def simpleRequest(options: Maybe<&2, ModelsSimpleStreamOptions()>) -> ModelsRequestOptions<Options.RequestOptions<Resolve.ModelsError>>:
+  match options:
+    case None{}: ModelsRequestOptions{Options.SimpleOptions{T.emptySimpleStreamOptions(T.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Resolve.ModelsError)}, None{}}
+    case Some{ModelsRequestOptions{options, transform}}: ModelsRequestOptions{Options.SimpleOptions{options}, transform}
+
+def streamRequest(+models: Models, +model: Model(), context: T.Context<V.Value, V.Value, V.Value, V.Value>, request: ModelsRequestOptions<Options.RequestOptions<Resolve.ModelsError>>, simple: Bool) -> IO(Lazy.StreamLease):
+  match request:
+    case ModelsRequestOptions{options, transform}: Lazy.lazyStream(model, streamSetup(models, model, Transcript.normalizeContext(V.Value, V.Value, V.Value, V.Value, context), options, transform, simple))
+
+def stream(models: Models, model: Model(), context: T.Context<V.Value, V.Value, V.Value, V.Value>, options: Maybe<&2, ModelsApiStreamOptions()>) -> IO(Lazy.StreamLease):
+  streamRequest(models, model, context, rawRequest(options), False{})
+
+def complete(models: Models, model: Model(), context: T.Context<V.Value, V.Value, V.Value, V.Value>, options: Maybe<&2, ModelsApiStreamOptions()>) -> IO(Lazy.Message()):
+  Lazy.complete(stream(models, model, context, options))
+
+def streamSimple(models: Models, model: Model(), context: T.Context<V.Value, V.Value, V.Value, V.Value>, options: Maybe<&2, ModelsSimpleStreamOptions()>) -> IO(Lazy.StreamLease):
+  streamRequest(models, model, context, simpleRequest(options), True{})
+
+def completeSimple(models: Models, model: Model(), context: T.Context<V.Value, V.Value, V.Value, V.Value>, options: Maybe<&2, ModelsSimpleStreamOptions()>) -> IO(Lazy.Message()):
+  Lazy.complete(streamSimple(models, model, context, options))
+
+def deferredBase(options: DeferredCancelOptions()) -> Options.BaseOptions(Resolve.ModelsError):
+  match options:
+    case T.ProviderRequestOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay}:
+      T.StreamOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+
+def deferredOptions(options: Options.BaseOptions(Resolve.ModelsError)) -> DeferredCancelOptions():
+  match options:
+    case T.StreamOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, _, _, _, _, _, _, _, _}:
+      T.ProviderRequestOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay}
+
+def deferredRequest(options: Maybe<&2, ModelsDeferredCancelOptions()>) -> ModelsRequestOptions<Options.BaseOptions(Resolve.ModelsError)>:
+  match options:
+    case None{}: ModelsRequestOptions{Options.emptyBase(Resolve.ModelsError), None{}}
+    case Some{ModelsRequestOptions{options, transform}}: ModelsRequestOptions{deferredBase(options), transform}
+
+def unsupportedDeferred(+model: Model()) -> Resolve.ModelsError:
+  Resolve.ModelsError{Resolve.ProviderError{}, "Provider " ++ T.modelProvider(model) ++ " does not support deferred responses"}
+
+def fetchPrepared(method: FetchDeferred(), handle: T.DeferredHandle, wait: Maybe<&2, F64>, prepared: PreparedResult()) -> IO(Lazy.OpenResult()):
+  match prepared:
+    case Fail{error}: IO.pure(Lazy.OpenResult(), Fail{error})
+    case Done{PreparedRequest{model, base}}: C.call(DeferredFetchInput, DeferredFetchResult(), method, DeferredFetchInput{model, handle, Some{T.DeferredFetchOptions{deferredOptions(base), wait}}})
+
+def fetchMethod(+models: Models, +model: Model(), handle: T.DeferredHandle, request: ModelsDeferredFetchOptions(), method: Maybe<&2, FetchDeferred()>) -> IO(Lazy.OpenResult()):
+  match method request:
+    case None{} _: IO.pure(Lazy.OpenResult(), Fail{unsupportedDeferred(model)})
+    case Some{method} ModelsRequestOptions{T.DeferredFetchOptions{base, wait}, transform}:
+      do IO<Lazy.OpenResult()>:
+        prepared : PreparedResult() <- applyAuth(models, model, deferredBase(base), transform)
+        fetchPrepared(method, handle, wait, prepared)
+
+def fetchKnown(models: Models, +model: Model(), handle: T.DeferredHandle, request: ModelsDeferredFetchOptions(), provider: Maybe<&2, Provider>) -> IO(Lazy.OpenResult()):
+  match provider:
+    case None{}: IO.pure(Lazy.OpenResult(), Fail{Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ T.modelProvider(model)}})
+    case Some{provider}: fetchMethod(models, model, handle, request, fetchDeferredMethod(providerStreams(provider)))
+
+def fetchSetup(+models: Models, +model: Model(), handle: T.DeferredHandle, request: ModelsDeferredFetchOptions()) -> IO(Lazy.OpenResult()):
+  do IO<Lazy.OpenResult()>:
+    provider : Maybe<&2, Provider> <- getProvider(models, T.modelProvider(model))
+    fetchKnown(models, model, handle, request, provider)
+
+def streamDeferred(+models: Models, +model: Model(), handle: T.DeferredHandle, options: Maybe<&2, ModelsDeferredFetchOptions()>) -> IO(Lazy.StreamLease):
+  Lazy.lazyStream(model, fetchSetup(models, model, handle, Maybe.default(&2, ModelsDeferredFetchOptions(), options, ModelsRequestOptions{T.DeferredFetchOptions{deferredOptions(Options.emptyBase(Resolve.ModelsError)), None{}}, None{}})))
+
+def fetchDeferred(models: Models, model: Model(), handle: T.DeferredHandle, options: Maybe<&2, ModelsDeferredFetchOptions()>) -> IO(Lazy.Message()):
+  Lazy.complete(streamDeferred(models, model, handle, options))
+
+def cancelPrepared(method: CancelDeferred(), handle: T.DeferredHandle, prepared: PreparedResult()) -> IO(DeferredCancelResult()):
+  match prepared:
+    case Fail{error}: IO.pure(DeferredCancelResult(), Fail{error})
+    case Done{PreparedRequest{model, base}}: C.call(DeferredCancelInput, DeferredCancelResult(), method, DeferredCancelInput{model, handle, Some{deferredOptions(base)}})
+
+def cancelMethod(+models: Models, +model: Model(), handle: T.DeferredHandle, request: ModelsRequestOptions<Options.BaseOptions(Resolve.ModelsError)>, method: Maybe<&2, CancelDeferred()>) -> IO(DeferredCancelResult()):
+  match method request:
+    case None{} _: IO.pure(DeferredCancelResult(), Fail{unsupportedDeferred(model)})
+    case Some{method} ModelsRequestOptions{base, transform}:
+      do IO<DeferredCancelResult()>:
+        prepared : PreparedResult() <- applyAuth(models, model, base, transform)
+        cancelPrepared(method, handle, prepared)
+
+def cancelKnown(models: Models, +model: Model(), handle: T.DeferredHandle, request: ModelsRequestOptions<Options.BaseOptions(Resolve.ModelsError)>, provider: Maybe<&2, Provider>) -> IO(DeferredCancelResult()):
+  match provider:
+    case None{}: IO.pure(DeferredCancelResult(), Fail{Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ T.modelProvider(model)}})
+    case Some{provider}: cancelMethod(models, model, handle, request, cancelDeferredMethod(providerStreams(provider)))
+
+def cancelDeferred(+models: Models, +model: Model(), handle: T.DeferredHandle, options: Maybe<&2, ModelsDeferredCancelOptions()>) -> IO(DeferredCancelResult()):
+  do IO<DeferredCancelResult()>:
+    provider : Maybe<&2, Provider> <- getProvider(models, T.modelProvider(model))
+    cancelKnown(models, model, handle, deferredRequest(options), provider)

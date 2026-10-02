@@ -58,6 +58,8 @@ def names(apis: List<&2, T.ModelApi>) -> List<&2, String>:
 def apiNames(streams: Models.ProviderStreams) -> String:
   match streams:
     case Models.ApiStreams{}: "api"
+    case Models.NativeStreams{apis, _, _}: "native:" ++ String.join(names(apis), ",")
+    case Models.DeferredStreams{base, _, _}: apiNames(base)
     case Models.CloudflareStreams{apis}: String.join(names(apis), ",")
     case Models.OpenCodeStreams{apis}: "opencode:" ++ String.join(names(apis), ",")
 

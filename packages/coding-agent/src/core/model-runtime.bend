@@ -1,4 +1,5 @@
 import Base
+import ../../../ai/src/api/lazy.bend as Lazy
 import ../../../ai/src/api/options.bend as Options
 import ../../../runtime/src/cancellable-task.bend as Tasks
 import ../../../runtime/src/keyed-serial.bend as KeyedSerial
@@ -2328,7 +2329,7 @@ def streamSimple(+runtime: ModelRuntime, request: Composer.SimpleStreamRequest()
 
 def stream(+runtime: ModelRuntime, request: Composer.RawStreamRequest(), transforms: RequestTransforms) -> IO(Composer.StreamOutput()):
   match request:
-    case AgentTypes.StreamInput{model, context, options}: streamRequest(runtime, AgentTypes.StreamInput{model, context, Some{Options.RawOptions{Maybe.default(&2, Options.ApiStreamOptions<Tools.ToolError>, options, Options.CommonOptions{Options.emptyBase(Tools.ToolError, )})}}}, transforms)
+    case AgentTypes.StreamInput{model, context, options}: streamRequest(runtime, AgentTypes.StreamInput{model, context, Some{Options.RawOptions{Maybe.default(&2, Options.ApiStreamOptions<Tools.ToolError>, options, Options.CommonOptions{Options.emptyBase(Tools.ToolError)})}}}, transforms)
 
 def errorReply(model: Model(), message: String, now: F64) -> Ai.AssistantMessage<V.Value, V.Value>:
   match model:
@@ -2413,7 +2414,7 @@ def completedDeferred(+model: Model(), response: AiModels.DeferredFetchResult())
       do IO<Ai.AssistantMessage<V.Value, V.Value>>:
         now : F64 <- Date.now()
         return errorReply(model, Resolve.errorMessage(error), now)
-    case Done{AiModels.DeferredStream{events, release}}:
+    case Done{Lazy.StreamLease{events, release}}:
       do IO<Ai.AssistantMessage<V.Value, V.Value>>:
         message : Ai.AssistantMessage<V.Value, V.Value> <- Events.resultValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events)
         released : AiModels.DeferredCancelResult() <- release

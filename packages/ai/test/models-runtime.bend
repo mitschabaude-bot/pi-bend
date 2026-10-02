@@ -1,4 +1,7 @@
 import Base
+import ../src/api/options.bend as Options
+import ../src/api/lazy.bend as Lazy
+import ../src/utils/event-stream.bend as Events
 import ../src/types.bend as Ai
 import ../src/models.bend as Models
 import ../src/models-store.bend as Store
@@ -20,8 +23,7 @@ import ../../runtime/src/ref.bend as R
 # so 'swallows provider source failures ...' has no counterpart. Pending:
 # cases where the caller stops waiting for a blocked provider, store or auth
 # callback (the collection waits for them), model-store signal identity, and
-# the stream/complete cases (requests stream through the application's stream
-# functions, not the collection).
+# the remaining model-store/cancellation cases.
 
 def check(ok: Bool, +name: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit), ok, _ => IO.print("ok " ++ name), _ => IO.die(Unit, 1, "FAIL " ++ name))(Unit{})
@@ -930,6 +932,271 @@ def appliesFilterModelsToAvailableModels() -> IO(Unit):
 def mergesDynamicModelsOverTheBaseline() -> IO(Unit):
   same(modelIds(Models.mergeModels([testModel("p", "a"), testModel("p", "b")], [testModel("q", "c"), testModel("q", "a"), testModel("r", "c")])), "q/a,p/b,r/c", "createProvider merges dynamic models over the baseline")
 
+
+# Upstream's real Provider callbacks; every observation comes from the request
+# actually passed by the collection after its auth and transcript preparation.
+type StreamCall is Data:
+  StreamCall{simple: Bool, request: Models.StreamInput}
+
+type CaptureStream is Data:
+  CaptureStream{simple: Bool, calls: R.Ref<List<&2, StreamCall>>}
+
+type StreamFixture is Data:
+  StreamFixture{models: Models.Models, provider: Models.Provider, raw: Models.ProviderStream(), simple: Models.ProviderStream(), calls: R.Ref<List<&2, StreamCall>>}
+
+def stoppedReply(message: Lazy.Message()) -> Lazy.Message():
+  match message:
+    case Ai.AssistantMessage{content, api, provider, id, response, container, responseModel, tier, usage, _, diagnostic, _, deferred, messagePhase, timestamp}:
+      Ai.AssistantMessage{content, api, provider, id, response, container, responseModel, tier, usage, Ai.Stop{}, diagnostic, None{}, deferred, messagePhase, timestamp}
+
+def stoppedMessage(model: Models.Model()) -> Lazy.Message(): stoppedReply(Lazy.setupError(model, "", U32.to_f64(0)))
+
+def releaseCaptured(events: Lazy.Stream()) -> IO(Lazy.Released()):
+  do IO<Lazy.Released()>:
+    Events.disposeAssistantMessageEventStream(V.Value, V.Value, events)
+    return Done{Unit{}}
+
+def capturedStream(env: CaptureStream, input: Models.StreamInput) -> IO(Lazy.OpenResult()):
+  match env input:
+    case CaptureStream{simple, calls} Models.StreamInput{+model, context, options}:
+      do IO<Lazy.OpenResult()>:
+        seen : Unit <- R.modify(List<&2, StreamCall>, Unit, calls, old => (List.append(&2, StreamCall, old, StreamCall{simple, Models.StreamInput{model, context, options}} <> Nil{}), Unit{}))
+        +events : Lazy.Stream() <- Events.createAssistantMessageEventStream(~V.Value, ~V.Value)
+        +message : Lazy.Message() = stoppedMessage(model)
+        Events.push(Lazy.Event(), Lazy.Message(), events, Ai.Start{message})
+        Events.push(Lazy.Event(), Lazy.Message(), events, Ai.StreamDone{Ai.DoneStop{}, message})
+        return Done{Lazy.StreamLease{events, releaseCaptured(events)}}
+
+def streamFixture(auth: Auth.ProviderAuth) -> IO(StreamFixture):
+  do IO<StreamFixture>:
+    +models : Models.Models <- Models.createModels(Models.createModelsOptions())
+    +calls : R.Ref<List<&2, StreamCall>> <- R.new(List<&2, StreamCall>, Nil{})
+    +raw : Models.ProviderStream() <- C.create(~CaptureStream, ~Models.StreamInput, ~Lazy.OpenResult(), ~capturedStream, CaptureStream{False{}, calls})
+    +simple : Models.ProviderStream() <- C.create(~CaptureStream, ~Models.StreamInput, ~Lazy.OpenResult(), ~capturedStream, CaptureStream{True{}, calls})
+    +provider : Models.Provider = Models.Provider{"p1", "p1", "https://example.test/v1", auth, testModel("p1", "model-a") <> Nil{}, Models.NativeStreams{Ai.CustomModelApi{"test-api"} <> Nil{}, raw, simple}, None{}, None{}}
+    Models.setProvider(models, provider)
+    return StreamFixture{models, provider, raw, simple, calls}
+
+def disposeStreamFixture(fixture: StreamFixture) -> IO(Unit):
+  match fixture:
+    case StreamFixture{models, provider, raw, simple, calls}:
+      do IO<Unit>:
+        Models.disposeModels(models)
+        Models.disposeProvider(provider)
+        C.dispose(Models.StreamInput, Lazy.OpenResult(), raw)
+        C.dispose(Models.StreamInput, Lazy.OpenResult(), simple)
+        previous : List<&2, StreamCall> <- R.dispose(List<&2, StreamCall>, calls)
+        return Unit{}
+
+def fixtureModels(fixture: StreamFixture) -> Models.Models:
+  match fixture:
+    case StreamFixture{models, _, _, _, _}: models
+
+def fixtureCalls(fixture: StreamFixture) -> IO(List<&2, StreamCall>):
+  match fixture:
+    case StreamFixture{_, _, _, _, calls}: R.read(List<&2, StreamCall>, calls)
+
+def requestContext() -> Ai.Context<V.Value, V.Value, V.Value, V.Value>:
+  Ai.Context{Some{"system"}, Ai.User{Ai.UserMessage{Ai.UserText{"hello"}, U32.to_f64(0)}} <> Nil{}, None{}}
+
+def requestOptions(key: Maybe<&2, String>, env: Maybe<&2, Ai.ProviderEnv()>, headers: Maybe<&2, Ai.ProviderHeaders()>) -> Options.StreamOptions(Resolve.ModelsError):
+  Ai.SimpleStreamOptions{None{}, None{}, key, None{}, env, None{}, None{}, headers, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+
+def optionalString(value: Maybe<&2, String>) -> String: Maybe.default(&2, String, value, "-")
+
+def nullableString(value: Maybe<&2, Ai.Nullable<String>>) -> String:
+  match value:
+    case Some{Ai.PresentValue{value}}: value
+    case Some{Ai.NullValue{}}: "null"
+    case None{}: "-"
+
+def header(headers: Maybe<&2, Ai.ProviderHeaders()>, name: String) -> String:
+  match headers:
+    case None{}: "-"
+    case Some{values}: nullableString(Rec.get(Ai.Nullable<String>, values, name))
+
+def account(env: Maybe<&2, Ai.ProviderEnv()>) -> String:
+  match env:
+    case None{}: "-"
+    case Some{values}: optionalString(Rec.get(String, values, "ACCOUNT_ID"))
+
+def baseUrl(model: Models.Model()) -> String:
+  match model:
+    case Ai.Model{_, _, _, _, url, _, _, _, _, _, _, _, _, _, _, _}: url
+
+def baseSummary(model: Models.Model(), options: Options.BaseOptions(Resolve.ModelsError)) -> String:
+  match options:
+    case Ai.StreamOptions{_, _, key, _, env, _, _, +headers, _, _, _, _, _, _, _, _, _, _, _}:
+      baseUrl(model) ++ "|" ++ optionalString(key) ++ "|" ++ account(env) ++ "|" ++ header(headers, "Authorization") ++ "|" ++ header(headers, "authorization") ++ "|" ++ header(headers, "x-a") ++ "|" ++ header(headers, "x-b")
+
+def callSummary(call: StreamCall) -> String:
+  match call:
+    case StreamCall{_, Models.StreamInput{model, _, options}}: baseSummary(model, Options.requestBase(Resolve.ModelsError, options))
+
+def callSummaries(calls: List<&2, StreamCall>) -> String:
+  match calls:
+    case Nil{}: ""
+    case call <> rest: callSummary(call) ++ "\n" ++ callSummaries(rest)
+
+def scopedOutcome(key: Maybe<&2, String>, account: Maybe<&2, String>) -> Auth.AuthOutcome():
+  match key account:
+    case Some{key} Some{+account}: Done{Some{Auth.AuthResult{Auth.ModelAuth{Some{key}, None{}, Some{"https://example.test/" ++ account}}, Some{Rec.Record{Rec.Property{"ACCOUNT_ID", account} <> Nil{}}}, None{}}}}
+    case _ _: Done{None{}}
+
+def scopedAuth(unit: Unit, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
+  match input:
+    case Auth.ResolveInput{context, credential, _}:
+      do IO<Auth.AuthOutcome()>:
+        account : Maybe<&2, String> <- Auth.envValue(context, "ACCOUNT_ID")
+        return scopedOutcome(storedKey(credential), account)
+
+def usesExplicitRequestKeyAndEnv() -> IO(Unit):
+  do IO<Unit>:
+    resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~scopedAuth, Unit{})
+    +fixture : StreamFixture <- streamFixture(Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Scoped", None{}, resolve, None{}}}, None{}})
+    result : Lazy.Message() <- Models.completeSimple(fixtureModels(fixture), testModel("p1", "model-a"), requestContext(), Some{Models.ModelsRequestOptions{requestOptions(Some{"explicit-key"}, Some{Rec.Record{Rec.Property{"ACCOUNT_ID", "acct"} <> Nil{}}}, None{}), None{}}})
+    calls : List<&2, StreamCall> <- fixtureCalls(fixture)
+    same(callSummaries(calls), "https://example.test/acct|explicit-key|acct|-|-|-|-\n", "uses explicit request api key and env during provider auth resolution")
+    disposeStreamFixture(fixture)
+
+def resolvedAuth(result: Auth.AuthResult, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome()): IO.pure(Auth.AuthOutcome(), Done{Some{result}})
+
+def resolvedProviderAuth(result: Auth.AuthResult) -> IO(Auth.ProviderAuth):
+  do IO<Auth.ProviderAuth>:
+    resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Auth.AuthResult, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~resolvedAuth, result)
+    return Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test", None{}, resolve, None{}}}, None{}}
+
+def stoppedReason(reason: Ai.StopReason) -> Bool:
+  match reason:
+    case Ai.Stop{}: True{}
+    case _: False{}
+
+def isStopped(message: Lazy.Message()) -> Bool: stoppedReason(Ai.assistantStopReason(V.Value, V.Value, message))
+
+def mergesResolvedAuthIntoStreamOptions() -> IO(Unit):
+  do IO<Unit>:
+    auth : Auth.ProviderAuth <- resolvedProviderAuth(Auth.AuthResult{Auth.ModelAuth{Some{"resolved-key"}, Some{Rec.Record{[Rec.Property{"Authorization", Ai.PresentValue{"Bearer resolved-key"}}, Rec.Property{"x-a", Ai.PresentValue{"auth"}}, Rec.Property{"x-b", Ai.PresentValue{"auth"}}]}}, Some{"https://auth.test/v1"}}, None{}, None{}})
+    +fixture : StreamFixture <- streamFixture(auth)
+    +first : Lazy.Message() <- Models.completeSimple(fixtureModels(fixture), testModel("p1", "model-a"), requestContext(), Some{Models.ModelsRequestOptions{requestOptions(Some{"explicit-key"}, None{}, Some{Rec.Record{[Rec.Property{"authorization", Ai.PresentValue{"Explicit token"}}, Rec.Property{"x-b", Ai.PresentValue{"explicit"}}]}}), None{}}})
+    +second : Lazy.Message() <- Models.completeSimple(fixtureModels(fixture), testModel("p1", "model-a"), requestContext(), None{})
+    calls : List<&2, StreamCall> <- fixtureCalls(fixture)
+    expected : String = "https://auth.test/v1|explicit-key|-|-|Explicit token|auth|explicit\nhttps://auth.test/v1|resolved-key|-|Bearer resolved-key|-|auth|auth\n"
+    same(Bool.pick(String, isStopped(first) && isStopped(second), callSummaries(calls), "wrong stop reason"), expected, "merges resolved auth into stream options; explicit options win per field")
+    disposeStreamFixture(fixture)
+
+def withModelHeaders(model: Models.Model(), headers: Rec.Record<String>) -> Models.Model():
+  match model:
+    case Ai.Model{id, name, api, provider, url, reasoning, levels, input, limits, cost, cache, window, tokens, sampling, _, compat}:
+      Ai.Model{id, name, api, provider, url, reasoning, levels, input, limits, cost, cache, window, tokens, sampling, Some{headers}, compat}
+
+def transformedHeaders(valid: Bool, headers: Ai.ProviderHeaders()) -> IO(Models.HeadersResult()):
+  match valid:
+    case False{}: IO.die(Models.HeadersResult(), 1, "transform must receive the fully assembled headers")
+    case True{}: IO.pure(Models.HeadersResult(), Done{Rec.set(Ai.Nullable<String>, headers, "x-transformed", Ai.PresentValue{"yes"})})
+
+def transformHeaders(count: R.Ref<Nat>, headers: Ai.ProviderHeaders()) -> IO(Models.HeadersResult()):
+  do IO<Models.HeadersResult()>:
+    +assembled : Ai.ProviderHeaders() = headers
+    seen : Nat <- R.modify(Nat, Nat, count, value => incremented(value))
+    transformedHeaders(String.eq(header(Some{assembled}, "x-model"), "model") && String.eq(header(Some{assembled}, "x-explicit"), "explicit") && String.eq(header(Some{assembled}, "X-Shared"), "explicit") && String.eq(header(Some{assembled}, "x-shared"), "-") && Nat.is_eq(List.length(&2, Rec.Property<Ai.Nullable<String>>, Rec.entries(Ai.Nullable<String>, assembled)), 3n), assembled)
+
+def authHeaders(resolution: Resolve.Resolution()) -> Maybe<&2, Ai.ProviderHeaders()>:
+  match resolution:
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{_, headers, _}, _, _}}}: headers
+    case _: None{}
+
+def transformedOptions(options: Options.BaseOptions(Resolve.ModelsError)) -> Bool:
+  match options:
+    case Ai.StreamOptions{_, _, _, _, _, _, _, +headers, _, _, _, _, _, _, _, _, _, _, _}:
+      String.eq(header(headers, "x-model"), "model") && String.eq(header(headers, "x-explicit"), "explicit") && String.eq(header(headers, "X-Shared"), "explicit") && String.eq(header(headers, "x-transformed"), "yes") && String.eq(header(headers, "x-shared"), "-")
+
+def transformedCall(calls: List<&2, StreamCall>) -> Bool:
+  match calls:
+    case StreamCall{_, Models.StreamInput{_, _, options}} <> Nil{}: transformedOptions(Options.requestBase(Resolve.ModelsError, options))
+    case _: False{}
+
+def addsModelHeadersAndTransformsOnce() -> IO(Unit):
+  do IO<Unit>:
+    auth : Auth.ProviderAuth <- envKeyAuth(Some{"key"})
+    +fixture : StreamFixture <- streamFixture(auth)
+    +model : Models.Model() = withModelHeaders(testModel("p1", "model-a"), Rec.Record{[Rec.Property{"x-model", "model"}, Rec.Property{"x-shared", "model"}]})
+    +count : R.Ref<Nat> <- R.new(Nat, 0n)
+    +transform : Models.TransformHeaders() <- C.create(~R.Ref<Nat>, ~Ai.ProviderHeaders(), ~Models.HeadersResult(), ~transformHeaders, count)
+    +providerAuth : Resolve.Resolution() <- Models.getAuth(fixtureModels(fixture), "p1", Resolve.noOverrides())
+    +modelAuth : Resolve.Resolution() <- Models.getModelAuth(fixtureModels(fixture), model, Resolve.noOverrides())
+    result : Lazy.Message() <- Models.completeSimple(fixtureModels(fixture), model, requestContext(), Some{Models.ModelsRequestOptions{requestOptions(None{}, None{}, Some{Rec.Record{[Rec.Property{"x-explicit", Ai.PresentValue{"explicit"}}, Rec.Property{"X-Shared", Ai.PresentValue{"explicit"}}]}}), Some{transform}}})
+    calls : List<&2, StreamCall> <- fixtureCalls(fixture)
+    +seen : Nat <- R.dispose(Nat, count)
+    check(Bool.not(Maybe.is_some(&2, Ai.ProviderHeaders(), authHeaders(providerAuth))) && String.eq(header(authHeaders(modelAuth), "x-model"), "model") && Nat.is_eq(seen, 1n) && transformedCall(calls), "adds model headers only for model auth and transforms assembled headers once")
+    C.dispose(Ai.ProviderHeaders(), Models.HeadersResult(), transform)
+    disposeStreamFixture(fixture)
+
+def errorContains(message: Lazy.Message(), text: String) -> Bool:
+  match message:
+    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, Ai.Error{}, _, Some{detail}, _, _, _}: String.contains(detail, text)
+    case _: False{}
+
+def failedHeaderTransform(unit: Unit, headers: Ai.ProviderHeaders()) -> IO(Models.HeadersResult()):
+  IO.pure(Models.HeadersResult(), Fail{Resolve.ModelsError{Resolve.StreamError{}, "header transform failed"}})
+
+def producesErrorStreamForUnknownProviders() -> IO(Unit):
+  do IO<Unit>:
+    +models : Models.Models <- Models.createModels(Models.createModelsOptions())
+    message : Lazy.Message() <- Models.completeSimple(models, testModel("ghost", "model-a"), requestContext(), None{})
+    check(errorContains(message, "Unknown provider: ghost"), "produces an error stream for unknown providers instead of throwing")
+    Models.disposeModels(models)
+    auth : Auth.ProviderAuth <- envKeyAuth(Some{"key"})
+    +fixture : StreamFixture <- streamFixture(auth)
+    +transform : Models.TransformHeaders() <- C.create(~Unit, ~Ai.ProviderHeaders(), ~Models.HeadersResult(), ~failedHeaderTransform, Unit{})
+    failed : Lazy.Message() <- Models.completeSimple(fixtureModels(fixture), testModel("p1", "model-a"), requestContext(), Some{Models.ModelsRequestOptions{requestOptions(None{}, None{}, None{}), Some{transform}}})
+    calls : List<&2, StreamCall> <- fixtureCalls(fixture)
+    check(errorContains(failed, "header transform failed") && List.is_empty(&2, StreamCall, calls), "header transform failures end the stream before provider invocation")
+    C.dispose(Ai.ProviderHeaders(), Models.HeadersResult(), transform)
+    disposeStreamFixture(fixture)
+
+def eventName(event: Lazy.Event()) -> String:
+  match event:
+    case Ai.Start{_}: "start"
+    case Ai.StreamDone{_, _}: "done"
+    case _: "unexpected"
+
+@unsafe def eventNames(+cursor: Events.Iterator<Lazy.Event(), Lazy.Message()>, step: Events.Iteration<Lazy.Event()>) -> IO(List<&2, String>):
+  match step:
+    case Events.End{}: IO.pure(List<&2, String>, Nil{})
+    case Events.Yield{event}:
+      do IO<List<&2, String>>:
+        next : Events.Iteration<Lazy.Event()> <- Events.nextValue(Lazy.Event(), Lazy.Message(), cursor)
+        rest : List<&2, String> <- eventNames(cursor, next)
+        return eventName(event) <> rest
+
+def streamEvents(lease: Lazy.StreamLease) -> IO(String):
+  match lease:
+    case Lazy.StreamLease{+events, release}:
+      do IO<String>:
+        +cursor : Events.Iterator<Lazy.Event(), Lazy.Message()> <- Events.iterator(Lazy.Event(), Lazy.Message(), events)
+        first : Events.Iteration<Lazy.Event()> <- Events.nextValue(Lazy.Event(), Lazy.Message(), cursor)
+        names : List<&2, String> <- eventNames(cursor, first)
+        message : Lazy.Message() <- Events.resultValue(Lazy.Event(), Lazy.Message(), events)
+        Events.disposeIterator(Lazy.Event(), Lazy.Message(), cursor)
+        released : Lazy.Released() <- release
+        return Bool.pick(String, isStopped(message), String.join(names, ","), "wrong stop reason")
+
+def usesBothProviderMethods(calls: List<&2, StreamCall>) -> Bool:
+  match calls:
+    case StreamCall{True{}, _} <> StreamCall{False{}, _} <> Nil{}: True{}
+    case _: False{}
+
+def streamsThroughTheProvider() -> IO(Unit):
+  do IO<Unit>:
+    auth : Auth.ProviderAuth <- envKeyAuth(Some{"key"})
+    +fixture : StreamFixture <- streamFixture(auth)
+    lease : Lazy.StreamLease <- Models.streamSimple(fixtureModels(fixture), testModel("p1", "model-a"), requestContext(), None{})
+    names : String <- streamEvents(lease)
+    raw : Lazy.Message() <- Models.complete(fixtureModels(fixture), testModel("p1", "model-a"), requestContext(), None{})
+    calls : List<&2, StreamCall> <- fixtureCalls(fixture)
+    check(String.eq(names, "start,done") && isStopped(raw) && usesBothProviderMethods(calls), "streams through the provider")
+    disposeStreamFixture(fixture)
+
 def main() -> IO(Unit):
   do IO<Unit>:
     enumeratesCredentialMetadata()
@@ -960,3 +1227,8 @@ def main() -> IO(Unit):
     wrapsApiKeyAuthFailures()
     appliesFilterModelsToAvailableModels()
     mergesDynamicModelsOverTheBaseline()
+    usesExplicitRequestKeyAndEnv()
+    mergesResolvedAuthIntoStreamOptions()
+    addsModelHeadersAndTransformsOnce()
+    producesErrorStreamForUnknownProviders()
+    streamsThroughTheProvider()

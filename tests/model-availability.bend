@@ -1,4 +1,5 @@
 import Base
+import ../packages/ai/src/api/lazy.bend as Lazy
 import ../packages/ai/src/api/options.bend as Options
 import ../packages/ai/src/utils/event-stream.bend as LifecycleEvents
 import ../packages/ai/src/models-store.bend as Store
@@ -1072,12 +1073,17 @@ def captureDeferredFetch(slot: Ref.Ref<Maybe<&2, AiModels.DeferredFetchInput>>, 
         LifecycleEvents.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.Start{message})
         LifecycleEvents.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.StreamDone{Ai.DoneStop{}, message})
         LifecycleEvents.end(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Some{message})
-        return Done{AiModels.DeferredStream{events, releaseDeferred(events)}}
+        return Done{Lazy.StreamLease{events, releaseDeferred(events)}}
 
 def captureDeferredCancel(slot: Ref.Ref<Maybe<&2, AiModels.DeferredCancelInput>>, input: AiModels.DeferredCancelInput) -> IO(AiModels.DeferredCancelResult()):
   do IO<AiModels.DeferredCancelResult()>:
     Ref.write(Maybe<&2, AiModels.DeferredCancelInput>, slot, Some{input})
     return Done{Unit{}}
+
+def collectionDeferredTransform(label: String, headers: Ai.ProviderHeaders()) -> IO(AiModels.HeadersResult()):
+  do IO<AiModels.HeadersResult()>:
+    transformed : Ai.ProviderHeaders() <- deferredTransform(label, headers)
+    return Done{transformed}
 
 def fetchedCorrect(input: Maybe<&2, AiModels.DeferredFetchInput>) -> Bool:
   match input:
@@ -1130,7 +1136,13 @@ def nativeModelLifecycle(path: String) -> IO(Unit):
     cancelled : AiModels.DeferredCancelResult() <- Models.cancelDeferred(runtime, model, Ai.DeferredHandle{"extension-native-deferred", "native-deferred", "openai-completions", "cancel-id", None{}, None{}, None{}}, Some{Ai.ProviderRequestOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{F.fromU32(100)}, None{}, None{}}}, Models.RequestTransforms{Some{cancelTransform}, None{}})
     fetched : Maybe<&2, AiModels.DeferredFetchInput> <- Ref.read(Maybe<&2, AiModels.DeferredFetchInput>, fetchSlot)
     stopped : Maybe<&2, AiModels.DeferredCancelInput> <- Ref.read(Maybe<&2, AiModels.DeferredCancelInput>, cancelSlot)
-    checked(fetchedCorrect(fetched) && cancelledCorrect(stopped) && successfulDeferredReply(reply), "preserves native deferred methods through provider overlays")
+    +collectionFetchTransform : AiModels.TransformHeaders() <- C.create(~String, ~Ai.ProviderHeaders(), ~AiModels.HeadersResult(), ~collectionDeferredTransform, "fetch")
+    +collectionCancelTransform : AiModels.TransformHeaders() <- C.create(~String, ~Ai.ProviderHeaders(), ~AiModels.HeadersResult(), ~collectionDeferredTransform, "cancel")
+    collectionReply : Ai.AssistantMessage<V.Value, V.Value> <- AiModels.fetchDeferred(Models.modelsOf(runtime), model, Ai.DeferredHandle{"extension-native-deferred", "native-deferred", "openai-completions", "fetch-id", None{}, None{}, None{}}, Some{AiModels.ModelsRequestOptions{Ai.DeferredFetchOptions{Ai.ProviderRequestOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{R.Record{[R.Property{"X-Fetch", Ai.PresentValue{"fetch"}}]}}, None{}, None{}, None{}}, Some{F.fromU32(25)}}, Some{collectionFetchTransform}}})
+    collectionCancelled : AiModels.DeferredCancelResult() <- AiModels.cancelDeferred(Models.modelsOf(runtime), model, Ai.DeferredHandle{"extension-native-deferred", "native-deferred", "openai-completions", "cancel-id", None{}, None{}, None{}}, Some{AiModels.ModelsRequestOptions{Ai.ProviderRequestOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{F.fromU32(100)}, None{}, None{}}, Some{collectionCancelTransform}}})
+    collectionFetched : Maybe<&2, AiModels.DeferredFetchInput> <- Ref.read(Maybe<&2, AiModels.DeferredFetchInput>, fetchSlot)
+    collectionStopped : Maybe<&2, AiModels.DeferredCancelInput> <- Ref.read(Maybe<&2, AiModels.DeferredCancelInput>, cancelSlot)
+    checked(fetchedCorrect(fetched) && cancelledCorrect(stopped) && successfulDeferredReply(reply) && fetchedCorrect(collectionFetched) && cancelledCorrect(collectionStopped) && successfulDeferredReply(collectionReply), "preserves native deferred methods through provider overlays")
     Models.dispose(runtime)
     Auth.disposeStore(credentials)
     Auth.disposeApiKeyAuth(keyAuth)
@@ -1139,6 +1151,8 @@ def nativeModelLifecycle(path: String) -> IO(Unit):
     C.dispose(Ai.ProviderHeaders(), Ai.ProviderHeaders(), fetchTransform)
     C.dispose(Ai.ProviderHeaders(), Ai.ProviderHeaders(), cancelTransform)
     C.dispose(Fetch.Input<Unit>, Fetch.Result_(Unit), fetch)
+    C.dispose(Ai.ProviderHeaders(), AiModels.HeadersResult(), collectionFetchTransform)
+    C.dispose(Ai.ProviderHeaders(), AiModels.HeadersResult(), collectionCancelTransform)
     fetchedFinal : Maybe<&2, AiModels.DeferredFetchInput> <- Ref.dispose(Maybe<&2, AiModels.DeferredFetchInput>, fetchSlot)
     cancelledFinal : Maybe<&2, AiModels.DeferredCancelInput> <- Ref.dispose(Maybe<&2, AiModels.DeferredCancelInput>, cancelSlot)
     return Unit{}
