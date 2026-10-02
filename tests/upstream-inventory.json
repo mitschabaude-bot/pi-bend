@@ -3396,8 +3396,11 @@
     },
     {
       "source": "packages/coding-agent/test/model-runtime-modify-models-compat.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/model-availability.bend",
+        "tests/model_availability_check.py"
+      ],
       "sha256": "49bd6c5f4c7129085e8a613eb2d685301589d70312b801f2d358d97734d6b280"
     },
     {

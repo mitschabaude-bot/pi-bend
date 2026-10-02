@@ -301,20 +301,57 @@ def nativesOf(catalog: Catalog) -> List<&2, AiModels.Provider>:
   match catalog:
     case Catalog{natives, _, _}: natives
 
-def definitionProviders(definition: Definition,natives: List<&2,AiModels.Provider>) -> List<&2,AiModels.Provider>:
-  match definition:
-    case Definition{providers,builtins,_,_,_,_,_}: effectiveProviders(providers,builtins,natives)
-def providersWith(runtime: ModelRuntime, +natives: List<&2, AiModels.Provider>) -> IO(List<&2, AiModels.Provider>):
-  do IO<List<&2,AiModels.Provider>>:
-    definition : Definition <- Ref.read(Definition,definitionRef(runtime))
-    return definitionProviders(definition,natives)
+def extensionsRef(runtime: ModelRuntime) -> Ref.Ref<ExtensionState>:
+  match runtime:
+    case ModelRuntime{_, _, _, _, extensions, _, _, _, _, _}: extensions
 
-# upstream rebuildProviders on the collection after the provider of `changed`
-# was registered, replaced or removed.
-def rebuildCollection(+runtime: ModelRuntime, changed: List<&2, String>) -> IO(Unit):
+
+# Config registrations already contain their models.json layer. Native
+# registrations keep their source provider here and compose the user layer
+# when the collection is rebuilt; untouched registrations reuse their view.
+def configRegistration(+id: String, entries: List<&2, ExtensionEntry>) -> Bool:
+  match entries:
+    case Nil{}: False{}
+    case ExtensionEntry{name, config, _, _} <> rest:
+      (String.eq(id, name) && Maybe.is_some(&2, Composer.ProviderConfigInput, config)) || configRegistration(id, rest)
+
+def composeNative(+provider: AiModels.Provider, +config: Config.ModelConfig, current: List<&2, AiModels.Provider>, +changed: List<&2, String>, registrations: List<&2, ExtensionEntry>, +composition: Composition) -> IO(Composition):
+  Bool.pick(Unit -> IO(Composition), configRegistration(providerId(provider), registrations),
+    _ => IO.pure(Composition, added(Some{provider}, composition)),
+    _ => Bool.pick(Unit -> IO(Composition), containsId(changed, providerId(provider)),
+      _ => recomposeProvider(providerId(provider), Some{provider}, Config.getProvider(config, providerId(provider)), composition),
+      _ => IO.pure(Composition, added(Some{Maybe.default(&2, AiModels.Provider, findProvider(current, providerId(provider)), provider)}, composition)))(Unit{}))(Unit{})
+
+def composeNatives(providers: List<&2, AiModels.Provider>, +config: Config.ModelConfig, +current: List<&2, AiModels.Provider>, +changed: List<&2, String>, +registrations: List<&2, ExtensionEntry>, composition: Composition) -> IO(Composition):
+  match providers:
+    case Nil{}: IO.pure(Composition, composition)
+    case provider <> rest:
+      do IO<Composition>:
+        composed : Composition <- composeNative(provider, config, current, changed, registrations, composition)
+        composeNatives(rest, config, current, changed, registrations, composed)
+
+# Generated native overlays belong to the runtime just like its built-in
+# overlays. Old callbacks remain valid until disposal, including handles
+# retained by a request before registration or file reload.
+def retainNativeComposition(definition: Definition, composition: Composition) -> Definition & List<&2, AiModels.Provider>:
+  match definition composition:
+    case Definition{+providers, +builtins, config, errors, Generation{owned, radius, refreshes}, source, retired} Composition{natives, nativeErrors, nativeRefreshes, nativeOwned}:
+      (Definition{providers, builtins, config, List.append(&2, String, errors, List.reverse(&2, String, nativeErrors)), Generation{List.append(&2, OwnedAuth, nativeOwned, owned), radius, List.append(&2, Composer.Retained, nativeRefreshes, refreshes)}, source, retired}, effectiveProviders(providers, builtins, List.reverse(&2, AiModels.Provider, natives)))
+
+def composeNativeViews(definition: Definition, natives: List<&2, AiModels.Provider>, current: List<&2, AiModels.Provider>, changed: List<&2, String>, registrations: ExtensionState) -> IO(Definition & List<&2, AiModels.Provider>):
+  match definition registrations:
+    case Definition{providers, builtins, +config, errors, generation, source, retired} ExtensionState{entries, _}:
+      do IO<Definition & List<&2, AiModels.Provider>>:
+        composed : Composition <- composeNatives(natives, config, current, changed, entries, Composition{Nil{}, Nil{}, Nil{}, Nil{}})
+        return retainNativeComposition(Definition{providers, builtins, config, errors, generation, source, retired}, composed)
+
+# Rebuilding composes only changed native ids and retains other views.
+def rebuildCollection(+runtime: ModelRuntime, +changed: List<&2, String>) -> IO(Unit):
   do IO<Unit>:
     catalog : Catalog <- readCatalog(runtime)
-    providers : List<&2,AiModels.Provider> <- providersWith(runtime,nativesOf(catalog))
+    current : List<&2, AiModels.Provider> <- AiModels.getProviders(modelsOf(runtime))
+    registrations : ExtensionState <- Ref.read(ExtensionState, extensionsRef(runtime))
+    providers : List<&2, AiModels.Provider> <- Ref.update(Definition, List<&2, AiModels.Provider>, definitionRef(runtime), definition => composeNativeViews(definition, nativesOf(catalog), current, changed, registrations))
     AiModels.rebuildProviders(modelsOf(runtime), providers, changed)
 
 def getProviders(+runtime: ModelRuntime) -> IO(List<&2, AiModels.Provider>):
@@ -641,9 +678,6 @@ def disposeApiStreamsOf(streams: Maybe<&2, Composer.ProviderStream()>) -> IO(Uni
     case None{}: IO.pure(Unit, Unit{})
     case Some{stream}: C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), stream)
 
-def extensionsRef(runtime: ModelRuntime) -> Ref.Ref<ExtensionState>:
-  match runtime:
-    case ModelRuntime{_, _, _, _, extensions, _, _, _, _, _}: extensions
 
 def entryId(entry: ExtensionEntry) -> String:
   match entry:
@@ -1576,15 +1610,22 @@ def networkEnabled(offline: Result<&1, &1, U32 & String, String>) -> Bool:
     case Done{_}: False{}
     case Fail{_}: True{}
 
+def reloadedNativeViews(runtime: ModelRuntime, +previous: List<&2, AiModels.Provider>, views: Definition & List<&2, AiModels.Provider>) -> IO(Definition & Bool):
+  match views:
+    case Tuple{definition, +providers}:
+      do IO<Definition & Bool>:
+        AiModels.rebuildProviders(modelsOf(runtime), providers, List.append(&2, String, AiModels.providerIds(previous), AiModels.providerIds(providers)))
+        return (definition, True{})
+
 def recomposeFile(+runtime: ModelRuntime, +oldProviders: List<&2, AiModels.Provider>, previous: Generation, retired: List<&2, Generation>, +path: String, +baseline: List<&2, AiModels.Provider>, +radius: Radius.RadiusTransport, +mark: SourceMark) -> IO(Definition & Bool):
   do IO<Definition & Bool>:
     +config : Config.ModelConfig <- configFromMark(mark, path)
     +builtins : List<&2, AiModels.Provider> <- configureRadiusProviders(Config.getProviderIds(config), baseline, config, radius)
     +composition : Composition <- rebuildProviders(composedIds(builtins, config), builtins, config, Composition{Nil{}, Nil{}, Nil{}, Nil{}})
-    +providers : List<&2, AiModels.Provider> = compositionProviders(composition)
-    catalog : Catalog <- readCatalog(runtime)
-    AiModels.rebuildProviders(modelsOf(runtime), effectiveProviders(providers, builtinIds(builtins), nativesOf(catalog)), List.append(&2, String, AiModels.providerIds(oldProviders), AiModels.providerIds(providers)))
-    return (composedDefinition(composition, builtins, config, FileSource{path, baseline, radius, mark}, previous <> retired), True{})
+    +catalog : Catalog <- readCatalog(runtime)
+    registrations : ExtensionState <- Ref.read(ExtensionState, extensionsRef(runtime))
+    views : Definition & List<&2, AiModels.Provider> <- composeNativeViews(composedDefinition(composition, builtins, config, FileSource{path, baseline, radius, mark}, previous <> retired), nativesOf(catalog), oldProviders, AiModels.providerIds(nativesOf(catalog)), registrations)
+    reloadedNativeViews(runtime, oldProviders, views)
 
 def reloadIfChanged(runtime: ModelRuntime, definition: Definition, observed: SourceMark, same: Bool) -> IO(Definition & Bool):
   match definition same:
@@ -2014,35 +2055,48 @@ def configOf(entry: Maybe<&2, ExtensionEntry>) -> Composer.ProviderConfigInput:
     case Some{ExtensionEntry{_, Some{config}, _, _}}: config
     case _: Composer.providerConfig()
 
-def definitionProvider(definition: Definition,id: String) -> Maybe<&2,AiModels.Provider>:
+def definitionProvider(definition: Definition,+id: String) -> Maybe<&2,AiModels.Provider>:
   match definition:
-    case Definition{providers,_,_,_,_,_,_}: findProvider(providers,id)
+    case Definition{_, _, _, _, Generation{_, radius, _}, source, _}: Maybe.or(&2, AiModels.Provider, findProvider(radius, id), findProvider(baselineOf(source), id))
 def baseProvider(runtime: ModelRuntime, +id: String) -> IO(Maybe<&2, AiModels.Provider>):
   do IO<Maybe<&2,AiModels.Provider>>:
     definition : Definition <- Ref.read(Definition,definitionRef(runtime))
     return definitionProvider(definition,id)
 
-def modelsJsonOverrides(+config: Config.ModelConfig, +id: String) -> Maybe<&2, R.Record<Config.ModelsJsonModelOverride>>:
-  Maybe.bind(&2, Config.ModelsJsonProvider, R.Record<Config.ModelsJsonModelOverride>, Config.getProvider(config, id), Composer.overridesOf)
+def retainedRefreshes(definition: Definition, resources: List<&2, Composer.Retained>) -> Definition & Unit:
+  match definition:
+    case Definition{providers, builtins, config, errors, Generation{owned, radius, refreshes}, source, retired}:
+      (Definition{providers, builtins, config, errors, Generation{owned, radius, List.append(&2, Composer.Retained, resources, refreshes)}, source, retired}, Unit{})
 
-def registeredConfig(+runtime: ModelRuntime, +id: String, +merged: Composer.ProviderConfigInput, +base: Maybe<&2, AiModels.Provider>, result: Result<&2, &2, String, Composer.Composed>) -> IO(Result<&2, &2, String, Unit>):
-  match result:
-    case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
-    case Done{Composer.Composed{name, url, +auth, models, _}}:
+def retainRefreshes(runtime: ModelRuntime, resources: List<&2, Composer.Retained>) -> IO(Unit):
+  Ref.modify(Definition, Unit, definitionRef(runtime), definition => retainedRefreshes(definition, resources))
+
+def registerConfigRefresh(+runtime: ModelRuntime, +id: String, +merged: Composer.ProviderConfigInput, +base: Maybe<&2, AiModels.Provider>, name: String, url: String, +auth: Auth.ProviderAuth, models: List<&2, Model()>, refreshing: Maybe<&2, AiModels.RefreshModels()> & List<&2, Composer.Retained>) -> IO(Result<&2, &2, String, Unit>):
+  match refreshing:
+    case Tuple{callback, resources}:
       do IO<Result<&2, &2, String, Unit>>:
-        # modelOverrides are the topmost layer (upstream getModels).
-        config : Config.ModelConfig <- getModelConfig(runtime)
-        +provider : AiModels.Provider = AiModels.Provider{id, name, url, auth, Composer.applyOverrides(models, modelsJsonOverrides(config, id)), AiModels.inheritedStreams(base), Maybe.bind(&2, AiModels.Provider, AiModels.RefreshModels(), base, AiModels.providerRefresh), baseFilter(base)}
+        +provider : AiModels.Provider = AiModels.Provider{id, name, url, auth, models, AiModels.inheritedStreams(base), callback, baseFilter(base)}
         setEntry(runtime, id, Some{ExtensionEntry{id, Some{merged}, Composer.configStream(merged), ownedAuth(auth, Composer.sourceAuth(Composer.Layers{None{}, Some{merged}}, maybeProviderAuth(base)))}})
+        retainRefreshes(runtime, resources)
         Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (registeredNative(provider, catalog), Unit{}))
         rebuildCollection(runtime, [id])
         refreshed : ModelsRefreshResult <- refresh(runtime, noNetwork())
         return Done{Unit{}}
 
+def registeredConfig(+runtime: ModelRuntime, +id: String, +merged: Composer.ProviderConfigInput, +source: Maybe<&2, AiModels.Provider>, result: Result<&2, &2, String, Composer.Composed>) -> IO(Result<&2, &2, String, Unit>):
+  match result:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
+    case Done{Composer.Composed{name, url, auth, models, _}}:
+      do IO<Result<&2, &2, String, Unit>>:
+        config : Config.ModelConfig <- getModelConfig(runtime)
+        refreshing : Maybe<&2, AiModels.RefreshModels()> & List<&2, Composer.Retained> <- Composer.layeredRefresh(id, base(source), Maybe.bind(&2, AiModels.Provider, AiModels.RefreshModels(), source, AiModels.providerRefresh), Composer.Layers{Config.getProvider(config, id), Some{merged}})
+        registerConfigRefresh(runtime, id, merged, source, name, url, auth, models, refreshing)
+
 def composedRegistration(+runtime: ModelRuntime, +id: String, +merged: Composer.ProviderConfigInput) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     +found : Maybe<&2, AiModels.Provider> <- baseProvider(runtime, id)
-    result : Result<&2, &2, String, Composer.Composed> <- Composer.composeLayeredProvider(id, base(found), Composer.Layers{None{}, Some{merged}})
+    config : Config.ModelConfig <- getModelConfig(runtime)
+    result : Result<&2, &2, String, Composer.Composed> <- Composer.composeLayeredProvider(id, base(found), Composer.Layers{Config.getProvider(config, id), Some{merged}})
     registeredConfig(runtime, id, merged, found, result)
 
 def validatedRegistration(+runtime: ModelRuntime, +id: String, +config: Composer.ProviderConfigInput, valid: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, Unit>):
@@ -2264,6 +2318,94 @@ def complete(+runtime: ModelRuntime, +model: Model(), context: Ai.Context<V.Valu
     response : Composer.StreamOutput() <- stream(runtime, AgentTypes.StreamInput{model, Transcript.normalizeContext(V.Value, V.Value, V.Value, Tools.ToolDetails, context), options}, transforms)
     completed(model, response)
 
+# Deferred requests use the same native request options as their provider.
+# Header transforms belong to the runtime and never enter those options.
+def deferredOverrides(options: AiModels.DeferredCancelOptions()) -> Resolve.AuthResolutionOverrides:
+  match options:
+    case Ai.ProviderRequestOptions{signal, _, key, _, env, _, _, _, _, _, _}: Resolve.AuthResolutionOverrides{key, env, None{}, signal}
+
+def emptyDeferredOptions() -> AiModels.DeferredCancelOptions():
+  Ai.ProviderRequestOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+
+def authorizedDeferred(auth: Auth.AuthResult, options: AiModels.DeferredCancelOptions()) -> AiModels.DeferredCancelOptions():
+  match auth options:
+    case Auth.AuthResult{Auth.ModelAuth{key, authHeaders, _}, authEnv, _} Ai.ProviderRequestOptions{signal, telemetry, apiKey, fetch, env, payload, response, headers, timeout, retries, delay}:
+      Ai.ProviderRequestOptions{signal, telemetry, Maybe.or(&2, String, apiKey, key), fetch, mergedEnv(authEnv, env), payload, response, AiModels.mergeHeaders(authHeaders, headers), timeout, retries, delay}
+
+def transformedDeferred(transforms: RequestTransforms, options: AiModels.DeferredCancelOptions()) -> IO(AiModels.DeferredCancelOptions()):
+  match transforms options:
+    case RequestTransforms{None{}, _} _: IO.pure(AiModels.DeferredCancelOptions(), options)
+    case RequestTransforms{Some{transform}, _} Ai.ProviderRequestOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay}:
+      do IO<AiModels.DeferredCancelOptions()>:
+        final : Ai.ProviderHeaders() <- C.call(Ai.ProviderHeaders(), Ai.ProviderHeaders(), transform, Maybe.default(&2, Ai.ProviderHeaders(), headers, R.new(Ai.Nullable<String>)))
+        return Ai.ProviderRequestOptions{signal, telemetry, key, fetch, env, payload, response, Some{final}, timeout, retries, delay}
+
+def unsupportedDeferred(+model: Model()) -> Resolve.ModelsError:
+  Resolve.ModelsError{Resolve.ProviderError{}, "Provider " ++ Ai.modelProvider(model) ++ " does not support deferred responses"}
+
+def dispatchDeferred(method: Maybe<&2, AiModels.FetchDeferred()>, model: Model(), handle: Ai.DeferredHandle, options: AiModels.DeferredFetchOptions()) -> IO(AiModels.DeferredFetchResult()):
+  match method:
+    case None{}: IO.pure(AiModels.DeferredFetchResult(), Fail{unsupportedDeferred(model)})
+    case Some{callback}: C.call(AiModels.DeferredFetchInput, AiModels.DeferredFetchResult(), callback, AiModels.DeferredFetchInput{model, handle, Some{options}})
+
+def authenticatedDeferred(+runtime: ModelRuntime, +model: Model(), handle: Ai.DeferredHandle, options: AiModels.DeferredFetchOptions(), transforms: RequestTransforms, resolution: Resolve.Resolution()) -> IO(AiModels.DeferredFetchResult()):
+  match resolution options:
+    case Fail{error} _: IO.pure(AiModels.DeferredFetchResult(), Fail{error})
+    case Done{None{}} _: IO.pure(AiModels.DeferredFetchResult(), Fail{Resolve.ModelsError{Resolve.AuthError{}, "Provider is not configured: " ++ Ai.modelProvider(model)}})
+    case Done{Some{+auth}} Ai.DeferredFetchOptions{base, wait}:
+      do IO<AiModels.DeferredFetchResult()>:
+        final : AiModels.DeferredCancelOptions() <- transformedDeferred(transforms, authorizedDeferred(auth, base))
+        streams : AiModels.ProviderStreams <- getProviderStreams(runtime, Ai.modelProvider(model))
+        dispatchDeferred(AiModels.fetchDeferredMethod(streams), preparedModel(Done{Some{auth}}, model), handle, Ai.DeferredFetchOptions{final, wait})
+
+def deferredBase(options: AiModels.DeferredFetchOptions()) -> AiModels.DeferredCancelOptions():
+  match options:
+    case Ai.DeferredFetchOptions{base, _}: base
+
+def streamDeferred(+runtime: ModelRuntime, +model: Model(), handle: Ai.DeferredHandle, options: Maybe<&2, AiModels.DeferredFetchOptions()>, transforms: RequestTransforms) -> IO(AiModels.DeferredFetchResult()):
+  do IO<AiModels.DeferredFetchResult()>:
+    +request : AiModels.DeferredFetchOptions() = Maybe.default(&2, AiModels.DeferredFetchOptions(), options, Ai.DeferredFetchOptions{emptyDeferredOptions(), None{}})
+    resolution : Resolve.Resolution() <- getModelAuth(runtime, model, deferredOverrides(deferredBase(request)))
+    authenticatedDeferred(runtime, model, handle, request, transforms, resolution)
+
+def completedDeferred(+model: Model(), response: AiModels.DeferredFetchResult()) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  match response:
+    case Fail{error}:
+      do IO<Ai.AssistantMessage<V.Value, V.Value>>:
+        now : F64 <- Date.now()
+        return errorReply(model, Resolve.errorMessage(error), now)
+    case Done{AiModels.DeferredStream{events, release}}:
+      do IO<Ai.AssistantMessage<V.Value, V.Value>>:
+        message : Ai.AssistantMessage<V.Value, V.Value> <- Events.resultValue(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events)
+        released : AiModels.DeferredCancelResult() <- release
+        return message
+
+def fetchDeferred(+runtime: ModelRuntime, +model: Model(), handle: Ai.DeferredHandle, options: Maybe<&2, AiModels.DeferredFetchOptions()>, transforms: RequestTransforms) -> IO(Ai.AssistantMessage<V.Value, V.Value>):
+  do IO<Ai.AssistantMessage<V.Value, V.Value>>:
+    result : AiModels.DeferredFetchResult() <- streamDeferred(runtime, model, handle, options, transforms)
+    completedDeferred(model, result)
+
+def dispatchDeferredCancel(method: Maybe<&2, AiModels.CancelDeferred()>, model: Model(), handle: Ai.DeferredHandle, options: AiModels.DeferredCancelOptions()) -> IO(AiModels.DeferredCancelResult()):
+  match method:
+    case None{}: IO.pure(AiModels.DeferredCancelResult(), Fail{unsupportedDeferred(model)})
+    case Some{callback}: C.call(AiModels.DeferredCancelInput, AiModels.DeferredCancelResult(), callback, AiModels.DeferredCancelInput{model, handle, Some{options}})
+
+def authenticatedDeferredCancel(+runtime: ModelRuntime, +model: Model(), handle: Ai.DeferredHandle, options: AiModels.DeferredCancelOptions(), transforms: RequestTransforms, resolution: Resolve.Resolution()) -> IO(AiModels.DeferredCancelResult()):
+  match resolution:
+    case Fail{error}: IO.pure(AiModels.DeferredCancelResult(), Fail{error})
+    case Done{None{}}: IO.pure(AiModels.DeferredCancelResult(), Fail{Resolve.ModelsError{Resolve.AuthError{}, "Provider is not configured: " ++ Ai.modelProvider(model)}})
+    case Done{Some{+auth}}:
+      do IO<AiModels.DeferredCancelResult()>:
+        final : AiModels.DeferredCancelOptions() <- transformedDeferred(transforms, authorizedDeferred(auth, options))
+        streams : AiModels.ProviderStreams <- getProviderStreams(runtime, Ai.modelProvider(model))
+        dispatchDeferredCancel(AiModels.cancelDeferredMethod(streams), preparedModel(Done{Some{auth}}, model), handle, final)
+
+def cancelDeferred(+runtime: ModelRuntime, +model: Model(), handle: Ai.DeferredHandle, options: Maybe<&2, AiModels.DeferredCancelOptions()>, transforms: RequestTransforms) -> IO(AiModels.DeferredCancelResult()):
+  do IO<AiModels.DeferredCancelResult()>:
+    +request : AiModels.DeferredCancelOptions() = Maybe.default(&2, AiModels.DeferredCancelOptions(), options, emptyDeferredOptions())
+    resolution : Resolve.Resolution() <- getModelAuth(runtime, model, deferredOverrides(request))
+    authenticatedDeferredCancel(runtime, model, handle, request, transforms, resolution)
+
 def nativeIdsOf(catalog: Catalog) -> List<&2, String>:
   match catalog:
     case Catalog{natives, _, _}: builtinIds(natives)
@@ -2273,6 +2415,17 @@ def getRegisteredProviderIds(runtime: ModelRuntime) -> IO(List<&2, String>):
   do IO<List<&2, String>>:
     catalog : Catalog <- readCatalog(runtime)
     return builtinIds(nativesOf(catalog))
+
+def nativeRegistrationProvider(+id: String, providers: List<&2, AiModels.Provider>, registrations: ExtensionState) -> Maybe<&2, AiModels.Provider>:
+  match registrations:
+    case ExtensionState{entries, _}: Bool.pick(Maybe<&2, AiModels.Provider>, configRegistration(id, entries), None{}, findProvider(providers, id))
+
+# The source registration remains separate from its composed collection view.
+def getRegisteredNativeProvider(+runtime: ModelRuntime, id: String) -> IO(Maybe<&2, AiModels.Provider>):
+  do IO<Maybe<&2, AiModels.Provider>>:
+    catalog : Catalog <- readCatalog(runtime)
+    registrations : ExtensionState <- Ref.read(ExtensionState, extensionsRef(runtime))
+    return nativeRegistrationProvider(id, nativesOf(catalog), registrations)
 
 # A committed credential change can alter a dynamic provider's cached models.
 # Refresh only that provider, without network access, then publish its new

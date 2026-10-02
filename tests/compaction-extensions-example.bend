@@ -186,7 +186,7 @@ def dispatchesThroughComplete() -> IO(Unit):
     +seen : R.Ref<List<&2, Seen>> <- R.new(List<&2, Seen>, Nil{})
     +models : Models.ModelRuntime <- Fixture.create([Fixture.Source{"google", "PI_EXAMPLE_UNSET_GEMINI_KEY", [geminiFlash()]}])
     stream : Composer.ProviderStream() <- C.create(~R.Ref<List<&2, Seen>>, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~capture, seen)
-    registered : Outcome() <- Models.registerProvider(models, "google", Composer.ProviderConfigInput{None{}, None{}, Some{"registry-test-key"}, Some{Ai.GoogleGenerativeAiApi{}}, Some{stream}, None{}, None{}, None{}, None{}})
+    registered : Outcome() <- Models.registerProvider(models, "google", Composer.ProviderConfigInput{None{}, None{}, Some{"registry-test-key"}, Some{Ai.GoogleGenerativeAiApi{}}, Some{stream}, None{}, None{}, None{}, None{}, None{}})
     +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
     +factory : T.ExtensionFactory() <- C.create(~Unit, ~T.ExtensionAPI, ~Outcome(), ~(_ => api => CustomCompaction.customCompaction(api)), Unit{})
     errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, [T.InlineExtension{"custom-compaction", factory, False{}}])

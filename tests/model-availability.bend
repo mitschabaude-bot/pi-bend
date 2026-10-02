@@ -1,4 +1,6 @@
 import Base
+import ../packages/ai/src/utils/event-stream.bend as LifecycleEvents
+import ../packages/ai/src/models-store.bend as Store
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/ai/src/auth/oauth/openrouter.bend as OpenRouterOAuth
 import ../packages/ai/src/auth/oauth/openai-codex.bend as CodexOAuth
@@ -443,7 +445,7 @@ def configModel(+id: String, headers: Maybe<&2, R.Record<String>>) -> Composer.P
   Composer.ProviderModelConfig{id, id, None{}, None{}, False{}, None{}, [Ai.InputText{}], None{}, Ai.ModelCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), None{}}, None{}, F.fromU32(10000), F.fromU32(1000), None{}, headers, None{}}
 
 def configProvider(name: String, key: Maybe<&2, String>, headers: Maybe<&2, R.Record<String>>, authHeader: Bool, stream: Maybe<&2, Composer.ProviderStream()>, oauth: Maybe<&2, Auth.OAuthAuth>, modelHeaders: Maybe<&2, R.Record<String>>) -> Composer.ProviderConfigInput:
-  Composer.ProviderConfigInput{Some{name}, Some{"https://example.test/v1"}, key, Some{Ai.OpenAICompletionsApi{}}, stream, headers, Some{authHeader}, Some{[configModel("extension-model", modelHeaders)]}, oauth}
+  Composer.ProviderConfigInput{Some{name}, Some{"https://example.test/v1"}, key, Some{Ai.OpenAICompletionsApi{}}, stream, headers, Some{authHeader}, Some{[configModel("extension-model", modelHeaders)]}, Maybe.map(&2, Auth.OAuthAuth, Composer.OAuthProvider, value => Composer.OAuthProvider{value, None{}}, oauth), None{}}
 
 def registered(result: Result<&2, &2, String, Unit>) -> IO(Unit):
   match result:
@@ -909,7 +911,199 @@ def cancellationAfterCommit() -> IO(Unit):
     wasSettled : Bool <- Ref.dispose(Bool, settled)
     return Unit{}
 
-def main() -> IO(Unit):
+# Provider model-lifecycle contracts from model-runtime-modify-models-compat.
+def liveModels(_: Unit, _: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, List<&2, Composer.ProviderModelConfig>>):
+  IO.pure(Result<&2, &2, String, List<&2, Composer.ProviderModelConfig>>, Done{[configModel("live", None{})]})
+
+def credentialModels(_: Unit, input: Composer.OAuthModelsInput) -> IO(Result<&2, &2, String, List<&2, AiModels.Model()>>):
+  match input:
+    case Composer.OAuthModelsInput{+models, Auth.OAuthCredential{_, access, _, _}}:
+      IO.pure(Result<&2, &2, String, List<&2, AiModels.Model()>>, Done{Bool.pick(List<&2, AiModels.Model()>, String.eq(access, "access"), List.append(&2, AiModels.Model(), models, [Composer.extensionModel("extension-oauth", configModel("credential-model", None{}), Ai.OpenAICompletionsApi{}, "https://example.test/v1")]), models)})
+    case Composer.OAuthModelsInput{models, _}: IO.pure(Result<&2, &2, String, List<&2, AiModels.Model()>>, Done{models})
+
+def stableCredential(_: Unit, input: Auth.RefreshInput) -> IO(Result<&2, &2, String, Auth.Credential>):
+  match input:
+    case Auth.RefreshInput{credential, _}: IO.pure(Result<&2, &2, String, Auth.Credential>, Done{credential})
+
+def unstored(result: Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>)) -> Bool:
+  match result:
+    case Done{None{}}: True{}
+    case _: False{}
+
+def configModelLifecycle() -> IO(Unit):
+  do IO<Unit>:
+    +credentials : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    +store : Store.ModelsStore <- Store.inMemoryModelsStore()
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    +runtime : Models.ModelRuntime <- Models.fromProvidersWithStore(Nil{}, credentials, context, store)
+    +refresh : Composer.ModelRefresh() <- C.create(~Unit, ~AiModels.RefreshModelsContext, ~(Result<&2, &2, String, List<&2, Composer.ProviderModelConfig>>), ~liveModels, Unit{})
+    registration : Result<&2, &2, String, Unit> <- Models.registerProvider(runtime, "extension-dynamic", Composer.ProviderConfigInput{None{}, Some{"http://localhost:8080/v1"}, Some{"local"}, Some{Ai.OpenAICompletionsApi{}}, None{}, None{}, None{}, None{}, None{}, Some{refresh}})
+    registered(registration)
+    refreshed : Models.ModelsRefreshResult <- Models.refresh(runtime, Models.ModelsRefreshOptions{Some{False{}}, None{}, None{}, None{}})
+    live : Maybe<&2, AiModels.Model()> <- Models.getModel(runtime, "extension-dynamic", "live")
+    persisted : Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>) <- Store.read(store, "extension-dynamic", None{})
+    checked(Maybe.is_some(&2, AiModels.Model(), live) && unstored(persisted), "publishes refreshModels results without forcing ModelsStore persistence")
+    now : F64 <- Date.now()
+    saveCredential(credentials, "extension-oauth", Auth.OAuthCredential{"refresh", "access", F.add(now, F.fromU32(60000)), R.new(V.Value)})
+    login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~Unit, ~Auth.ProviderAuthInteraction, ~Auth.LoginOutcome(), ~extensionLogin, Unit{})
+    tokenRefresh : C.Callback<Auth.RefreshInput, Result<&2, &2, String, Auth.Credential>> <- C.create(~Unit, ~Auth.RefreshInput, ~(Result<&2, &2, String, Auth.Credential>), ~stableCredential, Unit{})
+    derive : C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>> <- C.create(~Unit, ~Auth.Credential, ~(Result<&2, &2, String, Auth.ModelAuth>), ~extensionAuth, Unit{})
+    +oauth : Auth.OAuthAuth = Auth.OAuthAuth{"Extension OAuth", False{}, None{}, login, tokenRefresh, derive}
+    +modify : C.Callback<Composer.OAuthModelsInput, Result<&2, &2, String, List<&2, AiModels.Model()>>> <- C.create(~Unit, ~Composer.OAuthModelsInput, ~(Result<&2, &2, String, List<&2, AiModels.Model()>>), ~credentialModels, Unit{})
+    configured : Result<&2, &2, String, Unit> <- Models.registerProvider(runtime, "extension-oauth", Composer.ProviderConfigInput{None{}, Some{"https://example.test/v1"}, None{}, Some{Ai.OpenAICompletionsApi{}}, None{}, None{}, None{}, Some{[configModel("base", None{})]}, Some{Composer.OAuthProvider{oauth, Some{modify}}}, None{}})
+    registered(configured)
+    initialized : Models.ModelsRefreshResult <- Models.refresh(runtime, Models.ModelsRefreshOptions{Some{False{}}, None{}, None{}, None{}})
+    base : Maybe<&2, AiModels.Model()> <- Models.getModel(runtime, "extension-oauth", "base")
+    before : Maybe<&2, AiModels.Model()> <- Models.getModel(runtime, "extension-oauth", "credential-model")
+    loggedOut : Models.CredentialOutcome(Unit) <- Models.logout(runtime, "extension-oauth", None{})
+    after : Maybe<&2, AiModels.Model()> <- Models.getModel(runtime, "extension-oauth", "credential-model")
+    checked(Maybe.is_some(&2, AiModels.Model(), base) && Maybe.is_some(&2, AiModels.Model(), before) && Maybe.is_none(&2, AiModels.Model(), after), "applies legacy OAuth modifyModels after async credential initialization")
+    Models.dispose(runtime)
+    Auth.disposeStore(credentials)
+    Auth.disposeOAuthAuth(oauth)
+    C.dispose(Composer.OAuthModelsInput, Result<&2, &2, String, List<&2, AiModels.Model()>>, modify)
+    C.dispose(AiModels.RefreshModelsContext, Result<&2, &2, String, List<&2, Composer.ProviderModelConfig>>, refresh)
+
+def nativeAuth(_: Unit, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
+  match input:
+    case Auth.ResolveInput{_, Some{Auth.ApiKeyCredential{Some{key}, _}}, _}:
+      IO.pure(Auth.AuthOutcome(), Done{Some{Auth.AuthResult{Auth.ModelAuth{Some{key}, None{}, Some{"https://resolved.test/v1"}}, None{}, Some{"stored native key"}}}})
+    case _: IO.pure(Auth.AuthOutcome(), Done{None{}})
+
+def nativeCheck(_: Unit, input: Auth.ResolveInput) -> IO(Auth.CheckOutcome()):
+  match input:
+    case Auth.ResolveInput{_, Some{Auth.ApiKeyCredential{Some{_}, _}}, _}: IO.pure(Auth.CheckOutcome(), Done{Some{Auth.AuthCheck{Some{"stored native key"}, Auth.ApiKeyType{}}}})
+    case _: IO.pure(Auth.CheckOutcome(), Done{None{}})
+
+def providerResolver(found: Maybe<&2, AiModels.Provider>, resolver: C.Callback<Auth.ResolveInput, Auth.AuthOutcome()>) -> Bool:
+  match found:
+    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_, _, method, _}}, _}, _, _, _, _}}: C.same(Auth.ResolveInput, Auth.AuthOutcome(), method, resolver)
+    case _: False{}
+
+def nativeRegistration() -> IO(Unit):
+  do IO<Unit>:
+    +credentials : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    +runtime : Models.ModelRuntime <- Models.fromProviders(Nil{}, credentials, context)
+    login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~Helpers.EnvApiKey, ~Auth.ProviderAuthInteraction, ~Auth.LoginOutcome(), ~Helpers.loginEnv, Helpers.EnvApiKey{"API key", Nil{}})
+    +resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~nativeAuth, Unit{})
+    check : C.Callback<Auth.ResolveInput, Auth.CheckOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.CheckOutcome(), ~nativeCheck, Unit{})
+    +provider : AiModels.Provider = AiModels.Provider{"extension-native", "Extension Native", "https://fallback.test/v1", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Native setup", Some{login}, resolve, Some{check}}}, None{}}, [Composer.extensionModel("extension-native", configModel("native", None{}), Ai.OpenAICompletionsApi{}, "https://fallback.test/v1")], AiModels.ApiStreams{}, None{}, None{}}
+    registration : Result<&2, &2, String, Unit> <- Models.registerNativeProvider(runtime, provider)
+    registered(registration)
+    composed : Maybe<&2, AiModels.Provider> <- Models.getProvider(runtime, "extension-native")
+    source : Maybe<&2, AiModels.Provider> <- Models.getRegisteredNativeProvider(runtime, "extension-native")
+    ids : List<&2, String> <- Models.getRegisteredProviderIds(runtime)
+    found : Maybe<&2, AiModels.Model()> <- Models.getModel(runtime, "extension-native", "native")
+    +prompt : C.Callback<Auth.AuthPrompt, Result<&2, &2, String, String>> <- C.create(~Unit, ~Auth.AuthPrompt, ~(Result<&2, &2, String, String>), ~loginPrompt, Unit{})
+    +notify : C.Callback<Auth.AuthEvent, Unit> <- C.create(~Unit, ~Auth.AuthEvent, ~Unit, ~loginNotice, Unit{})
+    loggedIn : Models.LoginOutcome() <- Models.login(runtime, "extension-native", Auth.ApiKeyType{}, Auth.AuthInteraction{None{}, prompt, notify})
+    +auth : Resolve.Resolution() <- Models.getAuth(runtime, "extension-native", Resolve.noOverrides())
+    resolved : String = Composer.modelBaseUrl(Models.preparedModel(auth, model("extension-native")))
+    Models.unregisterProvider(runtime, "extension-native")
+    removed : Maybe<&2, AiModels.Provider> <- Models.getProvider(runtime, "extension-native")
+    checked(providerResolver(composed, resolve) && providerResolver(source, resolve) && Models.containsId(ids, "extension-native") && Maybe.is_some(&2, AiModels.Model(), found) && loginSucceeded(loggedIn) && resolvedKey(auth, "login-key") && String.eq(resolved, "https://resolved.test/v1") && Maybe.is_none(&2, AiModels.Provider, removed), "registers native pi-ai providers with their auth implementation")
+    Models.dispose(runtime)
+    AiModels.disposeProvider(provider)
+    Auth.disposeStore(credentials)
+    C.dispose(Auth.AuthPrompt, Result<&2, &2, String, String>, prompt)
+    C.dispose(Auth.AuthEvent, Unit, notify)
+
+def deferredTransform(tag: String, headers: Ai.ProviderHeaders()) -> IO(Ai.ProviderHeaders()):
+  IO.pure(Ai.ProviderHeaders(), R.set(Ai.Nullable<String>, headers, "X-Transformed", Ai.PresentValue{tag}))
+
+def releaseDeferred(events: LifecycleEvents.AssistantMessageEventStream(V.Value, V.Value)) -> IO(AiModels.DeferredCancelResult()):
+  do IO<AiModels.DeferredCancelResult()>:
+    LifecycleEvents.disposeAssistantMessageEventStream(V.Value, V.Value, events)
+    return Done{Unit{}}
+
+def deferredMessage(model: AiModels.Model()) -> Ai.AssistantMessage<V.Value, V.Value>:
+  match model:
+    case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}:
+      Ai.AssistantMessage{Nil{}, "openai-completions", provider, id, None{}, None{}, None{}, None{}, Ai.Usage{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), None{}, None{}, F.fromU32(0), Ai.UsageCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0)}}, Ai.Stop{}, None{}, None{}, None{}, None{}, F.fromU32(0)}
+
+def captureDeferredFetch(slot: Ref.Ref<Maybe<&2, AiModels.DeferredFetchInput>>, input: AiModels.DeferredFetchInput) -> IO(AiModels.DeferredFetchResult()):
+  match input:
+    case AiModels.DeferredFetchInput{+model, handle, options}:
+      do IO<AiModels.DeferredFetchResult()>:
+        Ref.write(Maybe<&2, AiModels.DeferredFetchInput>, slot, Some{AiModels.DeferredFetchInput{model, handle, options}})
+        +events : LifecycleEvents.AssistantMessageEventStream(V.Value, V.Value) <- LifecycleEvents.createAssistantMessageEventStream(~V.Value, ~V.Value)
+        +message : Ai.AssistantMessage<V.Value, V.Value> = deferredMessage(model)
+        LifecycleEvents.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.Start{message})
+        LifecycleEvents.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.StreamDone{Ai.DoneStop{}, message})
+        LifecycleEvents.end(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Some{message})
+        return Done{AiModels.DeferredStream{events, releaseDeferred(events)}}
+
+def captureDeferredCancel(slot: Ref.Ref<Maybe<&2, AiModels.DeferredCancelInput>>, input: AiModels.DeferredCancelInput) -> IO(AiModels.DeferredCancelResult()):
+  do IO<AiModels.DeferredCancelResult()>:
+    Ref.write(Maybe<&2, AiModels.DeferredCancelInput>, slot, Some{input})
+    return Done{Unit{}}
+
+def fetchedCorrect(input: Maybe<&2, AiModels.DeferredFetchInput>) -> Bool:
+  match input:
+    case Some{AiModels.DeferredFetchInput{model, _, Some{Ai.DeferredFetchOptions{Ai.ProviderRequestOptions{_, _, Some{key}, _, _, _, _, headers, _, _, _}, Some{wait}}}}}:
+      String.eq(Composer.modelBaseUrl(model), "https://overlay.test/v1") && String.eq(key, "key") && F64.is_eq(wait, F.fromU32(25)) && headersEqual(headers, R.Record{[R.Property{"X-Fetch", Ai.PresentValue{"fetch"}}, R.Property{"X-Transformed", Ai.PresentValue{"fetch"}}]})
+    case _: False{}
+
+def cancelledCorrect(input: Maybe<&2, AiModels.DeferredCancelInput>) -> Bool:
+  match input:
+    case Some{AiModels.DeferredCancelInput{_, Ai.DeferredHandle{_, _, _, id, _, _, _}, Some{Ai.ProviderRequestOptions{_, _, Some{key}, _, _, _, _, headers, Some{timeout}, _, _}}}}:
+      String.eq(id, "cancel-id") && String.eq(key, "key") && F64.is_eq(timeout, F.fromU32(100)) && headersEqual(headers, R.Record{[R.Property{"X-Transformed", Ai.PresentValue{"cancel"}}]})
+    case _: False{}
+
+def successfulDeferredReply(message: Ai.AssistantMessage<V.Value, V.Value>) -> Bool:
+  match message:
+    case Ai.AssistantMessage{_, _, _, id, _, _, _, _, _, Ai.Stop{}, _, _, _, _, _}: String.eq(id, "native-deferred")
+    case _: False{}
+
+def windowIs(model: AiModels.Model(), value: F64) -> Bool:
+  match model:
+    case Ai.Model{_, _, _, _, _, _, _, _, _, _, _, window, _, _, _, _}: F64.is_eq(window, value)
+
+# The caller supplies a models.json with both native overlays, just as upstream.
+def nativeModelLifecycle(path: String) -> IO(Unit):
+  do IO<Unit>:
+    +credentials : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    store : Store.ModelsStore <- Store.inMemoryModelsStore()
+    +fetch : Fetch.Fetch(Unit) <- C.create(~Unit, ~(Fetch.Input<Unit>), ~(Fetch.Result_(Unit)), ~networkForbidden, Unit{})
+    +runtime : Models.ModelRuntime <- Models.createWithProviders(credentials, Nil{}, Some{path}, Radius.RadiusTransport{fetch, Runtime.urlContext()}, Models.CreateModelRuntimeOptions{Some{store}, None{}, False{}, None{}, None{}, False{}})
+    +keyAuth : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Native key", Nil{})
+    # Explicit stored native key keeps this fixture independent of environment.
+    saveCredential(credentials, "extension-native-deferred", Auth.ApiKeyCredential{Some{"key"}, None{}})
+    saveCredential(credentials, "extension-native", Auth.ApiKeyCredential{Some{"key"}, None{}})
+    +fetchSlot : Ref.Ref<Maybe<&2, AiModels.DeferredFetchInput>> <- Ref.new(Maybe<&2, AiModels.DeferredFetchInput>, None{})
+    +cancelSlot : Ref.Ref<Maybe<&2, AiModels.DeferredCancelInput>> <- Ref.new(Maybe<&2, AiModels.DeferredCancelInput>, None{})
+    +fetchDeferred : AiModels.FetchDeferred() <- C.create(~Ref.Ref<Maybe<&2, AiModels.DeferredFetchInput>>, ~AiModels.DeferredFetchInput, ~(AiModels.DeferredFetchResult()), ~captureDeferredFetch, fetchSlot)
+    +cancelDeferred : AiModels.CancelDeferred() <- C.create(~Ref.Ref<Maybe<&2, AiModels.DeferredCancelInput>>, ~AiModels.DeferredCancelInput, ~(AiModels.DeferredCancelResult()), ~captureDeferredCancel, cancelSlot)
+    deferredRegistration : Result<&2, &2, String, Unit> <- Models.registerNativeProvider(runtime, AiModels.Provider{"extension-native-deferred", "Extension Native Deferred", "https://native.test/v1", Auth.ProviderAuth{Some{keyAuth}, None{}}, [Composer.extensionModel("extension-native-deferred", configModel("native-deferred", None{}), Ai.OpenAICompletionsApi{}, "https://native.test/v1")], AiModels.DeferredStreams{AiModels.ApiStreams{}, Some{fetchDeferred}, Some{cancelDeferred}}, None{}, None{}})
+    nativeRegistration : Result<&2, &2, String, Unit> <- Models.registerNativeProvider(runtime, AiModels.Provider{"extension-native", "Extension Native", "https://native.test/v1", Auth.ProviderAuth{Some{keyAuth}, None{}}, [Composer.extensionModel("extension-native", configModel("native", None{}), Ai.OpenAICompletionsApi{}, "https://native.test/v1")], AiModels.ApiStreams{}, None{}, None{}})
+    registered(deferredRegistration)
+    registered(nativeRegistration)
+    override : Maybe<&2, AiModels.Model()> <- Models.getModel(runtime, "extension-native", "native")
+    native : AiModels.Model() <- requiredModel(override)
+    checked(windowIs(native, F.fromU32(4242)), "applies models.json overrides above native providers")
+    selected : Maybe<&2, AiModels.Model()> <- Models.getModel(runtime, "extension-native-deferred", "native-deferred")
+    +model : AiModels.Model() <- requiredModel(selected)
+    +fetchTransform : C.Callback<Ai.ProviderHeaders(), Ai.ProviderHeaders()> <- C.create(~String, ~Ai.ProviderHeaders(), ~Ai.ProviderHeaders(), ~deferredTransform, "fetch")
+    +cancelTransform : C.Callback<Ai.ProviderHeaders(), Ai.ProviderHeaders()> <- C.create(~String, ~Ai.ProviderHeaders(), ~Ai.ProviderHeaders(), ~deferredTransform, "cancel")
+    reply : Ai.AssistantMessage<V.Value, V.Value> <- Models.fetchDeferred(runtime, model, Ai.DeferredHandle{"extension-native-deferred", "native-deferred", "openai-completions", "fetch-id", None{}, None{}, None{}}, Some{Ai.DeferredFetchOptions{Ai.ProviderRequestOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{R.Record{[R.Property{"X-Fetch", Ai.PresentValue{"fetch"}}]}}, None{}, None{}, None{}}, Some{F.fromU32(25)}}}, Models.RequestTransforms{Some{fetchTransform}, None{}})
+    cancelled : AiModels.DeferredCancelResult() <- Models.cancelDeferred(runtime, model, Ai.DeferredHandle{"extension-native-deferred", "native-deferred", "openai-completions", "cancel-id", None{}, None{}, None{}}, Some{Ai.ProviderRequestOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{F.fromU32(100)}, None{}, None{}}}, Models.RequestTransforms{Some{cancelTransform}, None{}})
+    fetched : Maybe<&2, AiModels.DeferredFetchInput> <- Ref.read(Maybe<&2, AiModels.DeferredFetchInput>, fetchSlot)
+    stopped : Maybe<&2, AiModels.DeferredCancelInput> <- Ref.read(Maybe<&2, AiModels.DeferredCancelInput>, cancelSlot)
+    checked(fetchedCorrect(fetched) && cancelledCorrect(stopped) && successfulDeferredReply(reply), "preserves native deferred methods through provider overlays")
+    Models.dispose(runtime)
+    Auth.disposeStore(credentials)
+    Auth.disposeApiKeyAuth(keyAuth)
+    C.dispose(AiModels.DeferredFetchInput, AiModels.DeferredFetchResult(), fetchDeferred)
+    C.dispose(AiModels.DeferredCancelInput, AiModels.DeferredCancelResult(), cancelDeferred)
+    C.dispose(Ai.ProviderHeaders(), Ai.ProviderHeaders(), fetchTransform)
+    C.dispose(Ai.ProviderHeaders(), Ai.ProviderHeaders(), cancelTransform)
+    C.dispose(Fetch.Input<Unit>, Fetch.Result_(Unit), fetch)
+    fetchedFinal : Maybe<&2, AiModels.DeferredFetchInput> <- Ref.dispose(Maybe<&2, AiModels.DeferredFetchInput>, fetchSlot)
+    cancelledFinal : Maybe<&2, AiModels.DeferredCancelInput> <- Ref.dispose(Maybe<&2, AiModels.DeferredCancelInput>, cancelSlot)
+    return Unit{}
+
+def checks() -> IO(Unit):
   do IO<Unit>:
     +state : Ref.Ref<State> <- Ref.new(State, State{Nil{}, False{}, True{}, True{}})
     +store : Auth.CredentialStore <- credentials(state)
@@ -933,4 +1127,21 @@ def main() -> IO(Unit):
     cancellationAfterCommit()
     providerMetadata()
     configAuthOptions()
+    configModelLifecycle()
+    nativeRegistration()
     IO.print("model availability: scoped reads, credential synchronization, snapshots, stream ownership, and auth gating pass")
+
+# An optional fixture path adds the two models.json lifecycle contracts.
+def runArgs(args: List<String>) -> IO(Unit):
+  match args:
+    case Nil{}: checks()
+    case path <> Nil{}:
+      do IO<Unit>:
+        checks()
+        nativeModelLifecycle(path)
+    case _: IO.die(Unit, 2, "usage: model-availability [models.json]")
+
+def main() -> IO(Unit):
+  do IO<Unit>:
+    args : List<String> <- IO.args()
+    runArgs(args)

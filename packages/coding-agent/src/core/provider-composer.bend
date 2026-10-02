@@ -20,6 +20,7 @@ import ../../../ai/src/utils/model-json.bend as ModelJson
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/callback.bend as C
+import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/fetch.bend as Fetch
@@ -28,15 +29,23 @@ import ./tools/index.bend as Tools
 
 # Composition of a built-in provider with its models.json layer and an
 # extension's registerProvider(name, config) layer (upstream
-# provider-composer.ts). refreshModels/modifyModels config fields are not
-# ported. Stream dispatch: an extension's
+# provider-composer.ts). Stream dispatch: an extension's
 # streamSimple serves its api; other requests stream through the api-keyed
 # native providers, as upstream's composed stream falls back to the api
 # registry (model-runtime.bend).
 
 def Model() -> Data: T.Model<T.JsonValue>
 
-# JavaScript object spread over records: existing keys keep their position.
+type ProviderModelConfig is Data:
+  ProviderModelConfig{id: String, name: String, api: Maybe<&2, T.ModelApi>, baseUrl: Maybe<&2, String>, reasoning: Bool, thinkingLevelMap: Maybe<&2, T.ThinkingLevelMap>, input: List<&2, T.ModelInput>, inputLimits: Maybe<&2, T.ModelInputLimits>, cost: T.ModelCost, promptCache: Maybe<&2, T.ModelPromptCache>, contextWindow: F64, maxTokens: F64, samplingParams: Maybe<&2, R.Record<T.JsonValue>>, headers: Maybe<&2, R.Record<String>>, compat: Maybe<&2, V.Value>}
+
+# One coherent catalog state: source models, the extension's latest model
+# definitions, and the OAuth projection used for the last publication.
+# The epoch prevents a superseded asynchronous publication replacing it.
+type ModelLayerState is Data:
+  ModelLayerState{epoch: Nat, base: List<&2, Model()>, extension: Maybe<&2, List<&2, ProviderModelConfig>>, credential: Maybe<&2, Auth.Credential>, error: Maybe<&2, String>}
+
+# Merge records, replacing existing values and appending new keys.
 def assign(-A: Data, entries: List<&2, R.Property<A>>, base: R.Record<A>) -> R.Record<A>:
   match entries:
     case Nil{}: base
@@ -788,6 +797,7 @@ type Retained is Data:
   RetainedApiKey{auth: Auth.ApiKeyAuth}
   RetainedToAuth{toAuth: C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>>}
   RetainedRefresh{refresh: AiModels.RefreshModels()}
+  RetainedModelsState{state: Ref.Ref<ModelLayerState>}
 
 def disposeRetained(items: List<&2, Retained>) -> IO(Unit):
   match items:
@@ -803,6 +813,10 @@ def disposeRetained(items: List<&2, Retained>) -> IO(Unit):
     case RetainedRefresh{refresh} <> rest:
       do IO<Unit>:
         C.dispose(AiModels.RefreshModelsContext, Result<&2, &2, String, Unit>, refresh)
+        disposeRetained(rest)
+    case RetainedModelsState{state} <> rest:
+      do IO<Unit>:
+        previous : ModelLayerState <- Ref.dispose(ModelLayerState, state)
         disposeRetained(rest)
 
 type Composition<-A: Data> is Data:
@@ -998,31 +1012,39 @@ def simpleOptions(options: Maybe<&2, RequestOptions>) -> Maybe<&2, StreamOptions
 
 # One of ProviderConfigInput.models; `api` and `baseUrl` fall back to the
 # provider config, then to the defaults model.
-type ProviderModelConfig is Data:
-  ProviderModelConfig{id: String, name: String, api: Maybe<&2, T.ModelApi>, baseUrl: Maybe<&2, String>, reasoning: Bool, thinkingLevelMap: Maybe<&2, T.ThinkingLevelMap>, input: List<&2, T.ModelInput>, inputLimits: Maybe<&2, T.ModelInputLimits>, cost: T.ModelCost, promptCache: Maybe<&2, T.ModelPromptCache>, contextWindow: F64, maxTokens: F64, samplingParams: Maybe<&2, R.Record<T.JsonValue>>, headers: Maybe<&2, R.Record<String>>, compat: Maybe<&2, V.Value>}
+
+
+# Native auth methods carry their model projection beside them. The caller
+# owns both callbacks; composition retains only wrappers it creates.
+type OAuthModelsInput is Data:
+  OAuthModelsInput{models: List<&2, Model()>, credential: Auth.Credential}
+
+type OAuthProvider is Data:
+  OAuthProvider{auth: Auth.OAuthAuth, modifyModels: Maybe<&2, C.Callback<OAuthModelsInput, Result<&2, &2, String, List<&2, Model()>>>>}
+
+def ModelRefresh() -> Data: C.Callback<AiModels.RefreshModelsContext, Result<&2, &2, String, List<&2, ProviderModelConfig>>>
 
 # Native OAuth methods and stream callbacks remain borrowed from their
 # extension owner; composition owns only the callbacks it creates.
-# refreshModels and OAuth modifyModels are not ported.
 type ProviderConfigInput is Data:
-  ProviderConfigInput{name: Maybe<&2, String>, baseUrl: Maybe<&2, String>, apiKey: Maybe<&2, String>, api: Maybe<&2, T.ModelApi>, streamSimple: Maybe<&2, ProviderStream()>, headers: Maybe<&2, R.Record<String>>, authHeader: Maybe<&2, Bool>, models: Maybe<&2, List<&2, ProviderModelConfig>>, oauth: Maybe<&2, Auth.OAuthAuth>}
+  ProviderConfigInput{name: Maybe<&2, String>, baseUrl: Maybe<&2, String>, apiKey: Maybe<&2, String>, api: Maybe<&2, T.ModelApi>, streamSimple: Maybe<&2, ProviderStream()>, headers: Maybe<&2, R.Record<String>>, authHeader: Maybe<&2, Bool>, models: Maybe<&2, List<&2, ProviderModelConfig>>, oauth: Maybe<&2, OAuthProvider>, refreshModels: Maybe<&2, ModelRefresh()>}
 
-def providerConfig() -> ProviderConfigInput: ProviderConfigInput{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+def providerConfig() -> ProviderConfigInput: ProviderConfigInput{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
 def configApi(config: ProviderConfigInput) -> Maybe<&2, T.ModelApi>:
   match config:
-    case ProviderConfigInput{_, _, _, api, _, _, _, _, _}: api
+    case ProviderConfigInput{_, _, _, api, _, _, _, _, _, _}: api
 
 def configStream(config: ProviderConfigInput) -> Maybe<&2, ProviderStream()>:
   match config:
-    case ProviderConfigInput{_, _, _, _, stream, _, _, _, _}: stream
+    case ProviderConfigInput{_, _, _, _, stream, _, _, _, _, _}: stream
 
 # upstream registerProvider's merge: the new registration's defined values
 # over the previous registration's.
 def mergeProviderConfig(previous: ProviderConfigInput, config: ProviderConfigInput) -> ProviderConfigInput:
   match previous config:
-    case ProviderConfigInput{n0, b0, k0, a0, s0, h0, x0, m0, o0} ProviderConfigInput{n1, b1, k1, a1, s1, h1, x1, m1, o1}:
-      ProviderConfigInput{Maybe.or(&2, String, n1, n0), Maybe.or(&2, String, b1, b0), Maybe.or(&2, String, k1, k0), Maybe.or(&2, T.ModelApi, a1, a0), Maybe.or(&2, ProviderStream(), s1, s0), Maybe.or(&2, R.Record<String>, h1, h0), Maybe.or(&2, Bool, x1, x0), Maybe.or(&2, List<&2, ProviderModelConfig>, m1, m0), Maybe.or(&2, Auth.OAuthAuth, o1, o0)}
+    case ProviderConfigInput{n0, b0, k0, a0, s0, h0, x0, m0, o0, r0} ProviderConfigInput{n1, b1, k1, a1, s1, h1, x1, m1, o1, r1}:
+      ProviderConfigInput{Maybe.or(&2, String, n1, n0), Maybe.or(&2, String, b1, b0), Maybe.or(&2, String, k1, k0), Maybe.or(&2, T.ModelApi, a1, a0), Maybe.or(&2, ProviderStream(), s1, s0), Maybe.or(&2, R.Record<String>, h1, h0), Maybe.or(&2, Bool, x1, x0), Maybe.or(&2, List<&2, ProviderModelConfig>, m1, m0), Maybe.or(&2, OAuthProvider, o1, o0), Maybe.or(&2, ModelRefresh(), r1, r0)}
 
 def withModelBaseUrl(model: Model(), +url: String) -> Model():
   match model:
@@ -1058,11 +1080,11 @@ def definitionModelId(definition: ProviderModelConfig) -> String:
 
 def configBaseUrl(config: ProviderConfigInput) -> Maybe<&2, String>:
   match config:
-    case ProviderConfigInput{_, baseUrl, _, _, _, _, _, _, _}: baseUrl
+    case ProviderConfigInput{_, baseUrl, _, _, _, _, _, _, _, _}: baseUrl
 
 def configModels(config: ProviderConfigInput) -> Maybe<&2, List<&2, ProviderModelConfig>>:
   match config:
-    case ProviderConfigInput{_, _, _, _, _, _, _, models, _}: models
+    case ProviderConfigInput{_, _, _, _, _, _, _, models, _, _}: models
 
 def apiOfModel(model: Model()) -> T.ModelApi: Api.modelApi(T.JsonValue, model)
 
@@ -1107,7 +1129,7 @@ def applyExtension(+providerId: String, +models: List<&2, Model()>, extension: M
 # layers must compose.
 def validateStream(+providerId: String, config: ProviderConfigInput) -> Result<&2, &2, String, Unit>:
   match config:
-    case ProviderConfigInput{_, _, _, None{}, Some{_}, _, _, _, _}: Fail{"Provider " ++ providerId ++ ": \"api\" is required when registering streamSimple."}
+    case ProviderConfigInput{_, _, _, None{}, Some{_}, _, _, _, _, _}: Fail{"Provider " ++ providerId ++ ": \"api\" is required when registering streamSimple."}
     case _: Done{Unit{}}
 
 def providerName(config: Config.ModelsJsonProvider) -> Maybe<&2, String>:
@@ -1131,19 +1153,19 @@ def configField(-A: Data, config: Maybe<&2, Config.ModelsJsonProvider>, get: Con
 
 def extensionKey(config: ProviderConfigInput) -> Maybe<&2, String>:
   match config:
-    case ProviderConfigInput{_, _, key, _, _, _, _, _, _}: key
+    case ProviderConfigInput{_, _, key, _, _, _, _, _, _, _}: key
 
 def extensionHeaders(config: ProviderConfigInput) -> Maybe<&2, R.Record<String>>:
   match config:
-    case ProviderConfigInput{_, _, _, _, _, headers, _, _, _}: headers
+    case ProviderConfigInput{_, _, _, _, _, headers, _, _, _, _}: headers
 
 def extensionAuthHeader(config: ProviderConfigInput) -> Maybe<&2, Bool>:
   match config:
-    case ProviderConfigInput{_, _, _, _, _, _, authHeader, _, _}: authHeader
+    case ProviderConfigInput{_, _, _, _, _, _, authHeader, _, _, _}: authHeader
 
 def extensionName(config: ProviderConfigInput) -> Maybe<&2, String>:
   match config:
-    case ProviderConfigInput{name, _, _, _, _, _, _, _, _}: name
+    case ProviderConfigInput{name, _, _, _, _, _, _, _, _, _}: name
 
 def entryAuthHeader(config: Config.ModelsJsonProvider) -> Maybe<&2, Bool>:
   match config:
@@ -1193,9 +1215,13 @@ def baseAuth(base: Maybe<&2, Base>) -> Auth.ProviderAuth:
     case Some{Base{_, _, auth, _}}: auth
     case None{}: Auth.ProviderAuth{None{}, None{}}
 
+def nativeOAuth(provider: OAuthProvider) -> Auth.OAuthAuth:
+  match provider:
+    case OAuthProvider{auth, _}: auth
+
 def extensionOAuth(config: ProviderConfigInput) -> Maybe<&2, Auth.OAuthAuth>:
   match config:
-    case ProviderConfigInput{_, _, _, _, _, _, _, _, oauth}: oauth
+    case ProviderConfigInput{_, _, _, _, _, _, _, _, oauth, _}: Maybe.map(&2, OAuthProvider, Auth.OAuthAuth, value => nativeOAuth(value), oauth)
 
 # This source method stays owned by the extension or baseline provider.
 # Header composition may wrap toAuth, but never replaces login or refresh.
@@ -1354,3 +1380,194 @@ def refreshOverlaid(source: OverlaidRefresh, context: AiModels.RefreshModelsCont
 # wrapper is retained by the composition (RetainedRefresh).
 def overlaidRefresh(providerId: String, config: Config.ModelsJsonProvider, fallback: List<&2, Model()>, base: AiModels.RefreshModels()) -> IO(AiModels.RefreshModels()):
   C.create(~OverlaidRefresh, ~AiModels.RefreshModelsContext, ~Result<&2, &2, String, Unit>, ~refreshOverlaid, OverlaidRefresh{providerId, config, fallback, base})
+
+# Dynamic extension catalogs use the same layers as registration. A refresh
+# borrows source callbacks and owns only its publication wrapper/state.
+type LayeredRefresh is Data:
+  LayeredRefresh{providerId: String, base: Maybe<&2, AiModels.RefreshModels()>, layers: Layers, state: Ref.Ref<ModelLayerState>}
+
+type LayeredPublish is Data:
+  LayeredPublish{source: LayeredRefresh, epoch: Nat, publish: C.Callback<AiModels.ModelsPublication, Bool>}
+
+def refreshField(config: ProviderConfigInput) -> Maybe<&2, ModelRefresh()>:
+  match config:
+    case ProviderConfigInput{_, _, _, _, _, _, _, _, _, refresh}: refresh
+
+def modifyModelsField(config: ProviderConfigInput) -> Maybe<&2, C.Callback<OAuthModelsInput, Result<&2, &2, String, List<&2, Model()>>>>:
+  match config:
+    case ProviderConfigInput{_, _, _, _, _, _, _, _, Some{OAuthProvider{_, modify}}, _}: modify
+    case _: None{}
+
+def withConfigModels(config: ProviderConfigInput, models: Maybe<&2, List<&2, ProviderModelConfig>>) -> ProviderConfigInput:
+  match config:
+    case ProviderConfigInput{name, url, key, api, stream, headers, bearer, _, oauth, refresh}:
+      ProviderConfigInput{name, url, key, api, stream, headers, bearer, models, oauth, refresh}
+
+def currentLayers(layers: Layers, models: Maybe<&2, List<&2, ProviderModelConfig>>) -> Layers:
+  match layers:
+    case Layers{entry, extension}: Layers{entry, Maybe.map(&2, ProviderConfigInput, ProviderConfigInput, config => withConfigModels(config, models), extension)}
+
+def oauthCredential(credential: Maybe<&2, Auth.Credential>) -> Maybe<&2, Auth.Credential>:
+  match credential:
+    case Some{Auth.OAuthCredential{refresh, access, expiry, data}}: Some{Auth.OAuthCredential{refresh, access, expiry, data}}
+    case _: None{}
+
+def beginModelRefresh(state: ModelLayerState) -> ModelLayerState & Nat:
+  match state:
+    case ModelLayerState{epoch, base, extension, credential, _}:
+      +next = epoch + 1n
+      (ModelLayerState{next, base, extension, credential, None{}}, next)
+
+def layerEpoch(state: ModelLayerState) -> Nat:
+  match state:
+    case ModelLayerState{epoch, _, _, _, _}: epoch
+
+def commitLayerState(+epoch: Nat, proposed: ModelLayerState, +current: ModelLayerState) -> ModelLayerState & Bool:
+  +valid = Nat.is_eq(epoch, layerEpoch(current))
+  (Bool.pick(ModelLayerState, valid, proposed, current), valid)
+
+def layerError(epoch: Nat, error: String, state: ModelLayerState) -> ModelLayerState & Unit:
+  match state:
+    case ModelLayerState{+current, base, extension, credential, previous}:
+      (ModelLayerState{current, base, extension, credential, Bool.pick(Maybe<&2, String>, Nat.is_eq(epoch, current), Some{error}, previous)}, Unit{})
+
+def projectWith(callback: Maybe<&2, C.Callback<OAuthModelsInput, Result<&2, &2, String, List<&2, Model()>>>>, models: List<&2, Model()>, credential: Auth.Credential) -> IO(Result<&2, &2, String, List<&2, Model()>>):
+  match callback:
+    case None{}: IO.pure(Result<&2, &2, String, List<&2, Model()>>, Done{models})
+    case Some{method}: C.call(OAuthModelsInput, Result<&2, &2, String, List<&2, Model()>>, method, OAuthModelsInput{models, credential})
+
+def projectedModels(layers: Layers, models: List<&2, Model()>, credential: Maybe<&2, Auth.Credential>) -> IO(Result<&2, &2, String, List<&2, Model()>>):
+  match credential:
+    case None{}: IO.pure(Result<&2, &2, String, List<&2, Model()>>, Done{models})
+    case Some{value}: projectWith(extensionField(C.Callback<OAuthModelsInput, Result<&2, &2, String, List<&2, Model()>>>, extensionOf(layers), modifyModelsField), models, value)
+
+def transformedModels(+layers: Layers, credential: Maybe<&2, Auth.Credential>, result: Result<&2, &2, String, List<&2, Model()>>) -> IO(Result<&2, &2, String, List<&2, Model()>>):
+  match result:
+    case Fail{reason}: IO.pure(Result<&2, &2, String, List<&2, Model()>>, Fail{reason})
+    case Done{models}:
+      do IO<Result<&2, &2, String, List<&2, Model()>>>:
+        projected : Result<&2, &2, String, List<&2, Model()>> <- projectedModels(layers, models, credential)
+        return Result.map(&2, &2, String, List<&2, Model()>, List<&2, Model()>, values => applyOverrides(values, layerOverrides(layers)), projected)
+
+def modelsFromLayers(id: String, +layers: Layers, state: ModelLayerState) -> IO(Result<&2, &2, String, List<&2, Model()>>):
+  match state:
+    case ModelLayerState{_, base, extension, credential, _}:
+      +active = currentLayers(layers, extension)
+      transformedModels(active, credential, layeredModels(id, Some{Base{"", "", Auth.ProviderAuth{None{}, None{}}, base}}, active))
+
+def committedLayer(accepted: Bool, state: Ref.Ref<ModelLayerState>, epoch: Nat, proposed: ModelLayerState) -> IO(Bool):
+  match accepted:
+    case False{}: IO.pure(Bool, False{})
+    case True{}: Ref.modify(ModelLayerState, Bool, state, current => commitLayerState(epoch, proposed, current))
+
+def publishLayerResult(target: LayeredPublish, proposed: ModelLayerState, persist: AiModels.Persist, result: Result<&2, &2, String, List<&2, Model()>>) -> IO(Bool):
+  match target result:
+    case LayeredPublish{LayeredRefresh{_, _, _, state}, epoch, _} Fail{reason}:
+      do IO<Bool>:
+        Ref.modify(ModelLayerState, Unit, state, current => layerError(epoch, reason, current))
+        return False{}
+    case LayeredPublish{LayeredRefresh{_, _, _, state}, epoch, publish} Done{models}:
+      do IO<Bool>:
+        accepted : Bool <- C.call(AiModels.ModelsPublication, Bool, publish, AiModels.ModelsPublication{persist, Some{models}})
+        committedLayer(accepted, state, epoch, proposed)
+
+def withBaseModels(state: ModelLayerState, models: List<&2, Model()>) -> ModelLayerState:
+  match state:
+    case ModelLayerState{epoch, _, extension, credential, error}: ModelLayerState{epoch, models, extension, credential, error}
+
+def publishLayered(target: LayeredPublish, publication: AiModels.ModelsPublication) -> IO(Bool):
+  match target publication:
+    case LayeredPublish{_, _, publish} AiModels.ModelsPublication{persist, None{}}:
+      C.call(AiModels.ModelsPublication, Bool, publish, AiModels.ModelsPublication{persist, None{}})
+    case LayeredPublish{LayeredRefresh{+id, base, +layers, +state}, epoch, publish} AiModels.ModelsPublication{persist, Some{models}}:
+      do IO<Bool>:
+        current : ModelLayerState <- Ref.read(ModelLayerState, state)
+        +next : ModelLayerState = withBaseModels(current, models)
+        projected : Result<&2, &2, String, List<&2, Model()>> <- modelsFromLayers(id, layers, next)
+        publishLayerResult(LayeredPublish{LayeredRefresh{id, base, layers, state}, epoch, publish}, next, persist, projected)
+
+def callBaseRefresh(callback: Maybe<&2, AiModels.RefreshModels()>, context: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, Unit>):
+  match callback:
+    case None{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case Some{method}: C.call(AiModels.RefreshModelsContext, Result<&2, &2, String, Unit>, method, context)
+
+def refreshedDefinitions(result: Result<&2, &2, String, List<&2, ProviderModelConfig>>) -> Result<&2, &2, String, Maybe<&2, List<&2, ProviderModelConfig>>>:
+  Result.map(&2, &2, String, List<&2, ProviderModelConfig>, Maybe<&2, List<&2, ProviderModelConfig>>, models => Some{models}, result)
+
+def callExtensionRefresh(callback: Maybe<&2, ModelRefresh()>, context: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, Maybe<&2, List<&2, ProviderModelConfig>>>):
+  match callback:
+    case None{}: IO.pure(Result<&2, &2, String, Maybe<&2, List<&2, ProviderModelConfig>>>, Done{None{}})
+    case Some{method}:
+      do IO<Result<&2, &2, String, Maybe<&2, List<&2, ProviderModelConfig>>>>:
+        models : Result<&2, &2, String, List<&2, ProviderModelConfig>> <- C.call(AiModels.RefreshModelsContext, Result<&2, &2, String, List<&2, ProviderModelConfig>>, method, context)
+        return refreshedDefinitions(models)
+
+def afterExtension(state: ModelLayerState, definitions: Maybe<&2, List<&2, ProviderModelConfig>>, credential: Maybe<&2, Auth.Credential>) -> ModelLayerState:
+  match state:
+    case ModelLayerState{epoch, base, previous, _, error}: ModelLayerState{epoch, base, Maybe.or(&2, List<&2, ProviderModelConfig>, definitions, previous), oauthCredential(credential), error}
+
+def layerStatus(epoch: Nat, state: ModelLayerState) -> Result<&2, &2, String, Unit>:
+  match state:
+    case ModelLayerState{current, _, _, _, error}:
+      Bool.pick(Result<&2, &2, String, Unit>, Nat.is_eq(epoch, current), Maybe.default(&2, Result<&2, &2, String, Unit>, Maybe.map(&2, String, Result<&2, &2, String, Unit>, reason => Fail{reason}, error), Done{Unit{}}), Done{Unit{}})
+
+def layerResult(state: Ref.Ref<ModelLayerState>, epoch: Nat) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    current : ModelLayerState <- Ref.read(ModelLayerState, state)
+    return layerStatus(epoch, current)
+
+def publishExtension(target: LayeredPublish, +context: AiModels.RefreshModelsContext, definitions: Maybe<&2, List<&2, ProviderModelConfig>>) -> IO(Result<&2, &2, String, Unit>):
+  match target context:
+    case LayeredPublish{LayeredRefresh{+id, base, +layers, +state}, +epoch, publish} AiModels.RefreshModelsContext{credential, _, _, _, _, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        previous : ModelLayerState <- Ref.read(ModelLayerState, state)
+        +next : ModelLayerState = afterExtension(previous, definitions, credential)
+        models : Result<&2, &2, String, List<&2, Model()>> <- modelsFromLayers(id, layers, next)
+        result : Bool <- publishLayerResult(LayeredPublish{LayeredRefresh{id, base, layers, state}, epoch, publish}, next, AiModels.KeepStored{}, models)
+        layerResult(state, epoch)
+
+def extensionFinished(stopped: Bool, target: LayeredPublish, context: AiModels.RefreshModelsContext, result: Result<&2, &2, String, Maybe<&2, List<&2, ProviderModelConfig>>>) -> IO(Result<&2, &2, String, Unit>):
+  match stopped result:
+    case _ Fail{reason}: IO.pure(Result<&2, &2, String, Unit>, Fail{reason})
+    case True{} Done{_}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case False{} Done{definitions}: publishExtension(target, context, definitions)
+
+def continueLayerRefresh(source: LayeredRefresh, epoch: Nat, context: AiModels.RefreshModelsContext, status: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, Unit>):
+  match source context status:
+    case _ _ Fail{reason}: IO.pure(Result<&2, &2, String, Unit>, Fail{reason})
+    case LayeredRefresh{+id, +base, +layers, +state} AiModels.RefreshModelsContext{+credential, +stored, +publish, +network, +force, +signal} Done{_}:
+      do IO<Result<&2, &2, String, Unit>>:
+        +context : AiModels.RefreshModelsContext = AiModels.RefreshModelsContext{credential, stored, publish, network, force, signal}
+        refreshed : Result<&2, &2, String, Maybe<&2, List<&2, ProviderModelConfig>>> <- callExtensionRefresh(extensionField(ModelRefresh(), extensionOf(layers), refreshField), context)
+        stopped : Bool <- Abort.aborted(Unit, signal)
+        extensionFinished(stopped, LayeredPublish{LayeredRefresh{id, base, layers, state}, epoch, publish}, context, refreshed)
+
+def afterBaseRefresh(source: LayeredRefresh, +epoch: Nat, context: AiModels.RefreshModelsContext, result: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, Unit>):
+  match source result:
+    case _ Fail{reason}: IO.pure(Result<&2, &2, String, Unit>, Fail{reason})
+    case LayeredRefresh{id, base, layers, +state} Done{_}:
+      do IO<Result<&2, &2, String, Unit>>:
+        status : Result<&2, &2, String, Unit> <- layerResult(state, epoch)
+        continueLayerRefresh(LayeredRefresh{id, base, layers, state}, epoch, context, status)
+
+def refreshLayered(source: LayeredRefresh, context: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, Unit>):
+  match source context:
+    case LayeredRefresh{+id, +base, +layers, +state} AiModels.RefreshModelsContext{+credential, +stored, +publish, +network, +force, +signal}:
+      do IO<Result<&2, &2, String, Unit>>:
+        +epoch : Nat <- Ref.modify(ModelLayerState, Nat, state, beginModelRefresh)
+        +wrapped : C.Callback<AiModels.ModelsPublication, Bool> <- C.create(~LayeredPublish, ~AiModels.ModelsPublication, ~Bool, ~publishLayered, LayeredPublish{LayeredRefresh{id, base, layers, state}, epoch, publish})
+        result : Result<&2, &2, String, Unit> <- callBaseRefresh(base, AiModels.RefreshModelsContext{credential, stored, wrapped, network, force, signal})
+        C.dispose(AiModels.ModelsPublication, Bool, wrapped)
+        afterBaseRefresh(LayeredRefresh{id, base, layers, state}, epoch, AiModels.RefreshModelsContext{credential, stored, publish, network, force, signal}, result)
+
+def createdLayerRefresh(enabled: Bool, +id: String, base: Maybe<&2, Base>, callback: Maybe<&2, AiModels.RefreshModels()>, +layers: Layers) -> IO(Maybe<&2, AiModels.RefreshModels()> & List<&2, Retained>):
+  match enabled:
+    case False{}: IO.pure(Maybe<&2, AiModels.RefreshModels()> & List<&2, Retained>, (None{}, Nil{}))
+    case True{}:
+      do IO<Maybe<&2, AiModels.RefreshModels()> & List<&2, Retained>>:
+        +state : Ref.Ref<ModelLayerState> <- Ref.new(ModelLayerState, ModelLayerState{0n, baseModels(base), extensionField(List<&2, ProviderModelConfig>, extensionOf(layers), configModels), None{}, None{}})
+        +refresh : AiModels.RefreshModels() <- C.create(~LayeredRefresh, ~AiModels.RefreshModelsContext, ~Result<&2, &2, String, Unit>, ~refreshLayered, LayeredRefresh{id, callback, layers, state})
+        return (Some{refresh}, [RetainedRefresh{refresh}, RetainedModelsState{state}])
+
+def layeredRefresh(id: String, base: Maybe<&2, Base>, +callback: Maybe<&2, AiModels.RefreshModels()>, +layers: Layers) -> IO(Maybe<&2, AiModels.RefreshModels()> & List<&2, Retained>):
+  createdLayerRefresh(Maybe.is_some(&2, AiModels.RefreshModels(), callback) || Maybe.is_some(&2, ModelRefresh(), extensionField(ModelRefresh(), extensionOf(layers), refreshField)) || Maybe.is_some(&2, C.Callback<OAuthModelsInput, Result<&2, &2, String, List<&2, Model()>>>, extensionField(C.Callback<OAuthModelsInput, Result<&2, &2, String, List<&2, Model()>>>, extensionOf(layers), modifyModelsField)), id, base, callback, layers)

@@ -465,6 +465,13 @@ type ImagesOptions<-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> 
 def emptyImagesOptions(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data) -> ImagesOptions<Signal, Telemetry, Fetch, Error>:
   ImagesOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
+# Bend expresses the deferred fetch's record extension as a common base.
+type DeferredFetchOptions<-RequestModel: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Payload: Data, -Error: Data> is Data:
+  DeferredFetchOptions{base: ProviderRequestOptions<RequestModel, Signal, Telemetry, Fetch, Payload, Error>, wait: Maybe<&2, F64>}
+
+def DeferredCancelOptions(-RequestModel: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Payload: Data, -Error: Data) -> Data:
+  ProviderRequestOptions<RequestModel, Signal, Telemetry, Fetch, Payload, Error>
+
 type StreamOptions<-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
   StreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Model<Value>, Error)>, onResponse: Maybe<&2, ResponseCallback(Model<Value>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, F64>, maxRetries: Maybe<&2, F64>, maxRetryDelayMs: Maybe<&2, F64>, temperature: Maybe<&2, F64>, samplingParams: Maybe<&2, Record.Record<Value>>, maxTokens: Maybe<&2, F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, F64>, metadata: Maybe<&2, Record.Record<Value>>}
 

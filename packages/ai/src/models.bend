@@ -1,5 +1,8 @@
 import Base
 import ./types.bend as T
+import ./utils/event-stream.bend as Stream
+import ../../runtime/src/schema-value.bend as V
+import ../../runtime/src/fetch.bend as Fetch
 import ./utils/model-api.bend as Api
 import ./utils/thinking-levels.bend as Thinking
 import ./utils/cost.bend as Cost
@@ -18,6 +21,26 @@ import ./auth/resolve.bend as Resolve
 import ./auth/context.bend as Context
 import ./auth/credential-store.bend as Credentials
 
+def Model() -> Data: T.Model<T.JsonValue>
+
+# Native provider deferred methods share the library's request/error types.
+def DeferredFetchOptions() -> Data: T.DeferredFetchOptions<Model(), Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), T.JsonValue, Resolve.ModelsError>
+def DeferredCancelOptions() -> Data: T.DeferredCancelOptions(Model(), Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), T.JsonValue, Resolve.ModelsError)
+
+type DeferredFetchInput is Data:
+  DeferredFetchInput{model: Model(), handle: T.DeferredHandle, options: Maybe<&2, DeferredFetchOptions()>}
+
+type DeferredCancelInput is Data:
+  DeferredCancelInput{model: Model(), handle: T.DeferredHandle, options: Maybe<&2, DeferredCancelOptions()>}
+
+type DeferredStream is Type:
+  DeferredStream{events: Stream.AssistantMessageEventStream(V.Value, V.Value), release: IO(Result<&2, &2, Resolve.ModelsError, Unit>)}
+
+def DeferredFetchResult() -> Type: Result<&2, &1, Resolve.ModelsError, DeferredStream>
+def DeferredCancelResult() -> Data: Result<&2, &2, Resolve.ModelsError, Unit>
+def FetchDeferred() -> Data: C.Callback<DeferredFetchInput, DeferredFetchResult()>
+def CancelDeferred() -> Data: C.Callback<DeferredCancelInput, DeferredCancelResult()>
+
 # upstream Provider.api, reduced to what differs between providers: requests
 # stream through the shared implementation of the model's api, the
 # Cloudflare providers first materialize endpoint placeholders for the APIs
@@ -27,11 +50,12 @@ type ProviderStreams is Data:
   ApiStreams{}
   CloudflareStreams{apis: List<&2, T.ModelApi>}
   OpenCodeStreams{apis: List<&2, T.ModelApi>}
+  DeferredStreams{base: ProviderStreams, fetchDeferred: Maybe<&2, FetchDeferred()>, cancelDeferred: Maybe<&2, CancelDeferred()>}
 
 # Dynamic catalogs (upstream RefreshModelsContext and ModelsPublication)
 # -------------------------------------------------------------------------
 
-def Model() -> Data: T.Model<T.JsonValue>
+
 
 # upstream `persist`: omitted leaves storage unchanged, null deletes it.
 type Persist is Data:
@@ -122,6 +146,7 @@ def streamedWith(-SamplingValue: Data, wrapped: Bool, model: T.Model<SamplingVal
 # provider env.
 def streamModel(-SamplingValue: Data, streams: ProviderStreams, +model: T.Model<SamplingValue>, env: Maybe<&2, T.ProviderEnv()>) -> T.Model<SamplingValue>:
   match streams:
+    case DeferredStreams{base, _, _}: streamModel(SamplingValue, base, model, env)
     case CloudflareStreams{apis}: streamedWith(SamplingValue, wraps(apis, Api.name(Api.modelApi(SamplingValue, model))), model, env)
     case _: model
 
@@ -133,6 +158,7 @@ def optionsWith(-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Er
 # The options a provider's streamSimple dispatches the model's api with.
 def streamSimpleOptions(-SamplingValue: Data, -Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, streams: ProviderStreams, model: T.Model<SamplingValue>, options: T.SimpleStreamOptions<Value, Signal, Telemetry, Fetch, Error>) -> T.SimpleStreamOptions<Value, Signal, Telemetry, Fetch, Error>:
   match streams:
+    case DeferredStreams{base, _, _}: streamSimpleOptions(SamplingValue, Value, Signal, Telemetry, Fetch, Error, base, model, options)
     case OpenCodeStreams{apis}: optionsWith(Value, Signal, Telemetry, Fetch, Error, wraps(apis, Api.name(Api.modelApi(SamplingValue, model))), options)
     case _: options
 
@@ -140,6 +166,7 @@ def streamSimpleOptions(-SamplingValue: Data, -Value: Data, -Signal: Data, -Tele
 # their API-specific options through streamSimple.
 def streamOptions(-SamplingValue: Data, -Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, streams: ProviderStreams, model: T.Model<SamplingValue>, +options: T.StreamOptions<Value, Signal, Telemetry, Fetch, Error>) -> T.StreamOptions<Value, Signal, Telemetry, Fetch, Error>:
   match streams:
+    case DeferredStreams{base, _, _}: streamOptions(SamplingValue, Value, Signal, Telemetry, Fetch, Error, base, model, options)
     case OpenCodeStreams{apis}: Bool.pick(T.StreamOptions<Value, Signal, Telemetry, Fetch, Error>, wraps(apis, Api.name(Api.modelApi(SamplingValue, model))), OpenCode.withSessionHeader(Value, Signal, Telemetry, Fetch, Error, options), options)
     case _: options
 
@@ -157,12 +184,29 @@ def usedApis(apis: List<&2, T.ModelApi>, +models: List<&2, T.Model<T.JsonValue>>
 
 # upstream composeProvider: a models.json overlay streams through its base
 # provider only for APIs the base provider's models use.
+def inheritedRouting(streams: ProviderStreams, +models: List<&2, Model()>) -> ProviderStreams:
+  match streams:
+    case ApiStreams{}: ApiStreams{}
+    case CloudflareStreams{apis}: CloudflareStreams{usedApis(apis, models)}
+    case OpenCodeStreams{apis}: OpenCodeStreams{usedApis(apis, models)}
+    case DeferredStreams{base, fetch, cancel}: DeferredStreams{inheritedRouting(base, models), fetch, cancel}
+
 def inheritedStreams(base: Maybe<&2, Provider>) -> ProviderStreams:
   match base:
     case None{}: ApiStreams{}
-    case Some{Provider{_, _, _, _, _, ApiStreams{}, _, _}}: ApiStreams{}
-    case Some{Provider{_, _, _, _, models, CloudflareStreams{apis}, _, _}}: CloudflareStreams{usedApis(apis, models)}
-    case Some{Provider{_, _, _, _, models, OpenCodeStreams{apis}, _, _}}: OpenCodeStreams{usedApis(apis, models)}
+    case Some{Provider{_, _, _, _, models, streams, _, _}}: inheritedRouting(streams, models)
+
+# Optional methods remain borrowed from the provider's owner.
+def fetchDeferredMethod(streams: ProviderStreams) -> Maybe<&2, FetchDeferred()>:
+  match streams:
+    case DeferredStreams{base, method, _}: Maybe.or(&2, FetchDeferred(), method, fetchDeferredMethod(base))
+    case _: None{}
+
+def cancelDeferredMethod(streams: ProviderStreams) -> Maybe<&2, CancelDeferred()>:
+  match streams:
+    case DeferredStreams{base, _, method}: Maybe.or(&2, CancelDeferred(), method, cancelDeferredMethod(base))
+    case _: None{}
+
 
 # Leaf utilities from models.ts. upstream hasApi is a type guard; here it is
 # the predicate alone.

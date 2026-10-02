@@ -9,6 +9,32 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = Path(os.environ.get("PI_BEND_CLI", ROOT / "build/pi-cli"))
+
+# The library fixture also covers the native/config provider lifecycle suite.
+# Reuse its compiled harness for both thread counts; Python supplies only files.
+if runner := os.environ.get("PI_BEND_AVAILABILITY_RUNNER"):
+    with tempfile.TemporaryDirectory(prefix="pi-provider-lifecycle-") as folder:
+        path = Path(folder) / "models.json"
+        path.write_text(json.dumps({"providers": {
+            "extension-native": {"modelOverrides": {"native": {"contextWindow": 4242}}},
+            "extension-native-deferred": {"baseUrl": "https://overlay.test/v1"},
+        }}))
+        names = (
+            "registers native pi-ai providers with their auth implementation",
+            "preserves native deferred methods through provider overlays",
+            "applies models.json overrides above native providers",
+            "publishes refreshModels results without forcing ModelsStore persistence",
+            "applies legacy OAuth modifyModels after async credential initialization",
+        )
+        for threads in ("1", "4"):
+            result = subprocess.run([str(Path(runner).resolve()), str(path)], cwd=ROOT,
+                                    env=dict(os.environ, BEND_THREADS=threads),
+                                    capture_output=True, text=True, timeout=600)
+            assert result.returncode == 0, (threads, result.stdout, result.stderr)
+            for name in names:
+                assert "ok " + name in result.stdout, (threads, name, result.stdout)
+            print(f"native{threads}: provider lifecycle5 and availability/auth/credential regressions pass")
+
 assert subprocess.run(['pi', '--version'], capture_output=True, text=True).stdout.strip() == '0.87.1'
 with tempfile.TemporaryDirectory(prefix='pi-availability-') as folder:
     base = Path(folder); agent = base / 'agent'; agent.mkdir()
