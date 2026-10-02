@@ -1,4 +1,5 @@
 import Base
+import ../../ai/src/api/options.bend as Options
 import ../src/core/agent-runtime.bend as Runtime
 import ../../ai/src/api/openai-codex-sessions.bend as CodexSessions
 import ../../ai/src/types.bend as Ai
@@ -657,20 +658,20 @@ def bedrockHandler(config: Responses.Config) -> Bedrock.Handler:
 
 # Decode the existing replay's raw option records, then use SDK transport
 # dispatch rather than a second implementation in the fixture.
-def rawOptions(api: Ai.ModelApi, +options: V.Value, +signal: Abort.AbortSignal<Unit>, +fetch: Fetch.Fetch(Unit)) -> Composer.ApiStreamOptions:
+def rawOptions(api: Ai.ModelApi, +options: V.Value, +signal: Abort.AbortSignal<Unit>, +fetch: Fetch.Fetch(Unit)) -> Options.ApiStreamOptions<Tools.ToolError>:
   match api:
-    case Ai.MistralConversationsApi{}: Composer.MistralOptions{Mistral.MistralOptions{baseOptions(options, signal, Some{fetch}), None{}, None{}, text(field(options, "reasoningEffort"))}}
-    case Ai.BedrockConverseStreamApi{}: Composer.BedrockOptions{bedrockOptions(options, signal, fetch)}
-    case Ai.GoogleVertexApi{}: Composer.VertexOptions{vertexOptions(options, signal)}
-    case Ai.AnthropicMessagesApi{}: Composer.AnthropicOptions{Messages.AnthropicOptions{baseOptions(options, signal, Some{fetch}), flag(field(options, "thinkingEnabled")), number(field(options, "thinkingBudgetTokens")), text(field(options, "effort")), None{}, None{}, None{}, None{}}}
-    case Ai.GoogleGenerativeAiApi{}: Composer.GoogleOptions{Gemini.GoogleOptions{baseOptions(options, signal, Some{fetch}), None{}, googleThinking(field(options, "thinking"))}}
-    case Ai.OpenAICompletionsApi{}: Composer.CompletionsOptions{Chat.OpenAICompletionsOptions{baseOptions(options, signal, Some{fetch}), None{}, levelOf(text(field(options, "reasoningEffort"))), None{}}}
-    case Ai.AzureOpenAIResponsesApi{}: Composer.AzureOptions{Azure.AzureOpenAIResponsesOptions{baseOptions(options, signal, Some{fetch}), levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}, None{}, None{}, None{}}}
-    case Ai.OpenAICodexResponsesApi{}: Composer.CodexOptions{codexOptions(options, signal, fetch)}
-    case _: Composer.ResponsesOptions{responsesOptions(options, signal, fetch)}
+    case Ai.MistralConversationsApi{}: Options.MistralOptions{Mistral.MistralOptions{baseOptions(options, signal, Some{fetch}), None{}, None{}, text(field(options, "reasoningEffort"))}}
+    case Ai.BedrockConverseStreamApi{}: Options.BedrockOptions{bedrockOptions(options, signal, fetch)}
+    case Ai.GoogleVertexApi{}: Options.VertexOptions{vertexOptions(options, signal)}
+    case Ai.AnthropicMessagesApi{}: Options.AnthropicOptions{Messages.AnthropicOptions{baseOptions(options, signal, Some{fetch}), flag(field(options, "thinkingEnabled")), number(field(options, "thinkingBudgetTokens")), text(field(options, "effort")), None{}, None{}, None{}, None{}}}
+    case Ai.GoogleGenerativeAiApi{}: Options.GoogleOptions{Gemini.GoogleOptions{baseOptions(options, signal, Some{fetch}), None{}, googleThinking(field(options, "thinking"))}}
+    case Ai.OpenAICompletionsApi{}: Options.CompletionsOptions{Chat.OpenAICompletionsOptions{baseOptions(options, signal, Some{fetch}), None{}, levelOf(text(field(options, "reasoningEffort"))), None{}}}
+    case Ai.AzureOpenAIResponsesApi{}: Options.AzureOptions{Azure.AzureOpenAIResponsesOptions{baseOptions(options, signal, Some{fetch}), levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}, None{}, None{}, None{}}}
+    case Ai.OpenAICodexResponsesApi{}: Options.CodexOptions{codexOptions(options, signal, fetch)}
+    case _: Options.ResponsesOptions{responsesOptions(options, signal, fetch)}
 
 def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, sessions: CodexSessions.Pool<Unit>, +model: Model(), context: Context(), options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
-  Runtime.openApi(Runtime.ApiTransport{configFor(agent), fetch, counter, sessions}, Agent.StreamInput{model, context, Some{Composer.RawOptions{rawOptions(apiOf(model), options, signal, fetch)}}})
+  Runtime.openApi(Runtime.ApiTransport{configFor(agent), fetch, counter, sessions}, Agent.StreamInput{model, context, Some{Options.RawOptions{rawOptions(apiOf(model), options, signal, fetch)}}})
 
 # upstream streamSimple(), as the agent runtime dispatches it.
 def openedSimple(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):

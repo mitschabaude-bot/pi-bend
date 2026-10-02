@@ -39,6 +39,7 @@ import ./proofs/validation.bend as Validation
 import ./proofs/transcript.bend as Transcript
 import ./proofs/simple-options.bend as SimpleOptions
 import ./proofs/thinking-levels.bend as ThinkingLevels
+import ./proofs/model-options.bend as ModelOptions
 import ./proofs/agent-loop.bend as AgentLoop
 import ./proofs/f64.bend as F64Laws
 import ./proofs/tool-truncate.bend as ToolTruncate

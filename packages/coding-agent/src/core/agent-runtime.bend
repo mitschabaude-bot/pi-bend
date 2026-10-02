@@ -1,4 +1,5 @@
 import Base
+import ../../../ai/src/api/options.bend as Options
 import ../../../ai/src/utils/model-api.bend as Api
 import ../../../ai/src/api/openai-codex-responses.bend as Codex
 import ../../../ai/src/api/azure-openai-responses.bend as Azure
@@ -273,38 +274,38 @@ def rawParent(options: Composer.BaseOptions()) -> Maybe<&2, Abort.AbortSignal<Un
 # Raw APIs use their existing lifecycle and lease release. No simple-options
 # conversion runs here, so provider-specific reasoning and transport fields
 # reach the native implementation unchanged.
-def rawProvider(+transport: ApiTransport, +model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>, options: Composer.ApiStreamOptions) -> IO(Composer.StreamOutput()):
+def rawProvider(+transport: ApiTransport, +model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>, options: Options.ApiStreamOptions<Tools.ToolError>) -> IO(Composer.StreamOutput()):
   match transport options:
-    case ApiTransport{_, fetch, _, _} Composer.AnthropicOptions{value}: Anthropic.openStream(fetch, urlContext(), model, context, value)
-    case ApiTransport{_, fetch, calls, _} Composer.GoogleOptions{value}: Google.openStream(fetch, urlContext(), calls, model, context, value)
-    case ApiTransport{_, fetch, _, _} Composer.CompletionsOptions{value}: Completions.openStream(fetch, urlContext(), model, context, value)
-    case ApiTransport{_, fetch, _, _} Composer.PiOptions{+value}: StreamProviders.lease(events => signal => PiApi.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, ~StreamProviders.jsonDetails, ~StreamProviders.diagnosticDetails, ~Tools.detailsValue, events, fetch, urlContext(), signal, model, context, value), rawParent(Composer.rawBase(Composer.PiOptions{value})))
-    case ApiTransport{_, fetch, _, _} Composer.MistralOptions{+value}: StreamProviders.lease(events => signal => MistralApi.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, events, fetch, urlContext(), signal, model, context, value), rawParent(Composer.rawBase(Composer.MistralOptions{value})))
-    case ApiTransport{+responses, fetch, _, _} Composer.BedrockOptions{+value}: StreamProviders.lease(events => signal => Bedrock.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, ~StreamProviders.jsonDetails, events, fetch, urlContext(), bedrockHandler(responses), signal, model, context, value), rawParent(Composer.rawBase(Composer.BedrockOptions{value})))
-    case ApiTransport{_, fetch, _, _} Composer.VertexOptions{+value}: StreamProviders.lease(events => signal => StreamProviders.vertexProduced(fetch, urlContext(), model, context, value, events, signal), rawParent(Composer.rawBase(Composer.VertexOptions{value})))
-    case ApiTransport{responses, _, _, _} Composer.ResponsesOptions{value}:
+    case ApiTransport{_, fetch, _, _} Options.AnthropicOptions{value}: Anthropic.openStream(fetch, urlContext(), model, context, value)
+    case ApiTransport{_, fetch, calls, _} Options.GoogleOptions{value}: Google.openStream(fetch, urlContext(), calls, model, context, value)
+    case ApiTransport{_, fetch, _, _} Options.CompletionsOptions{value}: Completions.openStream(fetch, urlContext(), model, context, value)
+    case ApiTransport{_, fetch, _, _} Options.PiOptions{+value}: StreamProviders.lease(events => signal => PiApi.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, ~StreamProviders.jsonDetails, ~StreamProviders.diagnosticDetails, ~Tools.detailsValue, events, fetch, urlContext(), signal, model, context, value), rawParent(Options.rawBase(Tools.ToolError, Options.PiOptions{value})))
+    case ApiTransport{_, fetch, _, _} Options.MistralOptions{+value}: StreamProviders.lease(events => signal => MistralApi.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, events, fetch, urlContext(), signal, model, context, value), rawParent(Options.rawBase(Tools.ToolError, Options.MistralOptions{value})))
+    case ApiTransport{+responses, fetch, _, _} Options.BedrockOptions{+value}: StreamProviders.lease(events => signal => Bedrock.stream(~Unit, ~Unit, ~Error(), ~V.Value, ~Details(), ~Tools.errorMessage, ~StreamProviders.jsonDetails, events, fetch, urlContext(), bedrockHandler(responses), signal, model, context, value), rawParent(Options.rawBase(Tools.ToolError, Options.BedrockOptions{value})))
+    case ApiTransport{_, fetch, _, _} Options.VertexOptions{+value}: StreamProviders.lease(events => signal => StreamProviders.vertexProduced(fetch, urlContext(), model, context, value, events, signal), rawParent(Options.rawBase(Tools.ToolError, Options.VertexOptions{value})))
+    case ApiTransport{responses, _, _, _} Options.ResponsesOptions{value}:
       do IO<Composer.StreamOutput()>:
         run : Responses.Run<Unit, V.Value, Error()> <- Responses.stream(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, responses, model, context, value)
         return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), run))
-    case ApiTransport{responses, _, _, _} Composer.AzureOptions{value}:
+    case ApiTransport{responses, _, _, _} Options.AzureOptions{value}:
       do IO<Composer.StreamOutput()>:
         run : Responses.Run<Unit, V.Value, Error()> <- Azure.stream(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, responses, model, context, value)
         return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), run))
-    case ApiTransport{responses, _, _, sessions} Composer.CodexOptions{value}:
+    case ApiTransport{responses, _, _, sessions} Options.CodexOptions{value}:
       do IO<Composer.StreamOutput()>:
         run : Responses.Run<Unit, V.Value, Error()> <- Codex.streamWithSessions(~Unit, ~Unit, ~V.Value, ~Details(), ~Error(), ~render, Some{sessions}, responses, model, context, value)
         return Providers.lease(~V.Value, ~Error(), ~failure, Responses.borrow(Unit, V.Value, Error(), run))
-    case _ Composer.CommonOptions{_}: IO.pure(Composer.StreamOutput(), Fail{Tools.Failure{"No API provider registered for api: " ++ Api.name(modelApi(model))}})
+    case _ Options.CommonOptions{_}: IO.pure(Composer.StreamOutput(), Fail{Tools.Failure{"No API provider registered for api: " ++ Api.name(modelApi(model))}})
 
-def rawSelected(transport: ApiTransport, model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>, selected: Result<&2, &2, String, Composer.ApiStreamOptions>) -> IO(Composer.StreamOutput()):
+def rawSelected(transport: ApiTransport, model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, V.Value, Details()>, selected: Result<&2, &2, String, Options.ApiStreamOptions<Tools.ToolError>>) -> IO(Composer.StreamOutput()):
   match selected:
     case Fail{message}: IO.pure(Composer.StreamOutput(), Fail{Tools.Failure{message}})
     case Done{options}: rawProvider(transport, model, context, options)
 
 def openApi(transport: ApiTransport, request: Composer.StreamRequest()) -> IO(Providers.Output(V.Value, Error())):
   match transport request:
-    case ApiTransport{responses, fetch, calls, sessions} T.StreamInput{+model, context, Some{Composer.SimpleOptions{value}}}: selectedProvider(sessions, responses, fetch, calls, model, context, Some{value}, modelApi(model))
-    case ApiTransport{responses, fetch, calls, sessions} T.StreamInput{+model, context, Some{Composer.RawOptions{value}}}: rawSelected({ApiTransport{responses, fetch, calls, sessions} : ApiTransport}, model, context, Composer.optionsForApi(modelApi(model), value))
+    case ApiTransport{responses, fetch, calls, sessions} T.StreamInput{+model, context, Some{Options.SimpleOptions{value}}}: selectedProvider(sessions, responses, fetch, calls, model, context, Some{value}, modelApi(model))
+    case ApiTransport{responses, fetch, calls, sessions} T.StreamInput{+model, context, Some{Options.RawOptions{value}}}: rawSelected({ApiTransport{responses, fetch, calls, sessions} : ApiTransport}, model, context, Options.optionsForApi(Tools.ToolError, modelApi(model), value))
     case ApiTransport{responses, fetch, calls, sessions} T.StreamInput{+model, context, None{}}: selectedProvider(sessions, responses, fetch, calls, model, context, None{}, modelApi(model))
 
 # The model runtime's api stream over this transport; the model runtime

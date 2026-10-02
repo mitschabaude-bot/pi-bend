@@ -1,4 +1,5 @@
 import Base
+import ../../ai/src/api/options.bend as Options
 import ../src/core/compaction/compaction.bend as Compaction
 import ../../ai/src/providers/anthropic.models.bend as AnthropicModels
 import ../../ai/src/utils/model-api.bend as Api
@@ -68,7 +69,7 @@ def capture(slot: Rf.Ref<Maybe<&2, Composer.StreamOptions()>>, request: Composer
   match request:
     case AgentTypes.StreamInput{_, _, options}:
       do IO<Composer.StreamOutput()>:
-        Rf.write(Maybe<&2, Composer.StreamOptions()>, slot, Composer.simpleOptions(options))
+        Rf.write(Maybe<&2, Composer.StreamOptions()>, slot, Options.simpleOptions(Tools.ToolError, options))
         return Fail{Tools.Failure{"captured"}}
 
 def captured(result: Composer.StreamOutput()) -> Bool:
@@ -356,16 +357,16 @@ def cacheWarmingCase(+directory: String, +restored: Bool) -> IO(Unit):
 # Regression 8964: the provider and command are registered by distinct
 # extensions. Consume the real stream through the command's bound registry.
 type ExtensionStreamEvidence is Data:
-  ExtensionStreamEvidence{options: Rf.Ref<Maybe<&2, Composer.RequestOptions>>, text: Rf.Ref<String>, reply: Rf.Ref<Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>>, raw: Bool}
+  ExtensionStreamEvidence{options: Rf.Ref<Maybe<&2, Options.RequestOptions<Tools.ToolError>>>, text: Rf.Ref<String>, reply: Rf.Ref<Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>>, raw: Bool}
 
 def extensionReply() -> Ai.AssistantMessage<V.Value, V.Value>:
   Ai.AssistantMessage{[Ai.AssistantText{Ai.TextContent{"custom provider response", None{}}}], "issue-8964-extension-api", "extension-provider", "custom-model", None{}, None{}, None{}, None{}, warmUsage(), Ai.Stop{}, None{}, None{}, None{}, None{}, zero()}
 
-def extensionStream(slot: Rf.Ref<Maybe<&2, Composer.RequestOptions>>, request: Composer.StreamRequest()) -> IO(Composer.StreamOutput()):
+def extensionStream(slot: Rf.Ref<Maybe<&2, Options.RequestOptions<Tools.ToolError>>>, request: Composer.StreamRequest()) -> IO(Composer.StreamOutput()):
   match request:
     case AgentTypes.StreamInput{_, _, options}:
       do IO<Composer.StreamOutput()>:
-        Rf.write(Maybe<&2, Composer.RequestOptions>, slot, options)
+        Rf.write(Maybe<&2, Options.RequestOptions<Tools.ToolError>>, slot, options)
         +events : Events.AssistantMessageEventStream(V.Value, V.Value) <- Events.createAssistantMessageEventStream(~V.Value, ~V.Value)
         Events.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.TextDelta{zero(), "custom provider response", extensionReply()})
         Events.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.StreamDone{Ai.DoneStop{}, extensionReply()})
@@ -444,10 +445,10 @@ def extensionResult(reply: Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>) -> 
     case Some{Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"custom provider response", _}} <> Nil{}, _, _, _, _, _, _, _, _, Ai.Stop{}, _, _, _, _, _}}: True{}
     case _: False{}
 
-def extensionOptionsMatch(captured: Maybe<&2, Composer.RequestOptions>, raw: Bool) -> Bool:
+def extensionOptionsMatch(captured: Maybe<&2, Options.RequestOptions<Tools.ToolError>>, raw: Bool) -> Bool:
   match captured raw:
-    case Some{Composer.SimpleOptions{Ai.SimpleStreamOptions{_, _, Some{"extension-key"}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}} False{}: True{}
-    case Some{Composer.RawOptions{Composer.CommonOptions{Ai.StreamOptions{_, _, Some{"extension-key"}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}}} True{}: True{}
+    case Some{Options.SimpleOptions{Ai.SimpleStreamOptions{_, _, Some{"extension-key"}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}} False{}: True{}
+    case Some{Options.RawOptions{Options.CommonOptions{Ai.StreamOptions{_, _, Some{"extension-key"}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}}} True{}: True{}
     case _ _: False{}
 
 def checkExtensionSession(pair: Sdk.CreateAgentSessionResult & Session.AgentSession, evidence: ExtensionStreamEvidence, isolated: Models.ModelRuntime, before: Maybe<&2, Models.Model()>) -> IO(Unit):
@@ -456,7 +457,7 @@ def checkExtensionSession(pair: Sdk.CreateAgentSessionResult & Session.AgentSess
       do IO<Unit>:
         prompted : Result<&2, &2, String, Unit> <- Session.prompt(live, "/stream-custom", Nil{}, None{})
         after : Maybe<&2, Models.Model()> <- Models.getModel(isolated, "extension-provider", "custom-model")
-        captured : Maybe<&2, Composer.RequestOptions> <- Rf.read(Maybe<&2, Composer.RequestOptions>, slot)
+        captured : Maybe<&2, Options.RequestOptions<Tools.ToolError>> <- Rf.read(Maybe<&2, Options.RequestOptions<Tools.ToolError>>, slot)
         content : String <- Rf.read(String, text)
         result : Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>> <- Rf.read(Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>, reply)
         check(Maybe.is_none(&2, Models.Model(), before) && Maybe.is_none(&2, Models.Model(), after) && Result.is_done(&2, &2, String, Unit, prompted) && extensionOptionsMatch(captured, raw) && String.eq(content, "custom provider response") && extensionResult(result), Bool.pick(String, raw, "allows an extension command to use ctx.modelRegistry.stream", "allows an extension command to use ctx.modelRegistry.streamSimple"))
@@ -469,11 +470,11 @@ def checkExtensionOutcome(result: Sdk.Outcome(), evidence: ExtensionStreamEviden
 
 def extensionStreamingCase(+directory: String, raw: Bool) -> IO(Unit):
   do IO<Unit>:
-    +slot : Rf.Ref<Maybe<&2, Composer.RequestOptions>> <- Rf.new(Maybe<&2, Composer.RequestOptions>, None{})
+    +slot : Rf.Ref<Maybe<&2, Options.RequestOptions<Tools.ToolError>>> <- Rf.new(Maybe<&2, Options.RequestOptions<Tools.ToolError>>, None{})
     +text : Rf.Ref<String> <- Rf.new(String, "")
     +reply : Rf.Ref<Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>> <- Rf.new(Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>, None{})
     +evidence : ExtensionStreamEvidence = ExtensionStreamEvidence{slot, text, reply, raw}
-    +stream : Composer.ProviderStream() <- C.create(~Rf.Ref<Maybe<&2, Composer.RequestOptions>>, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~extensionStream, slot)
+    +stream : Composer.ProviderStream() <- C.create(~Rf.Ref<Maybe<&2, Options.RequestOptions<Tools.ToolError>>>, ~Composer.StreamRequest(), ~Composer.StreamOutput(), ~extensionStream, slot)
     first : Ext.ExtensionFactory() <- C.create(~Composer.ProviderStream(), ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~providerFactory, stream)
     second : Ext.ExtensionFactory() <- C.create(~ExtensionStreamEvidence, ~Ext.ExtensionAPI, ~Result<&2, &2, String, Unit>, ~commandFactory, evidence)
     +store : Auth.CredentialStore <- Credentials.inMemoryCredentialStore()
@@ -493,7 +494,7 @@ def extensionStreamingCase(+directory: String, raw: Bool) -> IO(Unit):
     Models.dispose(isolated)
     Auth.disposeStore(store)
     C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), stream)
-    oldOptions : Maybe<&2, Composer.RequestOptions> <- Rf.dispose(Maybe<&2, Composer.RequestOptions>, slot)
+    oldOptions : Maybe<&2, Options.RequestOptions<Tools.ToolError>> <- Rf.dispose(Maybe<&2, Options.RequestOptions<Tools.ToolError>>, slot)
     oldText : String <- Rf.dispose(String, text)
     oldReply : Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>> <- Rf.dispose(Maybe<&2, Ai.AssistantMessage<V.Value, V.Value>>, reply)
     return Unit{}

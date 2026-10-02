@@ -82,7 +82,7 @@
       "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences: x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified. Generated tool-call ids use one counter shared by every stream of an agent runtime (a Ref in its provider configuration; the CLI process has one runtime), as upstream's module toolCallCounter; tests/ai-misc-suites.bend checks that a second stream continues the sequence. The SDK's tContents rejection of an empty contents list ('contents are required', before any request) is ported in prepareRequest (found by tests/live_replay_check.py).",
       "source_sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
       "port_sha256": {
-        "packages/ai/src/api/google-generative-ai.bend": "8e5fddf0912e58a6af8a24da3425ddfd4970278f1dc8811557f1ac9d524e7d46",
+        "packages/ai/src/api/google-generative-ai.bend": "eef2356cdf80059a14ec49047beed23a4005365117a23df458ec4c82425df234",
         "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3",
         "packages/ai/src/api/google-generative-ai-client.bend": "66b9d756218e312975e2228e3f3ea884613febf16e9ecfc315ac250cb8b52670"
       },
@@ -97,7 +97,7 @@
       "note": "Ported to google-shared.bend: Google thinking levels and their resolution/validation messages, usesGoogleThinkingLevel, disabled thinking config, thought-signature retention and validation, Gemini version rules (tool call ids, multimodal function responses, strict tool sampling), convertMessages (transformMessages with id normalization, signed/unsigned replay, empty-block handling, consecutive function responses, legacy image turns), sanitizeForOpenApi, convertTools with strict schemas, mapToolChoice, resolveGoogleFunctionCallingMode and mapStopReason/mapStopReasonString. Covered by the ported google-shared-* suites and the Google differential in tests/google_generative_ai_check.py. The Vertex caller is not ported, so Vertex-only paths are exercised only through the shared functions.",
       "source_sha256": "62500d190085d9725ab9dd547ff1ee37e1f47daecf047836700a48980d2ec113",
       "port_sha256": {
-        "packages/ai/src/api/google-shared.bend": "1984735bfdfef01a52262523c27298c49ca0ea51421b9a2febd1e67bc420dc97"
+        "packages/ai/src/api/google-shared.bend": "97972ec010f92ea1cd43bc9bd7fdaa9cd8df253185e1e9a1431edc75ea8254cf"
       }
     },
     "packages/ai/src/api/google-vertex.lazy.ts": {
@@ -157,7 +157,7 @@
       "port_sha256": {
         "packages/ai/src/api/openai-codex-responses.bend": "fa136b97876fc835cb4223b374b89daf0da71c3ec41ec664a9dd21361a9aec2b",
         "packages/ai/src/api/openai-codex-sessions.bend": "91d9b2a2ca0ed88b1a359af5be2ed167817d53c7607aed46908597faf198cd2c",
-        "packages/ai/src/api/openai-responses.bend": "fa7a4a85c1ae51e99264de1daae25252777bf728e35540cab280a4889d77b03a"
+        "packages/ai/src/api/openai-responses.bend": "8a54ac611b445aece95c1df263d3379c29eb33e8b95afeab54415ab9745d65b5"
       },
       "ports": [
         "packages/ai/src/api/openai-codex-responses.bend",
@@ -176,7 +176,7 @@
         "packages/coding-agent/src/core/openai-completions-provider.bend"
       ],
       "port_sha256": {
-        "packages/ai/src/api/openai-completions.bend": "6bd697b4bafbd69e3ac95f65e8f4b0d008689d494bc98b228cd579b15af2cdde",
+        "packages/ai/src/api/openai-completions.bend": "5af8a0b511928a5c5b01c8592bda90019cf0ace29b8ddbcf2f4e3ce95f77da90",
         "packages/ai/src/api/openai-completions-client.bend": "3fe44fd8d5cff79e17d78905796d611aad35434c48926255d35f12037c1f54bf",
         "packages/ai/src/api/openai-completions-stream.bend": "87e923079f391b66ae1d5f3fc38859e9fae182fbdfe1a8a90e024c388f5d2417",
         "packages/coding-agent/src/core/openai-completions-provider.bend": "ae4c6d3b6b58e5bdb22af57168846c43c737b003b1eb5b9656cd7b6b7906cf7f"
@@ -195,7 +195,7 @@
       "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs. The Codex endpoint (upstream openai-codex-responses.ts, not reviewed as its own module) now sends upstream's SSE headers: model and caller headers plus the fixed Codex headers, without the SDK client's session-affinity session_id; flex/priority requests echoed as 'default' are priced at the requested tier (resolveCodexServiceTier). Codex models run their own SSE lifecycle in openai-codex-responses.bend (see its review); preparation stays here. streamSimple returns the missing-auth error before a stream exists (upstream getClientApiKey throws; for Codex models the plain-key check of openai-codex-responses.ts streamSimple). Codex-specific preparation deliberately ignores inherited samplingParams; ordinary Responses sampling behavior is unchanged.",
       "source_sha256": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479",
       "port_sha256": {
-        "packages/ai/src/api/openai-responses.bend": "fa7a4a85c1ae51e99264de1daae25252777bf728e35540cab280a4889d77b03a"
+        "packages/ai/src/api/openai-responses.bend": "8a54ac611b445aece95c1df263d3379c29eb33e8b95afeab54415ab9745d65b5"
       }
     },
     "packages/ai/src/api/openrouter-images.lazy.ts": {
@@ -371,15 +371,19 @@
     },
     "packages/ai/src/models.ts": {
       "state": "partial",
-      "note": "Provider (with filterModels as a callback over the catalog and the stored credential), RefreshModelsContext, ModelsPublication and createProvider's fetched-catalog helpers, and the Models/MutableModels collection in models.bend: createModels (an InMemoryCredentialStore, an in-memory models store and the process auth context unless given), setProvider/deleteProvider/clearProviders in registration order (a known id keeps its position), getProviders/getProvider/getModels/getModel, refresh (cache phase, then the network phase with the effective credential; generation-checked publication, persistence before the catalog update), checkAuth (stored OAuth without refreshing, then ApiKeyAuth.check or resolution), getAvailable (filterModels for the stored credential), getAuth by provider id or model (the model's static headers merged case-insensitively) and login/logout; tested by packages/ai/test/models-runtime.bend and github-copilot-oauth. The coding agent's ModelRuntime holds the collection. Adaptations: the collection keeps each provider's published catalog by id (upstream providers keep theirs in closures), so rebuildProviders names the ids whose provider was replaced; refreshes run one provider at a time; callers wait for a blocked provider, store or auth callback instead of racing the abort signal. ProviderStreams also has OpenCodeStreams{apis} for upstream's withOpenCodeSessionHeader wrapper; inheritedStreams keeps it for models.json overlays. Missing: stream/complete/streamSimple/completeSimple/streamDeferred/fetchDeferred/cancelDeferred on the collection (the application's stream functions apply getAuth and dispatch by api), Provider.headers and createProvider's per-api map. Native extension stream/complete dispatch remains in coding-agent ModelRuntime; custom compaction exercises that path. The pi-ai collection stream API gap above remains. Native ProviderStreams can retain optional deferred fetch/cancel callbacks through model overlays; these borrow their owner and share canonical typed request/error options. ModelRuntime dispatches them with resolved auth and transformed headers; the lifecycle fixture exercises native stream completion and cancellation. Built-in deferred transports and the collection-level deferred facade are still missing.",
+      "note": "Provider (with filterModels as a callback over the catalog and the stored credential), RefreshModelsContext, ModelsPublication and createProvider's fetched-catalog helpers, and the Models/MutableModels collection in models.bend: createModels (an InMemoryCredentialStore, an in-memory models store and the process auth context unless given), setProvider/deleteProvider/clearProviders in registration order (a known id keeps its position), getProviders/getProvider/getModels/getModel, refresh (cache phase, then the network phase with the effective credential; generation-checked publication, persistence before the catalog update), checkAuth (stored OAuth without refreshing, then ApiKeyAuth.check or resolution), getAvailable (filterModels for the stored credential), getAuth by provider id or model (the model's static headers merged case-insensitively) and login/logout; tested by packages/ai/test/models-runtime.bend and github-copilot-oauth. The coding agent's ModelRuntime holds the collection. Adaptations: the collection keeps each provider's published catalog by id (upstream providers keep theirs in closures), so rebuildProviders names the ids whose provider was replaced; refreshes run one provider at a time; callers wait for a blocked provider, store or auth callback instead of racing the abort signal. ProviderStreams also has OpenCodeStreams{apis} for upstream's withOpenCodeSessionHeader wrapper; inheritedStreams keeps it for models.json overlays. Missing: stream/complete/streamSimple/completeSimple/streamDeferred/fetchDeferred/cancelDeferred on the collection (the application's stream functions apply getAuth and dispatch by api), Provider.headers and createProvider's per-api map. Native extension stream/complete dispatch remains in coding-agent ModelRuntime; custom compaction exercises that path. The pi-ai collection stream API gap above remains. Native ProviderStreams can retain optional deferred fetch/cancel callbacks through model overlays; these borrow their owner and share canonical typed request/error options. ModelRuntime dispatches them with resolved auth and transformed headers; the lifecycle fixture exercises native stream completion and cancellation. Built-in deferred transports and the collection-level deferred facade are still missing. Raw/simple request options now belong to pi-ai/api/options.bend; a shared leaf thinking clamp removes API-to-Models dependencies. Collection streaming remains missing.",
       "source_sha256": "84f2799b0bf45fb01237c5c2c19641b0da5d1245670b208c05bacb5cff36b96f",
       "port_sha256": {
-        "packages/ai/src/models.bend": "92a8850d877512e70044173ad8cf0976f135b72c6953f73b294152cdb039223d",
-        "packages/coding-agent/src/core/model-runtime.bend": "1647bab2347726bec9e347b924ea1dda321997b594aa7a5425d18e359891baaf"
+        "packages/ai/src/models.bend": "0cbd8c7f967c4928d4e967392c2adbc8868768e07eaf7b136f34126d03b32f57",
+        "packages/coding-agent/src/core/model-runtime.bend": "d4997b6ab919c4d0fdaf6e5709c236091b5e192270502f04b621069d39429446",
+        "packages/ai/src/api/options.bend": "3241d4dc374183afef3f82d802f4782bea0ce0d31be23281ad3308f8ee3ddf5d",
+        "packages/ai/src/utils/thinking-levels.bend": "940deedea11860b8fd665ff2ad98e7a178f720429a2904c620a0f4995ca77f77"
       },
       "ports": [
         "packages/ai/src/models.bend",
-        "packages/coding-agent/src/core/model-runtime.bend"
+        "packages/coding-agent/src/core/model-runtime.bend",
+        "packages/ai/src/api/options.bend",
+        "packages/ai/src/utils/thinking-levels.bend"
       ]
     },
     "packages/ai/src/providers/amazon-bedrock.models.ts": {
@@ -585,17 +589,19 @@
     },
     "packages/coding-agent/src/core/model-runtime.ts": {
       "state": "partial",
-      "note": "ModelRuntime owns the effective pi-ai Models collection, runtime credentials, availability snapshot and refresh coordination. Built-in, models.json, native and config registrations retain their distinct sources; changed native registrations compose the user overlay while preserving native auth, filters and deferred methods. Config registration merges fields and composes against the original base. refreshModels publishes catalogs without forcing persistence; native OAuth model projection uses the current initialized credential and disappears on logout. Shared refresh supports independent caller cancellation and joins detached work at disposal. Provider-keyed credential operations serialize writes; committed synchronization failures carry typed credential/operation details, and cancellation respects the write boundary. Raw/simple streaming, completion and native deferred fetch/cancel resolve auth and endpoint, assemble headers, run transforms once, and preserve typed provider options. Creation supports injected/file/in-memory stores, network controls, remote catalogs and signal. Existing availability, shared-refresh, SDK, compaction, mounted-login and model-file reload fixtures characterize these paths. Remaining: modelRefreshTimeoutMs, complete registration/error precedence and config-registration hot reload, broader snapshot freshness/stale-result characterization, and source-wide API review. Native deferred dispatch is available here; built-in deferred transports and the pi-ai collection streaming facade remain separate gaps. Native getApiKeyAndHeaders exposes resolved key, nullable headers, endpoint and environment; unauthenticated requests retain configured headers, required-key errors retain legacy wording, and auth failures retain the underlying cause.",
+      "note": "ModelRuntime owns the effective pi-ai Models collection, runtime credentials, availability snapshot and refresh coordination. Built-in, models.json, native and config registrations retain their distinct sources; changed native registrations compose the user overlay while preserving native auth, filters and deferred methods. Config registration merges fields and composes against the original base. refreshModels publishes catalogs without forcing persistence; native OAuth model projection uses the current initialized credential and disappears on logout. Shared refresh supports independent caller cancellation and joins detached work at disposal. Provider-keyed credential operations serialize writes; committed synchronization failures carry typed credential/operation details, and cancellation respects the write boundary. Raw/simple streaming, completion and native deferred fetch/cancel resolve auth and endpoint, assemble headers, run transforms once, and preserve typed provider options. Creation supports injected/file/in-memory stores, network controls, remote catalogs and signal. Existing availability, shared-refresh, SDK, compaction, mounted-login and model-file reload fixtures characterize these paths. Remaining: modelRefreshTimeoutMs, complete registration/error precedence and config-registration hot reload, broader snapshot freshness/stale-result characterization, and source-wide API review. Native deferred dispatch is available here; built-in deferred transports and the pi-ai collection streaming facade remain separate gaps. Native getApiKeyAndHeaders exposes resolved key, nullable headers, endpoint and environment; unauthenticated requests retain configured headers, required-key errors retain legacy wording, and auth failures retain the underlying cause. Request dispatch uses the canonical pi-ai raw/simple options, with generic proved preservation of API-specific controls during common-field replacement.",
       "ports": [
         "packages/coding-agent/src/core/model-runtime.bend",
         "packages/runtime/src/keyed-serial.bend",
-        "packages/runtime/src/cancellable-task.bend"
+        "packages/runtime/src/cancellable-task.bend",
+        "packages/ai/src/api/options.bend"
       ],
       "source_sha256": "20c1dbfa1dd757a594cf0b4ab6e401fc6c6155484a3f490096bc5328e3c33c2c",
       "port_sha256": {
-        "packages/coding-agent/src/core/model-runtime.bend": "1647bab2347726bec9e347b924ea1dda321997b594aa7a5425d18e359891baaf",
+        "packages/coding-agent/src/core/model-runtime.bend": "d4997b6ab919c4d0fdaf6e5709c236091b5e192270502f04b621069d39429446",
         "packages/runtime/src/keyed-serial.bend": "b2bb9c08605b416857e36168802f74b752f953a431c5ab139e7e206369299661",
-        "packages/runtime/src/cancellable-task.bend": "e3478dde411ee8d2297c843dd79f08efc9a25b242491d40e762455dc2b89235c"
+        "packages/runtime/src/cancellable-task.bend": "e3478dde411ee8d2297c843dd79f08efc9a25b242491d40e762455dc2b89235c",
+        "packages/ai/src/api/options.bend": "3241d4dc374183afef3f82d802f4782bea0ce0d31be23281ad3308f8ee3ddf5d"
       }
     },
     "packages/coding-agent/src/core/session-manager.ts": {
@@ -989,7 +995,7 @@
       "note": "Concurrent all-catalog requests on one runtime share an operation; each caller can stop waiting independently, the last cancellation aborts the operation, and a later caller starts a new one. The native runtime owns the coordinator instead of using a global WeakMap. The existing fixture exercises sharing, independent cancellation, last-caller abort and detached refresh retirement against an actual ModelRuntime.",
       "source_sha256": "a7a10647deaba5036019737c376ab3f73eed12703dafeb8cb8920581ec8672e2",
       "port_sha256": {
-        "packages/coding-agent/src/core/model-runtime.bend": "1647bab2347726bec9e347b924ea1dda321997b594aa7a5425d18e359891baaf",
+        "packages/coding-agent/src/core/model-runtime.bend": "d4997b6ab919c4d0fdaf6e5709c236091b5e192270502f04b621069d39429446",
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "52a125b75aa029981a3a15cce5ca996dca83411170f65d0a3cde80cc78a9efa8"
       },
       "ports": [
@@ -1570,7 +1576,7 @@
         "packages/coding-agent/src/core/http-dispatcher.bend": "ebdef30af7fff2fd0f4529bced421f752bc290f3b92698f5a173e29b90b9e6f8",
         "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
-        "packages/coding-agent/src/core/agent-runtime.bend": "f91b2d27b31e05fba3abf6246b0cfc0295eea3b3b4d5cdb39068e306910841ea",
+        "packages/coding-agent/src/core/agent-runtime.bend": "ee4d68245696882fe122d74932f5f099472c96bf4380960a271c677338dc0a9b",
         "packages/coding-agent/src/main.bend": "ed9903faa8166852cf86e723d459556c4909ede2094d1663c7fd04da9dcbe8f5"
       }
     },
@@ -1664,11 +1670,16 @@
     },
     "packages/coding-agent/src/core/provider-composer.ts": {
       "state": "partial",
-      "note": "Typed provider configurations compose base catalogs, models.json, extension models and final model overrides, preserving native auth and request routing. OAuthProvider borrows native OAuth methods and an optional typed model-projection callback; refreshModels returns typed model definitions. Dynamic publications rebuild from source models and current credential, preserve the requested storage policy, and suppress superseded state updates. Generated auth/refresh wrappers and catalog state belong to ModelRuntime; source callbacks remain borrowed. The availability fixture covers native registration/auth, native model overlays, retained deferred methods, refresh without forced persistence and credential-dependent catalogs after initialization/logout; SDK stream-options and compaction cover request dispatch. Remaining: OAuth-name fallback for unnamed providers and complete composition/registration-precedence characterization. Compatibility request config resolves configured provider/model headers, merges them above the model headers and preserves the configured authHeader requirement even when no key resolves.",
+      "note": "Typed provider configurations compose base catalogs, models.json, extension models and final model overrides, preserving native auth and request routing. OAuthProvider borrows native OAuth methods and an optional typed model-projection callback; refreshModels returns typed model definitions. Dynamic publications rebuild from source models and current credential, preserve the requested storage policy, and suppress superseded state updates. Generated auth/refresh wrappers and catalog state belong to ModelRuntime; source callbacks remain borrowed. The availability fixture covers native registration/auth, native model overlays, retained deferred methods, refresh without forced persistence and credential-dependent catalogs after initialization/logout; SDK stream-options and compaction cover request dispatch. Remaining: OAuth-name fallback for unnamed providers and complete composition/registration-precedence characterization. Compatibility request config resolves configured provider/model headers, merges them above the model headers and preserves the configured authHeader requirement even when no key resolves. Canonical typed raw/simple options live in pi-ai/api/options.bend; composition retains only its domain request and callback types.",
       "source_sha256": "d0088e387e7cc060e73e8e1bd11ca73c969c7433e368cab6fbb3e5a1d6676f21",
       "port_sha256": {
-        "packages/coding-agent/src/core/provider-composer.bend": "ee1864bedf15779c1639c8ba22b45d595f7038e7db6857a2c0d46776ace1315c"
-      }
+        "packages/coding-agent/src/core/provider-composer.bend": "48597f59bad7d982ed94d490480a9db6006dcaf7e21cbb7133cc857d776362e6",
+        "packages/ai/src/api/options.bend": "3241d4dc374183afef3f82d802f4782bea0ce0d31be23281ad3308f8ee3ddf5d"
+      },
+      "ports": [
+        "packages/coding-agent/src/core/provider-composer.bend",
+        "packages/ai/src/api/options.bend"
+      ]
     },
     "packages/tui/src/tui-main-screen.ts": {
       "state": "partial",
@@ -1775,7 +1786,7 @@
       "port_sha256": {
         "packages/coding-agent/src/main.bend": "ed9903faa8166852cf86e723d459556c4909ede2094d1663c7fd04da9dcbe8f5",
         "packages/coding-agent/src/extensions/index.bend": "c47f07df21fae8bdec7a04b010113ad9478c26557ed92c765e0d6b5e59faba20",
-        "packages/coding-agent/src/core/agent-runtime.bend": "f91b2d27b31e05fba3abf6246b0cfc0295eea3b3b4d5cdb39068e306910841ea"
+        "packages/coding-agent/src/core/agent-runtime.bend": "ee4d68245696882fe122d74932f5f099472c96bf4380960a271c677338dc0a9b"
       }
     },
     "packages/coding-agent/src/package-manager-cli.ts": {
@@ -1810,7 +1821,7 @@
         "packages/coding-agent/src/core/agent-runtime.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-runtime.bend": "f91b2d27b31e05fba3abf6246b0cfc0295eea3b3b4d5cdb39068e306910841ea"
+        "packages/coding-agent/src/core/agent-runtime.bend": "ee4d68245696882fe122d74932f5f099472c96bf4380960a271c677338dc0a9b"
       }
     },
     "packages/coding-agent/src/core/session-export.ts": {

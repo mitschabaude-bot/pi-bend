@@ -1,6 +1,5 @@
 import Base
 import ../types.bend as T
-import ../models.bend as Models
 import ../utils/schema-json.bend as Schema
 import ../utils/transcript.bend as Transcript
 import ../utils/sanitize-unicode.bend as Unicode
@@ -121,7 +120,7 @@ def disabledFallback(+model: T.Model<J()>, fallback: T.ModelThinkingLevel) -> Re
 def disabledFor(levels: Bool, +model: T.Model<J()>) -> Result<&2, &2, String, J()>:
   match levels:
     case False{}: Done{budgetZero()}
-    case True{}: disabledFallback(model, Models.clampThinkingLevel(J(), model, T.Off{}))
+    case True{}: disabledFallback(model, Levels.clampModel(J(), model, T.Off{}))
 
 # Thought signatures
 # ------------------

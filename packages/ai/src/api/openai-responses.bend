@@ -1,6 +1,5 @@
 import Base
 import ../types.bend as T
-import ../models.bend as Models
 import ../utils/error-body.bend as Body
 import ../utils/event-stream.bend as Events
 import ../utils/model-api.bend as Api
@@ -1283,7 +1282,7 @@ def clampedLevel(level: T.ModelThinkingLevel) -> Maybe<&2, T.ThinkingLevel>:
 def clampedEffort(model: T.Model<T.JsonValue>, reasoning: Maybe<&2, T.ThinkingLevel>) -> Maybe<&2, T.ThinkingLevel>:
   match reasoning:
     case None{}: None{}
-    case Some{level}: clampedLevel(Models.clampThinkingLevel(T.JsonValue, model, T.Thinking{level}))
+    case Some{level}: clampedLevel(Thinking.clampModel(T.JsonValue, model, T.Thinking{level}))
 
 def simpleSettings(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.JsonValue>, options: Maybe<&2, SimpleStreamOptions(Reason, Telemetry, E)>) -> ResponsesSettings:
   match options:

@@ -218,7 +218,7 @@ def getSupportedThinkingLevels(-SamplingValue: Data, model: T.Model<SamplingValu
     case T.Model{_, _, _, _, _, reasoning, mapping, _, _, _, _, _, _, _, _, _}: Thinking.available(reasoning, mapping)
 
 def clampThinkingLevel(-SamplingValue: Data, model: T.Model<SamplingValue>, level: T.ModelThinkingLevel) -> T.ModelThinkingLevel:
-  Thinking.closest(getSupportedThinkingLevels(SamplingValue, model), Thinking.rank(level), T.Off{})
+  Thinking.clampModel(SamplingValue, model, level)
 
 def modelsAreEqual(-SamplingValue: Data, a: Maybe<&2, T.Nullable<T.Model<SamplingValue>>>, b: Maybe<&2, T.Nullable<T.Model<SamplingValue>>>) -> Bool:
   match a b:

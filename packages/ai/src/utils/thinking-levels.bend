@@ -73,3 +73,10 @@ def closest(remaining: List<&2, T.ModelThinkingLevel>, +requested: U32, fallback
   match remaining:
     case Nil{}: fallback
     case +head <> tail: Bool.pick(T.ModelThinkingLevel, U32.is_ge(rank(head), requested), head, closest(tail, requested, head))
+
+
+# Clamp a model request against its declared support, preferring the next
+# higher supported level and falling back to the highest lower one.
+def clampModel(-Value: Data, model: T.Model<Value>, +level: T.ModelThinkingLevel) -> T.ModelThinkingLevel:
+  match model:
+    case T.Model{_, _, _, _, _, reasoning, mapping, _, _, _, _, _, _, _, _, _}: closest(available(reasoning, mapping), rank(level), T.Off{})

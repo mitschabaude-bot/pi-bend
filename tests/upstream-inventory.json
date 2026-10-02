@@ -3376,10 +3376,12 @@
       "source": "packages/coding-agent/test/model-runtime-auth-options.test.ts",
       "status": "ported",
       "ports": [
-        "tests/model-availability.bend"
+        "tests/model-availability.bend",
+        "laws/model-options.bend",
+        "proofs/model-options.bend"
       ],
       "sha256": "eabf6f097a74406dc4db5fe189016b38797c676b0b267f0147f510c027783f27",
-      "notes": "All eleven contracts execute in tests/model-availability.bend on native one/four: credential-store injection, scoped reads/errors, method metadata and active auth, subscription distinctions, config API-key login, request env, case-insensitive Authorization precedence, one assembled-header transform, extension OAuth cancellation and OAuth-only registration. Native OAuth uses Auth.OAuthAuth; transforms are separate typed arguments and cannot leak into provider options. Cancellation checks the caller signal and its supplied native Unit reason instead of JS Error identity. A retained-method check also covers provider replacement and immutable headers."
+      "notes": "All eleven contracts execute in tests/model-availability.bend on native one/four: credential-store injection, scoped reads/errors, method metadata and active auth, subscription distinctions, config API-key login, request env, case-insensitive Authorization precedence, one assembled-header transform, extension OAuth cancellation and OAuth-only registration. Native OAuth uses Auth.OAuthAuth; transforms are separate typed arguments and cannot leak into provider options. Cancellation checks the caller signal and its supplied native Unit reason instead of JS Error identity. A retained-method check also covers provider replacement and immutable headers. Canonical typed options are owned by pi-ai/api/options.bend. Generic model-options laws prove that arbitrary common-field updates reach the provider without loss, preserve all API-specific controls, and replace rather than accumulate earlier updates."
     },
     {
       "source": "packages/coding-agent/test/model-runtime-cloudflare-compat.test.ts",
@@ -4892,10 +4894,12 @@
       "status": "ported",
       "ports": [
         "packages/coding-agent/test/sdk-stream-options.bend",
-        "tests/sdk_suites_check.py"
+        "tests/sdk_suites_check.py",
+        "laws/model-options.bend",
+        "proofs/model-options.bend"
       ],
       "sha256": "c379190d9631400232636251edb9457ee95c7667d29297ac576acabc9deba92a",
-      "notes": "Both parameterized upstream contracts (stream and streamSimple) use separate native extension factories for config-provider registration and command registration, then AgentSession.prompt dispatches /stream-custom through the bound context registry. Assertions check the raw/simple request variant, resolved extension API key, accumulated text_delta content, final stop/content and isolation from an unrelated ModelRuntime. The JS global compatibility registry assertion becomes native runtime-local isolation. Command: python3 tests/sdk_suites_check.py --prefix build/ --lanes native-1,native-4 sdk-stream-options."
+      "notes": "Both parameterized upstream contracts (stream and streamSimple) use separate native extension factories for config-provider registration and command registration, then AgentSession.prompt dispatches /stream-custom through the bound context registry. Assertions check the raw/simple request variant, resolved extension API key, accumulated text_delta content, final stop/content and isolation from an unrelated ModelRuntime. The JS global compatibility registry assertion becomes native runtime-local isolation. Command: python3 tests/sdk_suites_check.py --prefix build/ --lanes native-1,native-4 sdk-stream-options. Canonical typed options are owned by pi-ai/api/options.bend. Generic model-options laws prove that arbitrary common-field updates reach the provider without loss, preserve all API-specific controls, and replace rather than accumulate earlier updates."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8989-fork-compaction-label-boundary.test.ts",

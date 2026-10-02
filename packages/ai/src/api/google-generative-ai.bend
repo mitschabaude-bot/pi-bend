@@ -1,6 +1,6 @@
 import Base
+import ../utils/thinking-levels.bend as Levels
 import ../types.bend as T
-import ../models.bend as Models
 import ../utils/text.bend as Text
 import ../utils/transcript.bend as Transcript
 import ../utils/sanitize-unicode.bend as Unicode
@@ -248,7 +248,7 @@ def clamped(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model:
 def simpleThinking(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, reasoning: Maybe<&2, T.ThinkingLevel>, budgets: Maybe<&2, T.ThinkingBudgets>, lite: Bool) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
   match reasoning:
     case None{}: Done{disabled(Signal, Telemetry, Fetch, Error, base, choice)}
-    case Some{level}: clamped(Signal, Telemetry, Fetch, Error, model, base, choice, budgets, lite, Models.clampThinkingLevel(J(), model, T.Thinking{level}))
+    case Some{level}: clamped(Signal, Telemetry, Fetch, Error, model, base, choice, budgets, lite, Levels.clampModel(J(), model, T.Thinking{level}))
 
 def simpleWith(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>, lite: Bool) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
   match options:

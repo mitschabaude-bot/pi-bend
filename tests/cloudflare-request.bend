@@ -1,4 +1,5 @@
 import Base
+import ../packages/ai/src/api/options.bend as Options
 import ../packages/coding-agent/src/core/agent-runtime.bend as Runtime
 import ../packages/coding-agent/src/core/provider-composer.bend as Composer
 import ../packages/ai/src/api/openai-codex-sessions.bend as Sessions
@@ -103,7 +104,7 @@ def resolvedComplete(+runtime: Models.ModelRuntime, stream: Composer.ProviderStr
       do IO<Unit>:
         streams : AiModels.ProviderStreams <- Models.getProviderStreams(runtime, Ai.modelProvider(model))
         routed : Models.Model() = AiModels.streamModel(Ai.JsonValue, streams, Models.withAuthBaseUrl(model, baseUrl), env)
-        request : Composer.RequestOptions = Composer.RawOptions{Composer.CommonOptions{Ai.StreamOptions{None{}, None{}, key, Some{fetch}, env, None{}, None{}, headers, None{}, Some{F.fromU32(0)}, None{}, None{}, None{}, None{}, None{}, None{}, Some{"session-1"}, None{}, None{}}}}
+        request : Options.RequestOptions<Tools.ToolError> = Options.RawOptions{Options.CommonOptions{Ai.StreamOptions{None{}, None{}, key, Some{fetch}, env, None{}, None{}, headers, None{}, Some{F.fromU32(0)}, None{}, None{}, None{}, None{}, None{}, None{}, Some{"session-1"}, None{}, None{}}}}
         output : Composer.StreamOutput() <- C.call(Composer.StreamRequest(), Composer.StreamOutput(), stream, Agent.StreamInput{routed, context(), Some{request}})
         reply : Ai.AssistantMessage<V.Value, V.Value> <- Models.completed(model, output)
         IO.print(authLines(R.entries(Ai.Nullable<String>, Maybe.default(&2, Ai.ProviderHeaders(), headers, R.new(Ai.Nullable<String>)))))

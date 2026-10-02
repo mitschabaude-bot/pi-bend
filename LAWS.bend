@@ -38,6 +38,7 @@ import ./laws/validation.bend as Validation
 import ./laws/transcript.bend as Transcript
 import ./laws/simple-options.bend as SimpleOptions
 import ./laws/thinking-levels.bend as ThinkingLevels
+import ./laws/model-options.bend as ModelOptions
 import ./laws/agent-loop.bend as AgentLoop
 import ./laws/f64.bend as F64Laws
 import ./laws/tool-truncate.bend as ToolTruncate

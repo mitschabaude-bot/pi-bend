@@ -1,4 +1,5 @@
 import Base
+import ../packages/ai/src/api/options.bend as Options
 import ../packages/ai/src/utils/event-stream.bend as LifecycleEvents
 import ../packages/ai/src/models-store.bend as Store
 import ../packages/runtime/src/abort.bend as Abort
@@ -462,7 +463,7 @@ def captureHeaders(slot: Ref.Ref<Maybe<&2, Ai.ProviderHeaders()>>, request: Comp
   match request:
     case AgentTypes.StreamInput{_, _, Some{options}}:
       do IO<Composer.StreamOutput()>:
-        Ref.write(Maybe<&2, Ai.ProviderHeaders()>, slot, Models.baseHeaders(Composer.requestBase(options)))
+        Ref.write(Maybe<&2, Ai.ProviderHeaders()>, slot, Models.baseHeaders(Options.requestBase(Tools.ToolError, options)))
         return Fail{Tools.Failure{"captured"}}
     case _: IO.die(Composer.StreamOutput(), 1, "authorized request options missing")
 

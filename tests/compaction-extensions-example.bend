@@ -1,4 +1,5 @@
 import Base
+import ../packages/ai/src/api/options.bend as Options
 import ../packages/agent/src/types.bend as Agent
 import ../packages/agent/src/agent.bend as AgentCore
 import ../packages/ai/src/types.bend as Ai
@@ -147,7 +148,7 @@ def capture(seen: R.Ref<List<&2, Seen>>, request: Composer.StreamRequest()) -> I
   match request:
     case Agent.StreamInput{+model, context, options}:
       do IO<Composer.StreamOutput()>:
-        R.modify(List<&2, Seen>, Unit, seen, earlier => (List.append(&2, Seen, earlier, [seenOf(model, context, Maybe.map(&2, Composer.RequestOptions, Composer.BaseOptions(), Composer.requestBase, options))]), Unit{}))
+        R.modify(List<&2, Seen>, Unit, seen, earlier => (List.append(&2, Seen, earlier, [seenOf(model, context, Maybe.map(&2, Options.RequestOptions<Tools.ToolError>, Composer.BaseOptions(), Options.requestBase(Tools.ToolError), options))]), Unit{}))
         +events : Stream.AssistantMessageEventStream(V.Value, V.Value) <- Stream.createAssistantMessageEventStream(~V.Value, ~V.Value)
         Stream.push(Ai.AssistantMessageEvent<V.Value, V.Value>, Ai.AssistantMessage<V.Value, V.Value>, events, Ai.StreamDone{Ai.DoneStop{}, summaryReply(model)})
         return Done{Agent.borrowedStream(V.Value, Tools.ToolError, events)}

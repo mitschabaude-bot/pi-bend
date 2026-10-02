@@ -72,15 +72,10 @@ def requestedLevel(level: T.ModelThinkingLevel) -> Maybe<&2, T.ThinkingLevel>:
     case T.Off{}: None{}
     case T.Thinking{selected}: Some{selected}
 
-# upstream clampThinkingLevel (models.ts).
-def clampThinkingLevel(-Value: Data, model: T.Model<Value>, level: T.ModelThinkingLevel) -> T.ModelThinkingLevel:
-  match model:
-    case T.Model{_, _, _, _, _, reasoning, mapping, _, _, _, _, _, _, _, _, _}: Levels.closest(Levels.available(reasoning, mapping), Levels.rank(level), T.Off{})
-
 def clampedEffort(-Value: Data, model: T.Model<Value>, reasoning: Maybe<&2, T.ThinkingLevel>) -> Maybe<&2, T.ThinkingLevel>:
   match reasoning:
     case None{}: None{}
-    case Some{level}: requestedLevel(clampThinkingLevel(Value, model, T.Thinking{level}))
+    case Some{level}: requestedLevel(Levels.clampModel(Value, model, T.Thinking{level}))
 
 def simpleSettings(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Options(Signal, Telemetry, Fetch, Error):
   match options:
