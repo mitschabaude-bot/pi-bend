@@ -1490,9 +1490,10 @@
     },
     {
       "source": "packages/ai/test/openai-codex-stream.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/ai/test/openai-codex-stream.bend",
+        "packages/runtime/src/zstd.bend",
         "tests/openai_codex_stream_check.py",
         "tests/openai_codex_stream_reference.ts",
         "packages/ai/test/responses-payload.bend",
@@ -1506,7 +1507,7 @@
         "tests/openai_codex_reuse_check.py"
       ],
       "sha256": "03e3277a307c6a02f21ee7238b51e4f38d74b7730e882c82547b178f050a827a",
-      "notes": "24 of 36 original test instances plus 3 native SSE error cases pass through the real loopback provider on Bun/native1/native4. Assertions compare request bodies, headers, event order and final messages with pinned pi; item events supply output_index, real timeout/backoff checks replace fake timers. Supplemental WebSocket checks cover 22 scenarios including connection-limit and missing-response retry budgets, recovery after partial output with one start, and no retry/fallback for an API error after start. Consecutive-turn checks cover 15 scenarios: socket reuse, cache disabling/session isolation, cached-context deltas and invalidation, three-turn continuations, missing previous-response recovery using the full request, and remembered per-session SSE fallback before/after output. Complete messages compare where diagnostics match; transport/protocol diagnostic detail remains pending and is explicitly excluded in those scenarios. Dedicated cache-helper differential and seven owned-pool socket fixtures also pass. Original WebSocket instances remain partial until their active expiry/liveness, generated request IDs and debug/cleanup assertions are ported. Optional zstd compression and transport diagnostics remain absent. Approved adaptations use structural object equality and immutable event snapshots. Raw public entrypoints now use the Codex-specific options type; 14 additional request-option scenarios cover text verbosity, all summary values/null, explicit none and requested-level mapping behavior. The inherited samplingParams noninterference case uses the actual raw/simple option decoders and compares the complete request with pinned pi. Existing SSE, WebSocket and consecutive-turn scenarios exercise the same native fixture. This does not close the original WebSocket diagnostic/expiry/debug gaps."
+      "notes": "All 39 original test instances pass through native production paths on one/four threads against pinned pi-mono. The 28 SSE instances compare requests, headers, events and messages, including native Zstandard framing/round-trip, retry delays/backoff and timeouts. Real timers replace fake timers. WebSocket and consecutive-turn scenarios cover account isolation, one-shot cleanup, connection and idle deadlines, age expiry, cached deltas, missing-context recovery over both transports and exact pool-scoped debug statistics. The native debug/cleanup API takes its owning session pool explicitly instead of using process-global maps. Supplemental malformed-frame and transport-failure scenarios preserve native error values rather than JavaScript Error objects/stacks. Approved adaptations use structural object equality and immutable event snapshots."
     },
     {
       "source": "packages/ai/test/openai-completions-cache-control-format.test.ts",

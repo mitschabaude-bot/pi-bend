@@ -8,6 +8,7 @@ import ../src/utils/message-json.bend as MessageJson
 import ../src/utils/schema-json.bend as Convert
 import ./anthropic-harness.bend as A
 import ../../runtime/src/fetch.bend as Fetch
+import ../../runtime/src/http-message.bend as H
 import ../src/utils/json.bend as Wire
 import ./responses-payload.bend as RP
 import ../../runtime/src/abort.bend as Abort
@@ -325,12 +326,31 @@ def outcome(result: Responses.SimpleRun(Unit, Unit, String), +controller: Abort.
     case Fail{cause}: IO.print("T " ++ Responses.describePreparation(cause))
     case Done{owner}: observed(Responses.borrow(Unit, Unit, String, owner), controller, trigger)
 
-def runCase(pool: Sessions.Pool<Unit>, +base: String, +value: V.Value) -> IO(Unit):
+def debugLine(stats: Sessions.DebugStats) -> String:
+  match stats:
+    case Sessions.DebugStats{requests, created, reused, cached, stored, full, delta, inputItems, lastDelta, previous, failures, fallbacks, active, error}:
+      String.join([Nat.show(requests), Nat.show(created), Nat.show(reused), Nat.show(cached), Nat.show(stored), Nat.show(full), Nat.show(delta), Nat.show(inputItems), Maybe.default(&2, String, Maybe.map(&2, Nat, String, value => Nat.show(value), lastDelta), "-"), Maybe.default(&2, String, previous, "-"), Nat.show(failures), Nat.show(fallbacks), Maybe.default(&2, String, Maybe.map(&2, Bool, String, value => Bool.pick(String, value, "true", "false"), active), "-"), Maybe.default(&2, String, error, "-")], "|")
+
+def printStats(stats: Maybe<&2, Sessions.DebugStats>) -> IO(Unit):
+  match stats:
+    case None{}: IO.print("S -")
+    case Some{value}: IO.print("S " ++ debugLine(value))
+
+def printDebug(pool: Sessions.Pool<Unit>, session: Maybe<&2, String>) -> IO(Unit):
+  match session:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{id}:
+      do IO<Unit>:
+        stats : Maybe<&2, Sessions.DebugStats> <- Codex.getOpenAICodexWebSocketDebugStats(Unit, pool, id)
+        printStats(stats)
+
+def runCase(+pool: Sessions.Pool<Unit>, +base: String, +value: V.Value) -> IO(Unit):
   +options = Maybe.default(&2, V.Value, field(value, "options"), V.ObjectValue{R.new(V.Value)})
   do IO<Unit>:
     +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     result : Responses.SimpleRun(Unit, Unit, String) <- started(pool, text(field(value, "entry")), model(base, Maybe.default(&2, V.Value, field(value, "model"), V.Null{})), context(value), options, Abort.signal(Unit, controller))
     outcome(result, controller, Maybe.default(&2, String, text(field(value, "abortOnEvent")), "(never)"))
+    printDebug(pool, text(field(options, "sessionId")))
     cancelled : Bool <- Abort.abort(Unit, controller, None{})
     Abort.dispose(Unit, controller)
 
@@ -347,8 +367,22 @@ def cases(+pool: Sessions.Pool<Unit>, +base: String, values: List<String>) -> IO
         parsed(pool, base, Decode.parse(Text.fromScalars(Text.parseNumbers(value))))
         cases(pool, base, rest)
 
+def delayText(value: Maybe<&2, F64>) -> String:
+  match value:
+    case None{}: "-"
+    case Some{delay}: Maybe.default(&2, String, F.toJsonNumber(delay), "NaN")
+
+def retryDelay(headers: Result<&2, &2, H.HeaderSyntaxError, H.Headers>) -> IO(Unit):
+  match headers:
+    case Fail{_}: IO.die(Unit, 1, "invalid retry header")
+    case Done{fields}:
+      do IO<Unit>:
+        delay : Maybe<&2, F64> <- Codex.getRetryAfterDelayMs(fields)
+        IO.print("D " ++ delayText(delay))
+
 def arguments(pool: Sessions.Pool<Unit>, values: List<String>) -> IO(Unit):
   match values:
+    case "retry-delay" <> name <> value <> Nil{}: retryDelay(H.set(H.new(), name, value))
     case base <> rest: cases(pool, base, rest)
     case Nil{}: IO.die(Unit, 1, "base URL required")
 

@@ -45,11 +45,12 @@ def error(value: Client.RequestError) -> String:
     case Client.HeaderRejected{cause}: H.errorKind(cause)
     case Client.NonFinitePayload{}: "nonfinite-payload"
     case Client.PayloadEncodingFailure{}: "payload-encoding"
+    case Client.PayloadCompressionFailure{_}: "payload-compression"
 
 def shown(result: Result<&2, &2, Client.RequestError, Client.Request>) -> V.Value:
   match result:
     case Fail{cause}: V.ObjectValue{R.Record{R.Property{"error", V.Text{error(cause)}} <> Nil{}}}
-    case Done{Client.Request{url, method, headers, body, timeout}}:
+    case Done{Client.Request{url, method, headers, body, _, timeout}}:
       V.ObjectValue{R.Record{R.Property{"url", V.Text{URL.serialize(url, False{})}} <> R.Property{"method", V.Text{method}} <> R.Property{"headers", V.ObjectValue{R.Record{H.wireFields(Headers.entries(headers))}}} <> R.Property{"body", V.Text{body}} <> R.Property{"timeout", V.Number{timeout}} <> Nil{}}}
 
 def checked(context: Absolute.Context, input: Result<&2, &2, Parse.ParseError, V.Value>, expected: Result<&2, &2, Parse.ParseError, V.Value>) -> IO(Unit):

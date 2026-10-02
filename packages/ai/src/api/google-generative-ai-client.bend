@@ -114,7 +114,7 @@ def buildRequest(url: Result<&2, &2, URL.Error, URL.URL>, headers: Result<&2, &2
     case Fail{_} _ _: Fail{"Invalid URL"}
     case _ Fail{message} _: Fail{message}
     case _ _ None{}: Fail{"Could not encode request payload as JSON"}
-    case Done{location} Done{fields} Some{text}: Done{Client.Request{location, "post", fields, text, unbounded()}}
+    case Done{location} Done{fields} Some{text}: Done{Client.Request{location, "post", fields, text, None{}, unbounded()}}
 
 # The SDK's tContents rejects an empty contents list while converting the
 # parameters, after the model and before the request is built.

@@ -32,6 +32,8 @@ import ../../../runtime/src/url.bend as URL
 import ../../../runtime/src/url.bend as Form
 import ../../../runtime/src/url.bend as Strict
 import ../../../runtime/src/url.bend as Encode
+import ../../../runtime/src/utf8.bend as UTF8
+import ../../../runtime/src/zstd.bend as Zstd
 
 # The request side of the OpenAI SDK client (openai 6.40.0), as used by pi
 # with retries disabled: header assembly, the fixed Responses resource URL,
@@ -299,13 +301,14 @@ def azureResponsesURL(context: Absolute.Context, base: String, apiVersion: Strin
 
 # An immutable, unframed request works with either custom fetch or native HTTP.
 type Request is Data:
-  Request{url: URL.URL, method: String, headers: Headers.Headers, body: String, timeout: F64}
+  Request{url: URL.URL, method: String, headers: Headers.Headers, body: String, wireBody: Maybe<&2, List<&2, U32>>, timeout: F64}
 
 type RequestError is Data:
   URLFailure{cause: URLError}
   HeaderRejected{cause: HeaderError}
   NonFinitePayload{}
   PayloadEncodingFailure{}
+  PayloadCompressionFailure{cause: Zstd.Error}
 
 def bodyHeaders() -> T.ProviderHeaders():
   R.Record{R.Property{"content-type", T.PresentValue{"application/json"}} <> Nil{}}
@@ -326,7 +329,21 @@ def serialize(+payload: T.JsonValue) -> Result<&2, &2, RequestError, String>:
 def completed(url: URL.URL, body: String, timeout: F64, headers: Result<&2, &2, HeaderError, Headers.Headers>) -> Result<&2, &2, RequestError, Request>:
   match headers:
     case Fail{cause}: Fail{HeaderRejected{cause}}
-    case Done{fields}: Done{Request{url, "post", fields, body, timeout}}
+    case Done{fields}: Done{Request{url, "post", fields, body, None{}, timeout}}
+
+type CompressedBody is Data:
+  CompressedBody{body: String, bytes: List<&2, U32>}
+
+def compressedBody(+body: String, result: Result<&2, &2, Zstd.Error, List<&2, U32>>) -> Result<&2, &2, RequestError, CompressedBody>:
+  match result:
+    case Fail{cause}: Fail{PayloadCompressionFailure{cause}}
+    case Done{bytes}: Done{CompressedBody{body, bytes}}
+
+def completedCompressed(url: URL.URL, timeout: F64, headers: Result<&2, &2, HeaderError, Headers.Headers>, value: Result<&2, &2, RequestError, CompressedBody>) -> Result<&2, &2, RequestError, Request>:
+  match headers value:
+    case Fail{cause} _: Fail{HeaderRejected{cause}}
+    case _ Fail{cause}: Fail{cause}
+    case Done{fields} Done{CompressedBody{body, bytes}}: Done{Request{url, "post", fields, body, Some{bytes}, timeout}}
 
 def serialized(configuration: Defaults, credential: T.ProviderHeaders(), client: T.ProviderHeaders(), url: URL.URL, timeout: F64, original: Maybe<&2, F64>, body: Result<&2, &2, RequestError, String>) -> Result<&2, &2, RequestError, Request>:
   match body:
@@ -389,13 +406,13 @@ def sessionHeaders(fields: T.ProviderHeaders(), sessionId: Maybe<&2, String>) ->
 def codexHeaders(configuration: Defaults, token: String, accountId: String, sessionId: Maybe<&2, String>) -> T.ProviderHeaders():
   match configuration:
     case Defaults{userAgent, _, _, _}:
-      sessionHeaders(R.Record{R.Property{"Authorization", T.PresentValue{"Bearer " ++ token}} <> R.Property{"chatgpt-account-id", T.PresentValue{accountId}} <> R.Property{"originator", T.PresentValue{"pi"}} <> R.Property{"User-Agent", T.PresentValue{userAgent}} <> R.Property{"OpenAI-Beta", T.PresentValue{"responses=experimental"}} <> R.Property{"accept", T.PresentValue{"text/event-stream"}} <> R.Property{"content-type", T.PresentValue{"application/json"}} <> Nil{}}, sessionId)
+      sessionHeaders(R.Record{R.Property{"Authorization", T.PresentValue{"Bearer " ++ token}} <> R.Property{"chatgpt-account-id", T.PresentValue{accountId}} <> R.Property{"originator", T.PresentValue{"pi"}} <> R.Property{"User-Agent", T.PresentValue{userAgent}} <> R.Property{"OpenAI-Beta", T.PresentValue{"responses=experimental"}} <> R.Property{"accept", T.PresentValue{"text/event-stream"}} <> R.Property{"content-type", T.PresentValue{"application/json"}} <> R.Property{"content-encoding", T.PresentValue{"zstd"}} <> Nil{}}, sessionId)
 
 # Model/options headers first, then the fixed Codex headers override them.
 def serializedCodex(fixed: T.ProviderHeaders(), client: T.ProviderHeaders(), url: URL.URL, timeout: F64, body: Result<&2, &2, RequestError, String>) -> Result<&2, &2, RequestError, Request>:
   match body:
     case Fail{cause}: Fail{cause}
-    case Done{text}: completed(url, text, timeout, assembled(build(Some{client} <> Some{fixed} <> Nil{})))
+    case Done{+text}: completedCompressed(url, timeout, assembled(build(Some{client} <> Some{fixed} <> Nil{})), compressedBody(text, Zstd.encode(UTF8.encode(text))))
 
 def timedCodex(fixed: T.ProviderHeaders(), client: T.ProviderHeaders(), url: URL.URL, payload: T.JsonValue, timeout: Result<&2, &2, HeaderError, F64>) -> Result<&2, &2, RequestError, Request>:
   match timeout:
@@ -619,11 +636,11 @@ def Outcome(-Reason: Data) -> Type: Result<&2, &1, Retry.RequestFailure<AttemptE
 
 def input(-Reason: Data, request: Request, signal: Fetch.Signal(Reason)) -> Fetch.Input<Reason>:
   match request:
-    case Request{url, method, headers, body, _}: Fetch.Input{url, String.to_upper(method), headers, H.Text{body}, signal}
+    case Request{url, method, headers, body, wire, _}: Fetch.Input{url, String.to_upper(method), headers, Maybe.default(&2, H.Input, Maybe.map(&2, List<&2, U32>, H.Input, bytes => H.Bytes{bytes}, wire), H.Text{body}), signal}
 
 def timeout(request: Request) -> Result<&2, &2, Duration.MillisecondsError, U32>:
   match request:
-    case Request{_, _, _, _, milliseconds}: Duration.exactMilliseconds(milliseconds)
+    case Request{_, _, _, _, _, milliseconds}: Duration.exactMilliseconds(milliseconds)
 
 def connection(-E: Data, original: E, message: String) -> Retry.RequestFailure<E>:
   Retry.Provider{Retry.ProviderError{original, message, None{}, None{}, None{}, None{}}}
@@ -750,6 +767,7 @@ def describeRequest(error: RequestError) -> String:
     case HeaderRejected{cause}: describeHeader(cause)
     case NonFinitePayload{}: "Request payload contains a non-finite number"
     case PayloadEncodingFailure{}: "Could not encode request payload as JSON"
+    case PayloadCompressionFailure{_}: "Could not encode request payload as Zstandard"
 
 def describeEntropy(error: Seed.SeedError) -> String:
   match error:

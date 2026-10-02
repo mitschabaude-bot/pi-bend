@@ -399,7 +399,7 @@ def buildRequest(url: Result<&2, &2, URL.Error, URL.URL>, headers: Result<&2, &2
     case Fail{_} _ _: Fail{"Invalid URL"}
     case _ Fail{message} _: Fail{message}
     case _ _ None{}: Fail{"Could not encode request payload as JSON"}
-    case Done{location} Done{fields} Some{text}: Done{SDK.Request{location, "post", fields, text, GoogleClient.unbounded()}}
+    case Done{location} Done{fields} Some{text}: Done{SDK.Request{location, "post", fields, text, None{}, GoogleClient.unbounded()}}
 
 def prepared(context: URL.Context, +config: ClientConfig, auth: List<&2, R.Property<String>>, +params: J(), path: Result<&2, &2, String, String>) -> Result<&2, &2, String, SDK.Request>:
   match path:

@@ -207,7 +207,7 @@ def serializedRequest(url: URL.URL, headers: Result<&2, &2, Client.HeaderError, 
   match body headers:
     case Fail{cause} _: Fail{cause}
     case _ Fail{cause}: Fail{Client.HeaderRejected{cause}}
-    case Done{text} Done{fields}: Done{Client.Request{url, "post", fields, text, timeout}}
+    case Done{text} Done{fields}: Done{Client.Request{url, "post", fields, text, None{}, timeout}}
 
 def timedRequest(defaults: Client.Defaults, auth: Messages.ClientAuth, client: T.ProviderHeaders(), url: URL.URL, +payload: J(), original: Maybe<&2, F64>, timeout: Result<&2, &2, Client.HeaderError, F64>) -> Result<&2, &2, Client.RequestError, Client.Request>:
   match timeout:

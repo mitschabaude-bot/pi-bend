@@ -32,7 +32,7 @@
       "port_sha256": {
         "packages/ai/src/api/anthropic-messages.bend": "9c82e71ede83dac2f0bb08ce04599390866ada04a325f27d27bad6d4c0cc43fe",
         "packages/ai/src/api/anthropic-messages-stream.bend": "e039587037466f33faf9ffbb296596fd18c0e6c6992fc4466dad9001fb58719f",
-        "packages/ai/src/api/anthropic-messages-client.bend": "e2eba6659b52cac6d27ccf0793cb234c035371c1c06ebad34c4ddd1b94f22dee"
+        "packages/ai/src/api/anthropic-messages-client.bend": "26159ea6e4a1a774a1f08f7c36cf5e6d15fc06666b6baa6cd5caea04d4c51f70"
       },
       "ports": [
         "packages/ai/src/api/anthropic-messages.bend",
@@ -84,7 +84,7 @@
       "port_sha256": {
         "packages/ai/src/api/google-generative-ai.bend": "eef2356cdf80059a14ec49047beed23a4005365117a23df458ec4c82425df234",
         "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3",
-        "packages/ai/src/api/google-generative-ai-client.bend": "66b9d756218e312975e2228e3f3ea884613febf16e9ecfc315ac250cb8b52670"
+        "packages/ai/src/api/google-generative-ai-client.bend": "500150705cf34fd9ca9f052b2085e85089351810f083f9a2c606ca461a398916"
       },
       "ports": [
         "packages/ai/src/api/google-generative-ai.bend",
@@ -120,12 +120,12 @@
       ],
       "source_sha256": "d0a53a2faaad20620800a1e95d2d2175d641011c4d6b00b0877d905c57f16ec1",
       "port_sha256": {
-        "packages/ai/src/api/google-vertex.bend": "3494b6c33becfe5c9b786e0b5a38cb4eee1cc7c37c5bf0648243154d84691467",
+        "packages/ai/src/api/google-vertex.bend": "98ba327cbea8c28a8240f1c7d25c119c57be98e649d9c73f8b6a5eaa72aa56b7",
         "packages/ai/src/api/google-vertex-credentials.bend": "8abc7e7edbfdcbfdd85935801e381a6ed3d9d89fe5c98b873d0eba637e4bd94d",
         "packages/ai/src/api/google-external-account.bend": "b8e61c7e91fd8e43376971b937ddc104a85a801256044678601fbe9bd654213a",
         "packages/ai/src/api/google-metadata.bend": "506f498584388fad9ea7a6f863767f932d43f7db5709fba03a44a5b07dc73219",
         "packages/ai/src/api/credential-http.bend": "9c037e48ffab2c42a8448d6ff2fdf615ed3d789fff1f9e6efb1da10faa33794a",
-        "packages/ai/src/api/google-generative-ai-client.bend": "66b9d756218e312975e2228e3f3ea884613febf16e9ecfc315ac250cb8b52670",
+        "packages/ai/src/api/google-generative-ai-client.bend": "500150705cf34fd9ca9f052b2085e85089351810f083f9a2c606ca461a398916",
         "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3"
       }
     },
@@ -152,17 +152,21 @@
     },
     "packages/ai/src/api/openai-codex-responses.ts": {
       "state": "partial",
-      "note": "Native Codex stream/streamSimple use shared Responses request preparation and conversion, SSE retry/timeouts/service-tier pricing, and real WebSocket streaming. The CLI-owned session pool supports exclusive reusable connections, independent request cancellation, concurrent one-shot requests, immutable cached-context deltas, invalidation and checkout-time expiry. Connection-limit errors retry once before output starts; missing previous responses retry once with a fresh full request, including after partial output. One run emits start once across retries/fallback. Transport failures remember SSE for later requests in that session, without disabling other sessions. Differential checks cover 27 SSE cases, 22 WebSocket scenarios and 15 consecutive-turn scenarios on Bun/native1/native4; cache helpers and pool ownership also have dedicated checks. Remaining: active idle-expiry timers, stale-peer checks, debug/cleanup APIs, transport diagnostics, generated WebSocket request IDs without a session, https:// proxy URLs (TLS to the proxy; the attempt falls back to SSE) and optional zstd compression. WebSocket connections take the proxy as upstream's Bun WebSocketWithProxy does: resolveHttpProxyUrlForTarget for the http(s) form of the URL with the request's provider env, then a CONNECT tunnel; an unsupported proxy URL fails the attempt (SSE fallback); tests/openai_codex_websocket_check.py proxy modes compare tunnel requests, credentials, NO_PROXY and failures with pinned pi. Approved differences: structural JSON equality, immutable event snapshots, strict malformed-input rejection; parser/fetch error wording is native. Raw entrypoints use OpenAICodexResponsesOptions: typed text verbosity, all summary values/null, explicit none effort, model mappings and tool choice. Off represents the raw wire effort none. Complete request/event/result comparisons cover raw options and existing SSE/WebSocket/pooled-turn scenarios on native one/four. ModelRuntime and SDK transport retain these raw options through auth/header preparation and dispatch. Codex ignores inherited samplingParams as upstream does; the raw/simple differential fixture forwards it and checks that it cannot replace the wire envelope. Other inherited fields remain subject to source review.",
+      "note": "Native Codex stream/streamSimple cover the complete upstream stream suite: request conversion, SSE retries/deadlines/service-tier pricing and valid Zstandard request frames; real WebSocket streaming; pool-scoped reuse, expiry, account isolation, cached-context deltas, missing-context recovery and cleanup; exact public debug counters and asserted timeout messages. The native debug/cleanup API takes the owning pool explicitly instead of consulting process-global maps. Connection-limit and missing-context failures each retry once without duplicating the start event, and pre-start failures can fall back to SSE. WebSocket proxy resolution, CONNECT authentication and NO_PROXY behavior match the pinned implementation. Approved differences are structural JSON equality, immutable event snapshots, strict malformed-input rejection and native error values without JavaScript stacks. Remaining source gaps are entropy-compressed Zstandard blocks (the current writer emits standards-compliant raw blocks), active idle-expiry retirement, stale-peer probing, generated WebSocket request IDs without a session, TLS to an HTTPS proxy and full transport diagnostic metadata. Raw options and inherited-sampling noninterference are covered through the public raw/simple paths; other inherited fields remain subject to source review.",
       "source_sha256": "ea1860ea6f78d1ed4e935e86b5dcb149ccb1f03a12669ff8550cc7243ec6ddc8",
       "port_sha256": {
-        "packages/ai/src/api/openai-codex-responses.bend": "fa136b97876fc835cb4223b374b89daf0da71c3ec41ec664a9dd21361a9aec2b",
-        "packages/ai/src/api/openai-codex-sessions.bend": "91d9b2a2ca0ed88b1a359af5be2ed167817d53c7607aed46908597faf198cd2c",
-        "packages/ai/src/api/openai-responses.bend": "8a54ac611b445aece95c1df263d3379c29eb33e8b95afeab54415ab9745d65b5"
+        "packages/ai/src/api/openai-client.bend": "e85c1f4a0d28a12769b7b74d4dbbbb7b818983c7f998a37442eb29ddbb6ae044",
+        "packages/ai/src/api/openai-codex-responses.bend": "a0be591caf8cd92d1aee5eaea53829ea0f1bfc3e7596167b69936cf2dc234d22",
+        "packages/ai/src/api/openai-codex-sessions.bend": "46891a5153f9a870a194d2eb8f8675b2e352f93bd6f8c377a6d7e09c2283a571",
+        "packages/ai/src/api/openai-responses.bend": "8a54ac611b445aece95c1df263d3379c29eb33e8b95afeab54415ab9745d65b5",
+        "packages/runtime/src/zstd.bend": "7497fe400402c5a8e0f08b3a052af56377baec553d3c5038d491839df1ac1f46"
       },
       "ports": [
+        "packages/ai/src/api/openai-client.bend",
         "packages/ai/src/api/openai-codex-responses.bend",
         "packages/ai/src/api/openai-codex-sessions.bend",
-        "packages/ai/src/api/openai-responses.bend"
+        "packages/ai/src/api/openai-responses.bend",
+        "packages/runtime/src/zstd.bend"
       ]
     },
     "packages/ai/src/api/openai-completions.ts": {
@@ -280,7 +284,7 @@
       "note": "Native OAuthAuth.login selects browser/device login. Browser authorization uses PKCE, independent 16-byte hex state, upstream URL fields, callback host override, state validation, manual-input fallback and token exchange with the browser redirect URI. Device login notifies the user code then polls/exchanges with the device redirect URI. Refresh and toAuth remain native. Browser/manual workers share typed first-settlement arbitration and are cancelled/joined before disposal. The callback server answers with upstream's handler (callbackReply) and oauth-page.bend's pages, compared byte for byte with pinned pi in tests/oauth_callback_pages_check.py; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
       "source_sha256": "757c6cff2bc67d89df30ad175eead549519e1d3756397b5b4189460ac9dbcaba",
       "port_sha256": {
-        "packages/ai/src/auth/oauth/openai-codex.bend": "b259f40999841da31598540cd0656007d2550298e2ff228aad40473fde2a50b9",
+        "packages/ai/src/auth/oauth/openai-codex.bend": "9797cd217d69fc79c4a7e4e788390c18da5ab80ea092ecafeaa4af9997dd44f5",
         "packages/ai/src/auth/oauth/browser.bend": "fdb9e73450eb2a5630d820fcade347aaad6c05c39fc7a8f04c2631a6514f99f5"
       },
       "ports": [

@@ -78,8 +78,16 @@ type Slot<-Reason: Data> is Type:
 type State<-Reason: Data> is Type:
   State{slots: List<&1, Slot<Reason>>, nextGeneration: Nat, sseFallback: List<&2, String>}
 
+# Debug counters are explicit pool state in the native API, so independent
+# Models collections do not communicate through a process-global map.
+type DebugStats is Data:
+  DebugStats{requests: Nat, connectionsCreated: Nat, connectionsReused: Nat, cachedContextRequests: Nat, storeTrueRequests: Nat, fullContextRequests: Nat, deltaRequests: Nat, lastInputItems: Nat, lastDeltaInputItems: Maybe<&2, Nat>, lastPreviousResponseId: Maybe<&2, String>, websocketFailures: Nat, sseFallbacks: Nat, websocketFallbackActive: Maybe<&2, Bool>, lastWebSocketError: Maybe<&2, String>}
+
+type DebugEntry is Data:
+  DebugEntry{sessionId: String, stats: DebugStats}
+
 type Pool<-Reason: Data> is Data:
-  Pool{state: Ref.Ref<State<Reason>>, policy: Policy}
+  Pool{state: Ref.Ref<State<Reason>>, debug: Ref.Ref<List<&2, DebugEntry>>, policy: Policy}
 
 type Checkout<-Reason: Data> is Type:
   Reused{reservation: Reservation, entry: Entry<Reason>}
@@ -165,7 +173,7 @@ def takeSelected(-Reason: Data, pair: Checkout<Reason> & List<&1, Entry<Reason>>
 
 def take(-Reason: Data, pool: Pool<Reason>, session: String, account: String, now: F64) -> IO(Checkout<Reason>):
   match pool:
-    case Pool{reference, policy}:
+    case Pool{reference, _, policy}:
       do IO<Checkout<Reason>>:
         pair : Checkout<Reason> & List<&1, Entry<Reason>> <- Ref.modify(State<Reason>, Checkout<Reason> & List<&1, Entry<Reason>>, reference, state => takeState(Reason, session, account, now, policy, state))
         takeSelected(Reason, pair)
@@ -210,7 +218,7 @@ def parkedEntry(-Reason: Data, policy: Policy, now: F64, entry: Entry<Reason>) -
 def release(-Reason: Data, pool: Pool<Reason>, reservation: Maybe<&2, Reservation>, entry: Entry<Reason>, keep: Bool, now: F64) -> IO(Unit):
   match pool reservation:
     case _ None{}: disposeEntry(Reason, entry)
-    case Pool{reference, policy} Some{ticket}:
+    case Pool{reference, _, policy} Some{ticket}:
       do IO<Unit>:
         discarded : Maybe<&1, Entry<Reason>> <- Ref.modify(State<Reason>, Maybe<&1, Entry<Reason>>, reference, state => putState(Reason, ticket, parkedEntry(Reason, policy, now, entry), keep, state))
         disposeMaybeEntry(Reason, discarded)
@@ -251,7 +259,7 @@ def tracked(-Reason: Data, controller: Abort.AbortController<Deadline.Cause<Reas
 def track(-Reason: Data, pool: Pool<Reason>, reservation: Maybe<&2, Reservation>, +controller: Abort.AbortController<Deadline.Cause<Reason>>) -> IO(Unit):
   match pool reservation:
     case _ None{}: IO.pure(Unit, Unit{})
-    case Pool{reference, _} Some{ticket}:
+    case Pool{reference, _, _} Some{ticket}:
       do IO<Unit>:
         found : Bool <- Ref.modify(State<Reason>, Bool, reference, state => trackState(Reason, ticket, controller, state))
         tracked(Reason, controller, found)
@@ -316,7 +324,7 @@ def closeCleared(-Reason: Data, pair: List<&1, Entry<Reason>> & List<&2, Abort.A
 
 def clear(-Reason: Data, pool: Pool<Reason>, session: Maybe<&2, String>) -> IO(Unit):
   match pool:
-    case Pool{reference, _}:
+    case Pool{reference, _, _}:
       do IO<Unit>:
         discarded : List<&1, Entry<Reason>> & List<&2, Abort.AbortController<Deadline.Cause<Reason>>> <- Ref.modify(State<Reason>, List<&1, Entry<Reason>> & List<&2, Abort.AbortController<Deadline.Cause<Reason>>>, reference, state => clearState(Reason, session, state))
         closeCleared(Reason, discarded)
@@ -324,7 +332,8 @@ def clear(-Reason: Data, pool: Pool<Reason>, session: Maybe<&2, String>) -> IO(U
 def create(-Reason: Data, policy: Policy) -> IO(Pool<Reason>):
   do IO<Pool<Reason>>:
     reference : Ref.Ref<State<Reason>> <- Ref.new(State<Reason>, State{Nil{}, 0n, Nil{}})
-    return Pool{reference, policy}
+    debug : Ref.Ref<List<&2, DebugEntry>> <- Ref.new(List<&2, DebugEntry>, Nil{})
+    return Pool{reference, debug, policy}
 
 def disposeSlots(-Reason: Data, slots: List<&1, Slot<Reason>>) -> IO(Unit):
   match slots:
@@ -342,9 +351,10 @@ def disposeState(-Reason: Data, state: State<Reason>) -> IO(Unit):
 # Borrowers finish their requests before retiring the pool, as for native fetch.
 def dispose(-Reason: Data, pool: Pool<Reason>) -> IO(Unit):
   match pool:
-    case Pool{reference, _}:
+    case Pool{reference, debug, _}:
       do IO<Unit>:
         state : State<Reason> <- Ref.dispose(State<Reason>, reference)
+        entries : List<&2, DebugEntry> <- Ref.dispose(List<&2, DebugEntry>, debug)
         disposeState(Reason, state)
 
 # A failed dial has no connection to release, but must relinquish its reservation.
@@ -359,7 +369,7 @@ def abandonState(-Reason: Data, ticket: Reservation, state: State<Reason>) -> St
 def abandon(-Reason: Data, pool: Pool<Reason>, ticket: Maybe<&2, Reservation>) -> IO(Unit):
   match pool ticket:
     case _ None{}: IO.pure(Unit, Unit{})
-    case Pool{reference, _} Some{value}: Ref.modify(State<Reason>, Unit, reference, state => abandonState(Reason, value, state))
+    case Pool{reference, _, _} Some{value}: Ref.modify(State<Reason>, Unit, reference, state => abandonState(Reason, value, state))
 
 # Transport failures disable WebSocket for later requests in this session.
 def hasFallback(sessions: List<&2, String>, +session: String) -> Bool:
@@ -373,7 +383,7 @@ def fallbackState(-Reason: Data, session: String, state: State<Reason>) -> State
 
 def usesSse(-Reason: Data, pool: Pool<Reason>, session: String) -> IO(Bool):
   match pool:
-    case Pool{reference, _}: Ref.modify(State<Reason>, Bool, reference, state => fallbackState(Reason, session, state))
+    case Pool{reference, _, _}: Ref.modify(State<Reason>, Bool, reference, state => fallbackState(Reason, session, state))
 
 def rememberState(-Reason: Data, +session: String, state: State<Reason>) -> State<Reason> & Unit:
   match state:
@@ -381,4 +391,111 @@ def rememberState(-Reason: Data, +session: String, state: State<Reason>) -> Stat
 
 def rememberSse(-Reason: Data, pool: Pool<Reason>, session: String) -> IO(Unit):
   match pool:
-    case Pool{reference, _}: Ref.modify(State<Reason>, Unit, reference, state => rememberState(Reason, session, state))
+    case Pool{reference, _, _}: Ref.modify(State<Reason>, Unit, reference, state => rememberState(Reason, session, state))
+
+# Public WebSocket diagnostics
+# ----------------------------
+
+type DebugChange is Data:
+  DebugCheckout{reused: Bool, cachedContext: Bool}
+  DebugBody{inputItems: Nat, storeTrue: Bool, previousResponseId: Maybe<&2, String>}
+  DebugFailure{message: String}
+  DebugFallback{active: Bool}
+
+def emptyDebug() -> DebugStats:
+  DebugStats{0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, None{}, None{}, 0n, 0n, None{}, None{}}
+
+def checkoutDebug(+reused: Bool, cached: Bool, stats: DebugStats) -> DebugStats:
+  match stats:
+    case DebugStats{requests, created, reusedCount, cachedCount, stored, full, delta, input, lastDelta, previous, failures, fallbacks, active, error}:
+      DebugStats{requests + 1n, created + Bool.pick(Nat, reused, 0n, 1n), reusedCount + Bool.pick(Nat, reused, 1n, 0n), cachedCount + Bool.pick(Nat, cached, 1n, 0n), stored, full, delta, input, lastDelta, previous, failures, fallbacks, active, error}
+
+def bodyDebug(+input: Nat, stored: Bool, previous: Maybe<&2, String>, stats: DebugStats) -> DebugStats:
+  match stats previous:
+    case DebugStats{requests, created, reused, cached, storeCount, full, delta, _, _, _, failures, fallbacks, active, error} None{}:
+      DebugStats{requests, created, reused, cached, storeCount + Bool.pick(Nat, stored, 1n, 0n), full + 1n, delta, input, None{}, None{}, failures, fallbacks, active, error}
+    case DebugStats{requests, created, reused, cached, storeCount, full, delta, _, _, _, failures, fallbacks, active, error} Some{id}:
+      DebugStats{requests, created, reused, cached, storeCount + Bool.pick(Nat, stored, 1n, 0n), full, delta + 1n, input, Some{input}, Some{id}, failures, fallbacks, active, error}
+
+def failureDebug(message: String, stats: DebugStats) -> DebugStats:
+  match stats:
+    case DebugStats{requests, created, reused, cached, stored, full, delta, input, lastDelta, previous, failures, fallbacks, _, _}:
+      DebugStats{requests, created, reused, cached, stored, full, delta, input, lastDelta, previous, failures + 1n, fallbacks, Some{True{}}, Some{message}}
+
+def fallbackDebug(active: Bool, stats: DebugStats) -> DebugStats:
+  match stats:
+    case DebugStats{requests, created, reused, cached, stored, full, delta, input, lastDelta, previous, failures, fallbacks, _, error}:
+      DebugStats{requests, created, reused, cached, stored, full, delta, input, lastDelta, previous, failures, fallbacks + 1n, Some{active}, error}
+
+def applyDebug(change: DebugChange, stats: DebugStats) -> DebugStats:
+  match change:
+    case DebugCheckout{reused, cached}: checkoutDebug(reused, cached, stats)
+    case DebugBody{input, stored, previous}: bodyDebug(input, stored, previous, stats)
+    case DebugFailure{message}: failureDebug(message, stats)
+    case DebugFallback{active}: fallbackDebug(active, stats)
+
+def changedDebug(+session: String, +change: DebugChange, entries: List<&2, DebugEntry>) -> List<&2, DebugEntry>:
+  match entries:
+    case Nil{}: DebugEntry{session, applyDebug(change, emptyDebug())} <> Nil{}
+    case DebugEntry{+id, +stats} <> +rest:
+      Bool.pick(Unit -> List<&2, DebugEntry>, String.eq(id, session), _ => DebugEntry{id, applyDebug(change, stats)} <> rest, _ => DebugEntry{id, stats} <> changedDebug(session, change, rest))(Unit{})
+
+def debugChanged(session: String, change: DebugChange, entries: List<&2, DebugEntry>) -> List<&2, DebugEntry> & Unit:
+  (changedDebug(session, change, entries), Unit{})
+
+def recordDebug(-Reason: Data, pool: Pool<Reason>, session: String, change: DebugChange) -> IO(Unit):
+  match pool:
+    case Pool{_, debug, _}: Ref.modify(List<&2, DebugEntry>, Unit, debug, entries => debugChanged(session, change, entries))
+
+def recordCheckout(-Reason: Data, pool: Pool<Reason>, session: String, reused: Bool, cachedContext: Bool) -> IO(Unit):
+  recordDebug(Reason, pool, session, DebugCheckout{reused, cachedContext})
+
+def inputItems(value: Maybe<&2, V.Value>) -> Nat:
+  match value:
+    case Some{V.ArrayValue{items}}: List.length(&2, V.Value, items)
+    case _: 0n
+
+def trueValue(value: Maybe<&2, V.Value>) -> Bool:
+  match value:
+    case Some{V.Boolean{value}}: value
+    case _: False{}
+
+def textValue(value: Maybe<&2, V.Value>) -> Maybe<&2, String>:
+  match value:
+    case Some{V.Text{text}}: Some{text}
+    case _: None{}
+
+def recordBody(-Reason: Data, pool: Pool<Reason>, session: String, +body: R.Record<V.Value>) -> IO(Unit):
+  recordDebug(Reason, pool, session, DebugBody{inputItems(R.get(V.Value, body, "input")), trueValue(R.get(V.Value, body, "store")), textValue(R.get(V.Value, body, "previous_response_id"))})
+
+def recordFailure(-Reason: Data, pool: Pool<Reason>, session: String, message: String) -> IO(Unit):
+  recordDebug(Reason, pool, session, DebugFailure{message})
+
+def recordFallback(-Reason: Data, pool: Pool<Reason>, session: String, active: Bool) -> IO(Unit):
+  recordDebug(Reason, pool, session, DebugFallback{active})
+
+def foundDebug(+session: String, entries: List<&2, DebugEntry>) -> Maybe<&2, DebugStats>:
+  match entries:
+    case Nil{}: None{}
+    case DebugEntry{id, stats} <> rest: Bool.pick(Maybe<&2, DebugStats>, String.eq(id, session), Some{stats}, foundDebug(session, rest))
+
+def debugStats(-Reason: Data, pool: Pool<Reason>, session: String) -> IO(Maybe<&2, DebugStats>):
+  match pool:
+    case Pool{_, debug, _}:
+      do IO<Maybe<&2, DebugStats>>:
+        entries : List<&2, DebugEntry> <- Ref.read(List<&2, DebugEntry>, debug)
+        return foundDebug(session, entries)
+
+def retainedDebug(+session: String, entries: List<&2, DebugEntry>) -> List<&2, DebugEntry>:
+  match entries:
+    case Nil{}: Nil{}
+    case DebugEntry{+id, stats} <> +rest: Bool.pick(List<&2, DebugEntry>, String.eq(id, session), retainedDebug(session, rest), DebugEntry{id, stats} <> retainedDebug(session, rest))
+
+def resetDebug(-Reason: Data, pool: Pool<Reason>, session: Maybe<&2, String>) -> IO(Unit):
+  match pool session:
+    case Pool{_, debug, _} None{}: Ref.write(List<&2, DebugEntry>, debug, Nil{})
+    case Pool{_, debug, _} Some{id}: Ref.modify(List<&2, DebugEntry>, Unit, debug, entries => (retainedDebug(id, entries), Unit{}))
+
+def reservationSession(reservation: Reservation) -> String:
+  match reservation:
+    case Reservation{session, _, _}: session

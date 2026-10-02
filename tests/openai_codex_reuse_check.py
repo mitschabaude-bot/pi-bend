@@ -7,7 +7,7 @@ import hashlib
 import json
 import subprocess
 import threading
-from openai_codex_websocket_check import Server, Handler, fixture, events, comparable, ROOT
+from openai_codex_websocket_check import Server, Handler, fixture, events, comparable, parse_stats, ROOT
 from websocket_client_check import frame, receive, GUID
 
 
@@ -41,9 +41,12 @@ class ReusableHandler(Handler):
                             conn.sendall(frame(1, json.dumps(value).encode()))
                     conn.sendall(frame(8, b'\x03\xe8'))
                     return
-                if self.server.mode == 'cached-missing' and ordinal == 2:
+                if self.server.mode in ('cached-missing', 'cached-missing-sse') and ordinal == 2:
                     conn.sendall(frame(1, json.dumps({'type': 'error', 'code': 'previous_response_not_found', 'message': 'fixture recovery'}).encode()))
                     continue
+                if self.server.mode == 'cached-missing-sse' and ordinal == 3:
+                    conn.sendall(frame(8, b'\x03\xe8'))
+                    return
                 for value in events(tool=self.server.tool):
                     if value.get('item', {}).get('type') == 'message':
                         value['item']['id'] = f'msg_{ordinal}'
@@ -67,7 +70,14 @@ def native_results(stdout):
             message = json.loads(''.join(chr(int(n)) for n in line[2:].split(',')))
             results.append({'events': labels, 'message': message})
             labels = []
+        elif line.startswith('S '):
+            results[-1]['stats'] = parse_stats(line[2:])
     return results
+
+
+def account_token(account):
+    payload = base64.b64encode(json.dumps({'https://api.openai.com/auth': {'chatgpt_account_id': account}}).encode()).decode()
+    return f'aaa.{payload}.bbb'
 
 
 def run(command, mode, reference=False, previous=None, following=None):
@@ -115,6 +125,10 @@ def run(command, mode, reference=False, previous=None, following=None):
             other = copy.deepcopy(cases[1])
             other['options']['sessionId'] = 'isolated'
             cases.append(other)
+        if mode == 'account-rotation':
+            cases.append(copy.deepcopy(cases[1]))
+            for case, account in zip(cases, ('account-a', 'account-b', 'account-a')):
+                case['options']['apiKey'] = account_token(account)
         try:
             if reference:
                 result = subprocess.run(command, cwd=ROOT, input=json.dumps({'url': url, 'cases': cases}), text=True, capture_output=True, timeout=15)
@@ -131,7 +145,9 @@ def run(command, mode, reference=False, previous=None, following=None):
         assert not server.errors, server.errors
         assert len(output) == len(cases), output
         expected = [0, 1] if mode in ('uncached', 'session-isolation') else [0] * len(cases)
-        if mode == 'cached-missing':
+        if mode == 'account-rotation':
+            expected = [0, 1, 0]
+        if mode in ('cached-missing', 'cached-missing-sse'):
             expected = [0, 0, 1]
             assert 'previous_response_id' in server.requests[1]
             assert 'previous_response_id' not in server.requests[2]
@@ -139,10 +155,16 @@ def run(command, mode, reference=False, previous=None, following=None):
         if mode.startswith('sticky-'):
             expected = [0, 1] if mode == 'sticky-isolation' else [0]
             assert len(server.http_requests) == (1 if mode == 'sticky-after' else 2), (mode, server.http_requests)
+        if mode == 'cached-missing-sse':
+            assert len(server.http_requests) == 1, server.http_requests
         assert server.identities == expected, (mode, server.identities)
         normalized = [comparable(item) for item in output]
-        if mode.startswith('sticky-'):
+        if mode.startswith('sticky-') or mode == 'cached-missing-sse':
             for item in normalized:
+                if item.get('stats'):
+                    item['stats'].pop('lastWebSocketError', None)
+                # The original recovery assertions do not inspect the
+                # transport diagnostic object or its JavaScript stack trace.
                 item['message'].pop('diagnostics', None)
                 # Close-frame diagnostic wording is tracked separately.
                 if item['message']['stopReason'] == 'error':
@@ -160,13 +182,13 @@ def main():
     initial = run(reference, 'reuse', True)[0]
     previous, following = initial[0]['message'], initial[1]['message']
     previous_tool = run(reference, 'seed-tool', True)[0][0]['message']
-    modes = ('reuse', 'uncached', 'session-isolation', 'cached-empty', 'cached-user',
-             'auto-user', 'unset-user', 'cached-configuration', 'cached-prefix', 'cached-tool', 'cached-chain', 'cached-missing', 'sticky-before', 'sticky-after', 'sticky-isolation')
+    modes = ('reuse', 'uncached', 'session-isolation', 'account-rotation', 'cached-empty', 'cached-user',
+             'auto-user', 'unset-user', 'cached-configuration', 'cached-prefix', 'cached-tool', 'cached-chain', 'cached-missing', 'cached-missing-sse', 'sticky-before', 'sticky-after', 'sticky-isolation')
     for mode in modes:
         prior = previous_tool if mode == 'cached-tool' else previous
         want = run(reference, mode, True, prior, following)
         second = want[1][1] if len(want[1]) > 1 else {}
-        delta = mode in ('cached-empty', 'cached-user', 'auto-user', 'cached-tool', 'cached-chain', 'cached-missing')
+        delta = mode in ('cached-empty', 'cached-user', 'auto-user', 'cached-tool', 'cached-chain', 'cached-missing', 'cached-missing-sse')
         assert ('previous_response_id' in second) == delta, (mode, second)
         if delta:
             assert second['previous_response_id'] == 'resp_1', second

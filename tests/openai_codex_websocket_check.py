@@ -72,6 +72,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             request = json.loads(payload)
             assert request.pop('type') == 'response.create'
             server.requests.append(request)
+            if server.mode == 'idle-before':
+                time.sleep(.15)
+                values = []
+            else:
+                values = events(server.text, server.mode == 'tool')
             if server.mode == 'close-before':
                 conn.sendall(frame(8, b'\x03\xe8'))
                 return
@@ -88,7 +93,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if server.mode == 'mixed-retries' and ordinal <= 2:
                 code = 'previous_response_not_found' if ordinal == 1 else 'websocket_connection_limit_reached'
             failure = {'type': 'error', 'code': code, 'message': 'fixture recovery'}
-            values = events(server.text, server.mode == 'tool')
             if code:
                 values = [*values[:3], failure] if after else [failure]
             if server.mode == 'invalid':
@@ -174,13 +178,23 @@ def fixture(mode):
         value['options'].pop('transport')
     if mode == 'abort':
         value['abortOnEvent'] = 'text_delta:Hello'
-    if mode == 'idle':
+    if mode in ('idle', 'idle-before'):
         value['options']['timeoutMs'] = 30
     if mode == 'connect-timeout':
         value['options']['websocketConnectTimeoutMs'] = 30
     if mode == 'tool':
         value['tools'] = [{'name': 'read', 'description': 'Read a file', 'parameters': {'type': 'object', 'properties': {'path': {'type': 'string'}}, 'required': ['path']}}]
     return value
+
+
+def parse_stats(text):
+    if not text or text == '-':
+        return None
+    values = text.split('|')
+    integer = lambda index: int(values[index])
+    optional_integer = lambda index: None if values[index] == '-' else int(values[index])
+    optional_bool = lambda index: None if values[index] == '-' else values[index] == 'true'
+    return {'requests': integer(0), 'connectionsCreated': integer(1), 'connectionsReused': integer(2), 'cachedContextRequests': integer(3), 'storeTrueRequests': integer(4), 'fullContextRequests': integer(5), 'deltaRequests': integer(6), 'lastInputItems': integer(7), 'lastDeltaInputItems': optional_integer(8), 'lastPreviousResponseId': None if values[9] == '-' else values[9], 'websocketFailures': integer(10), 'sseFallbacks': integer(11), 'websocketFallbackActive': optional_bool(12), 'lastWebSocketError': None if values[13] == '-' else values[13]}
 
 
 def run(command, mode, reference=False):
@@ -208,8 +222,11 @@ def run(command, mode, reference=False):
                 output = json.loads(result.stdout)
             else:
                 lines = result.stdout.splitlines()
+                stat_line = next((line[2:] for line in lines if line.startswith('S ')), None)
+                stats = parse_stats(stat_line)
                 output = {'events': [line[2:] for line in lines if line.startswith('E ')],
-                          'message': json.loads(''.join(chr(int(n)) for n in next(line[2:] for line in lines if line.startswith('R ')).split(',')))}
+                          'message': json.loads(''.join(chr(int(n)) for n in next(line[2:] for line in lines if line.startswith('R ')).split(','))),
+                          'stats': stats}
         finally:
             server.shutdown()
             worker.join()
@@ -232,6 +249,10 @@ def run(command, mode, reference=False):
 def comparable(output):
     output = {**output, 'message': dict(output['message'])}
     output['message'].pop('timestamp', None)
+    if output.get('stats'):
+        output['stats'] = {key: value for key, value in output['stats'].items() if value is not None}
+    else:
+        output['stats'] = None
     return output
 
 
@@ -241,7 +262,7 @@ def main():
     parser.add_argument('--backends', nargs='+', choices=['bun', 'native-1', 'native-4'], default=['bun'])
     parser.add_argument('--modes', nargs='+')
     args = parser.parse_args()
-    for mode in args.modes or ('limit-once', 'limit-always', 'context-once', 'context-after', 'mixed-retries', 'limit-after', 'complete', 'simple', 'auto', 'cached-first', 'connect-disabled', 'idle-disabled', 'fragmented', 'binary', 'tool', 'api-error', 'invalid', 'close-before', 'close-after', 'abort', 'idle', 'connect-timeout', *PROXY_MODES):
+    for mode in args.modes or ('limit-once', 'limit-always', 'context-once', 'context-after', 'mixed-retries', 'limit-after', 'complete', 'simple', 'auto', 'cached-first', 'connect-disabled', 'idle-disabled', 'fragmented', 'binary', 'tool', 'api-error', 'invalid', 'close-before', 'close-after', 'abort', 'idle-before', 'idle', 'connect-timeout', *PROXY_MODES):
         want = run(['bun', 'tests/openai_codex_websocket_reference.ts'], mode, True)
         for backend in args.backends:
             command = ['bun', args.prefix + '.js'] if backend == 'bun' else [args.prefix, '--threads', backend[-1]]
@@ -261,6 +282,13 @@ def main():
                 assert got.get('connects') == want.get('connects'), (backend, mode, got, want)
                 assert got['http_requests'] == want['http_requests'], (backend, mode, got, want)
                 assert got['message']['stopReason'] == want['message']['stopReason'], (backend, mode, got, want)
+                got_stats, want_stats = comparable(got)['stats'], comparable(want)['stats']
+                if mode not in ('connect-timeout', 'idle-before', 'idle'):
+                    if got_stats is not None:
+                        got_stats.pop('lastWebSocketError', None)
+                    if want_stats is not None:
+                        want_stats.pop('lastWebSocketError', None)
+                assert got_stats == want_stats, (backend, mode, got_stats, want_stats)
                 print(f'{backend}: {mode} fallback/no-replay/events/stop reason PASS (diagnostics pending)')
 
 

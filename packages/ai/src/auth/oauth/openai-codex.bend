@@ -105,7 +105,7 @@ def requestAt(url: Result<&2, &2, URL.Error, URL.URL>, headers: Result<&2, &2, H
   match url headers:
     case Fail{_} _: Fail{"OpenAI Codex token URL is invalid"}
     case _ Fail{_}: Fail{"OpenAI Codex token request headers are invalid"}
-    case Done{url} Done{fields}: Done{Client.Request{url, "post", fields, body, REFRESH_TIMEOUT_MS()}}
+    case Done{url} Done{fields}: Done{Client.Request{url, "post", fields, body, None{}, REFRESH_TIMEOUT_MS()}}
 
 def request(context: URL.Context, refreshToken: String) -> Result<&2, &2, String, Client.Request>:
   requestAt(URL.parse(context, TOKEN_URL()), Headers.set(Headers.new(), "content-type", "application/x-www-form-urlencoded"), formBody(refreshToken))

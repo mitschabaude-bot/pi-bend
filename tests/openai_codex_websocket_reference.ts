@@ -1,7 +1,7 @@
 // Test-only oracle: pinned Codex provider over a real loopback WebSocket.
 import { zstdDecompressSync } from "node:zlib";
 import { UPSTREAM } from "./upstream_pin.mjs";
-const { stream, streamSimple, closeOpenAICodexWebSocketSessions } = await import(UPSTREAM + "/packages/ai/src/api/openai-codex-responses.ts");
+const { stream, streamSimple, closeOpenAICodexWebSocketSessions, getOpenAICodexWebSocketDebugStats } = await import(UPSTREAM + "/packages/ai/src/api/openai-codex-responses.ts");
 const { normalizeContext } = await import(UPSTREAM + "/packages/ai/src/utils/transcript.ts");
 
 function modelOf(c: any): any {
@@ -46,7 +46,7 @@ async function runCase(c: any) {
   }
   const message = await s.result();
   controller.abort();
-  return {events, message};
+  return {events, message, stats: c.options?.sessionId ? getOpenAICodexWebSocketDebugStats(c.options.sessionId) : undefined};
 }
 const results = [];
 for (const item of c.cases ?? [c]) results.push(await runCase({...item, url: c.url}));

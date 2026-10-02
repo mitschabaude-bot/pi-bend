@@ -10,6 +10,7 @@ applies the upstream test's own assertions to the native result.
 """
 import argparse
 import base64
+import email.utils
 import http.server
 import json
 import os
@@ -179,6 +180,9 @@ for model_id, tier, multiplier in [('gpt-5.1-codex', 'flex', 0.5), ('gpt-5.1-cod
     case(f'uses the client-sent {tier} service tier for {model_id} when Codex echoes default', [step(sse(usage=BIG, service_tier='default'))], dict(serviceTier=tier), model={'id': model_id, 'name': 'GPT-5.5' if model_id == 'gpt-5.5' else 'GPT-5.1 Codex', 'cost': {'input': 1, 'output': 2}},
          check=lambda r, m=multiplier: (expect(r['message']['usage']['cost']['input'] == 1 * m, r['message']['usage']), expect(r['message']['usage']['cost']['output'] == 2 * m), expect(r['message']['usage']['cost']['total'] == 3 * m)))
 case('does not set session-id/x-client-request-id headers when sessionId is not provided', [step(sse())], check=lambda r: (expect('session-id' not in first_request(r)['headers']), expect('session_id' not in first_request(r)['headers']), expect('x-client-request-id' not in first_request(r)['headers'])))
+LARGE_TEXT = 'compress me ' * 400
+case('zstd-compresses SSE request bodies', [step(sse())], context={'systemPrompt': 'You are a helpful assistant.', 'messages': [{'role': 'user', 'content': LARGE_TEXT, 'timestamp': 1}]}, check=lambda r: (expect(first_request(r)['headers'].get('content-encoding') == 'zstd', first_request(r)['headers']), expect(first_request(r)['body']['input'][0]['content'][0]['text'] == LARGE_TEXT, first_request(r)['body'])))
+case('native: zstd frames short SSE request bodies', [step(sse())], check=lambda r: expect(first_request(r)['headers'].get('content-encoding') == 'zstd', first_request(r)['headers']))
 
 
 def json_failure(status, error, headers=None):
@@ -236,6 +240,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         case_id = self.path.split('/')[2]
         length = int(self.headers.get('content-length', '0'))
         raw = self.rfile.read(length)
+        if self.headers.get('content-encoding') == 'zstd':
+            raw = subprocess.run(['node', '-e', 'const z=require("node:zlib"),f=require("node:fs");process.stdout.write(z.zstdDecompressSync(f.readFileSync(0)))'], input=raw, capture_output=True, check=True).stdout
         body = json.loads(raw.decode()) if raw else None
         seen = Handler.requests.setdefault(case_id, [])
         seen.append({'url': self.path, 'headers': {k.lower(): v for k, v in self.headers.items()}, 'body': body, 'at': time.time()})
@@ -290,6 +296,34 @@ def comparable(result):
     return {'requests': requests, 'events': result['events'], 'message': message}
 
 
+def retry_delay(command, name, value):
+    run = subprocess.run(command + ['retry-delay', name, value], cwd=ROOT, capture_output=True, text=True, timeout=30)
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    line = next(line for line in run.stdout.splitlines() if line.startswith('D '))
+    return float(line[2:])
+
+
+def check_retry_delays(command, backend):
+    exact = [
+        ('retry-after-ms', 'retry-after-ms', '1500', 1500),
+        ('retry-after seconds', 'retry-after', '60', 60_000),
+    ]
+    for label, name, value, expected in exact:
+        actual = retry_delay(command, name, value)
+        assert actual == expected, (label, actual, expected)
+        print(f'PASS {backend} uses {label} for SSE retries')
+
+    target = time.time() + 45
+    value = email.utils.formatdate(target, usegmt=True)
+    before = time.time()
+    actual = retry_delay(command, 'retry-after', value)
+    after = time.time()
+    low = max(0, target - after) * 1000 - 1000
+    high = max(0, target - before) * 1000 + 1000
+    assert low <= actual <= high, ('retry-after HTTP date', actual, low, high)
+    print(f'PASS {backend} uses retry-after HTTP date for SSE retries')
+
+
 def main():
     selected = [(value, check) for value, check in CASES if arguments.only in value['name'] and (arguments.pending or value['name'] not in PENDING)]
     for name, reason in PENDING.items():
@@ -307,6 +341,11 @@ def main():
         for backend in arguments.backends:
             command = ['bun', arguments.prefix + '.js'] if backend == 'bun' else [arguments.prefix, '--threads', backend[-1]]
             passed = 0
+            try:
+                check_retry_delays(command, backend)
+            except AssertionError as error:
+                failures += 1
+                print(f'FAIL {backend} Retry-After delay parsing: {str(error)[:2500]}')
             for index, ((value, check), want) in enumerate(zip(selected, expected)):
                 case_id = f'{backend}-{index}'
                 Handler.scripts[case_id] = value['script']

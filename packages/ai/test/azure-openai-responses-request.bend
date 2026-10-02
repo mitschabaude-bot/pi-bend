@@ -126,11 +126,12 @@ def requestError(error: Client.RequestError) -> String:
     case Client.HeaderRejected{cause}: H.errorKind(cause)
     case Client.NonFinitePayload{}: "nonfinite-payload"
     case Client.PayloadEncodingFailure{}: "payload-encoding"
+    case Client.PayloadCompressionFailure{_}: "payload-compression"
 
 def shown(result: Result<&2, &2, Client.RequestError, Client.Request>) -> V.Value:
   match result:
     case Fail{cause}: errorValue(requestError(cause))
-    case Done{Client.Request{url, _, headers, body, _}}:
+    case Done{Client.Request{url, _, headers, body, _, _}}:
       V.ObjectValue{R.Record{R.Property{"url", V.Text{URL.serialize(url, False{})}} <> R.Property{"headers", V.ObjectValue{R.Record{H.wireFields(Headers.entries(headers))}}} <> R.Property{"body", V.Text{body}} <> Nil{}}}
 
 def envelope(configuration: Responses.Config, timeout: Maybe<&2, F64>, result: Result<&2, &2, Responses.PreparationError, Responses.ProviderRequest>) -> V.Value:
