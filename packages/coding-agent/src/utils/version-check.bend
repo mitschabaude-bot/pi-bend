@@ -29,10 +29,26 @@ type VersionCheckOptions is Data:
 
 def defaultOptions() -> VersionCheckOptions: VersionCheckOptions{None{}, False{}}
 
-# upstream formatVersionCheckError adds the errno codes Node hides behind
-# "fetch failed"; the native transport error carries no errno names, so this
-# is the management request's message.
-def formatVersionCheckError(error: Http.Error) -> String: Http.errorMessage(error)
+def joinedCodes(values: List<&2, String>) -> String:
+  match values:
+    case Nil{}: ""
+    case value <> Nil{}: value
+    case value <> rest: value ++ ", " ++ joinedCodes(rest)
+
+def formattedCause(+message: String, cause: Maybe<&2, String>) -> String:
+  match cause:
+    case Some{value}: message ++ " (cause: " ++ value ++ ")"
+    case None{}: message
+
+def formattedDescription(description: Http.Description) -> String:
+  match description:
+    case Http.Description{+message, Nil{}, cause}: formattedCause(message, cause)
+    case Http.Description{message, codes, _}: message ++ " (" ++ joinedCodes(codes) ++ ")"
+
+# Include the errno names hidden behind a generic fetch failure. When the
+# transport has no errno, retain its first actionable cause instead.
+def formatVersionCheckError(error: Http.Error) -> String:
+  formattedDescription(Http.describe(error))
 
 # comparePackageVersions: semver order of two valid versions, else None.
 def comparedVersions(left: Maybe<&2, Semver.SemVer>, right: Maybe<&2, Semver.SemVer>) -> Maybe<&2, Cmp>:
@@ -103,7 +119,7 @@ def okResponse(ok: Bool, body: Response.Body<Http.Scoped()>) -> IO(Result<&2, &2
 
 def answered(result: Http.ScopedOutcome()) -> IO(Result<&2, &2, String, Maybe<&2, LatestPiRelease>>):
   match result:
-    case Fail{error}: IO.pure(Result<&2, &2, String, Maybe<&2, LatestPiRelease>>, Fail{Http.errorMessage(error)})
+    case Fail{error}: IO.pure(Result<&2, &2, String, Maybe<&2, LatestPiRelease>>, Fail{formatVersionCheckError(error)})
     case Done{Response.Response{+metadata, body}}: okResponse(Response.ok(metadata), body)
 
 def headers(+userAgent: String) -> Message.Headers:

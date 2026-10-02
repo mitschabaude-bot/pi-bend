@@ -63,5 +63,5 @@ for name, command in lanes:
     finally:
         server.shutdown()
     lines = result.stdout.splitlines()
-    assert result.returncode == 0 and len(lines) == 10 and all(line.startswith('ok ') for line in lines), (name, result.stdout, result.stderr)
+    assert result.returncode == 0 and len(lines) == 11 and all(line.startswith('ok ') for line in lines), (name, result.stdout, result.stderr)
     print(f'{name}: {len(lines)} version-check/pi-user-agent cases pass')

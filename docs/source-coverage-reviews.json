@@ -1213,14 +1213,14 @@
       }
     },
     "packages/coding-agent/src/utils/version-check.ts": {
-      "state": "partial",
-      "note": "LATEST_VERSION_URL request with the pi user agent and accept header, PI_OFFLINE and PI_SKIP_VERSION_CHECK, retry options, response parsing (trimmed version, packageName and note), comparePackageVersions/isNewerPackageVersion and checkForNewPiVersion are ported and tested over a loopback fetch. formatVersionCheckError cannot add errno codes (the native fetch error has none). No caller in the interactive mode uses it yet.",
+      "state": "ported",
+      "note": "LATEST_VERSION_URL requests with the pi user agent and accept header, PI_OFFLINE and PI_SKIP_VERSION_CHECK, retry options, response parsing (trimmed version, packageName and note), comparePackageVersions/isNewerPackageVersion, checkForNewPiVersion and formatVersionCheckError are ported and tested. Native fetch projects its typed connection failures, so formatting retains ordered unique errno names and the first actionable cause without JavaScript Error reflection.",
       "ports": [
         "packages/coding-agent/src/utils/version-check.bend"
       ],
       "source_sha256": "23279d94eae94dc19b1221c58a7993677327a47a8b6e37c9c1e4201f3adcf983",
       "port_sha256": {
-        "packages/coding-agent/src/utils/version-check.bend": "febd9ca70940b5ec25ed3d4f4dcb6534dfb1c561f57cb1cd7e23652361e080f0"
+        "packages/coding-agent/src/utils/version-check.bend": "500ba5c06155ade4b1e0ea08dd9b5b06b3ce97f36971d420a6e8efb8616673fa"
       }
     },
     "packages/coding-agent/src/core/package-manager.ts": {
@@ -1577,7 +1577,7 @@
       "port_sha256": {
         "packages/coding-agent/src/core/http-dispatcher.bend": "ebdef30af7fff2fd0f4529bced421f752bc290f3b92698f5a173e29b90b9e6f8",
         "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
-        "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
+        "packages/runtime/src/fetch.bend": "0c39b7ea4d715606aac651fbcacb4ac644b975fbcd40e1bcec3ac44f4d199ac4",
         "packages/coding-agent/src/core/agent-runtime.bend": "ee4d68245696882fe122d74932f5f099472c96bf4380960a271c677338dc0a9b",
         "packages/coding-agent/src/main.bend": "ed9903faa8166852cf86e723d459556c4909ede2094d1663c7fd04da9dcbe8f5"
       }

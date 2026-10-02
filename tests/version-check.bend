@@ -1,6 +1,7 @@
 import Base
 import ../packages/coding-agent/src/utils/version-check.bend as VC
 import ../packages/coding-agent/src/utils/pi-user-agent.bend as UA
+import ../packages/coding-agent/src/utils/management-http.bend as Http
 import ../packages/runtime/src/fetch.bend as Fetch
 import ./loopback-fetch.bend as Loop
 
@@ -29,6 +30,9 @@ def yields(order: Maybe<&2, Cmp>, wanted: Cmp) -> Bool:
 
 def compares() -> IO(Unit):
   check(yields(VC.comparePackageVersions("0.70.6", "0.70.5"), GT{}) && yields(VC.comparePackageVersions("0.70.5", "0.70.5"), EQ{}) && yields(VC.comparePackageVersions("0.70.4", "0.70.5"), LT{}) && yields(VC.comparePackageVersions("5.0.0-beta.20", "5.0.0-beta.9"), GT{}) && Bool.not(VC.isNewerPackageVersion("0.70.5", "0.70.5")) && VC.isNewerPackageVersion("0.70.6", "0.70.5"), "version checks compares package versions")
+
+def nestedNetworkDetails() -> IO(Unit):
+  check(String.eq(VC.formatVersionCheckError(Http.FetchFailed{[Fetch.NetworkFailure{Some{110}, "connect timeout"}, Fetch.NetworkFailure{Some{101}, "network unreachable"}]}), "fetch failed (ETIMEDOUT, ENETUNREACH)"), "version checks formats nested network error details")
 
 def sameMaybe(left: Maybe<&2, String>, right: Maybe<&2, String>) -> Bool:
   match left right:
@@ -156,6 +160,7 @@ def scenario(+inner: Fetch.Fetch(Unit), +base: String, +route: String, +name: St
 def cases(+base: String, +inner: Fetch.Fetch(Unit)) -> IO(Unit):
   do IO<Unit>:
     compares()
+    nestedNetworkDetails()
     scenario(inner, base, "same", "onlyNewer")
     scenario(inner, base, "ua", "piUserAgent")
     scenario(inner, base, "flaky", "retried")

@@ -73,23 +73,41 @@ def ensureOffline(+binDir: String, +fetch: Fetch.Fetch(Unit)) -> IO(Unit):
     seen : List<&2, String> <- Ref.dispose(List<&2, String>, statuses)
     check(Maybe.is_none(&2, String, result) && statusesAre(seen, ["warning: fd not found. Offline mode enabled, skipping download."]), "ensureTool reports status through a callback without writing to the console")
 
-def run(+binDir: String, pair: Fetch.Fetch(Unit) & Loop.Log()) -> IO(Unit):
-  match pair:
-    case (+fetch, log):
+def detailedFailure(values: List<&2, String>) -> Bool:
+  match values:
+    case "info: fd not found. Downloading..." <> warning <> Nil{}: String.eq(warning, "warning: Failed to download fd: fetch failed: ECONNREFUSED: Connection refused")
+    case _: False{}
+
+def ensureFailure(+binDir: String, +fetch: Fetch.Fetch(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    set : Result<&1, &1, U32 & String, Unit> <- IO.set_env("PI_OFFLINE", "")
+    +statuses : Statuses() <- Ref.new(List<&2, String>, Nil{})
+    +callback : C.Callback<Tools.ToolStatus, Unit> <- C.create(~Statuses(), ~Tools.ToolStatus, ~Unit, ~recorded, statuses)
+    result : Maybe<&2, String> <- Tools.ensureTool(Tools.ToolsManager{binDir, Loop.urlContext(), Some{fetch}}, Tools.Fd{}, Some{callback})
+    C.dispose(Tools.ToolStatus, Unit, callback)
+    seen : List<&2, String> <- Ref.dispose(List<&2, String>, statuses)
+    check(Maybe.is_none(&2, String, result) && detailedFailure(seen), "ensureTool surfaces the error cause chain when a download fails")
+
+def run(+binDir: String, pair: Fetch.Fetch(Unit) & Loop.Log(), failed: Fetch.Fetch(Unit) & Loop.Log()) -> IO(Unit):
+  match pair failed:
+    case Tuple{+fetch, log} Tuple{+failureFetch, _}:
       do IO<Unit>:
         latestCases(fetch, log)
         ensureOffline(binDir, fetch)
+        ensureFailure(binDir, failureFetch)
         Loop.retired(fetch)
+        Loop.retired(failureFetch)
 
-def cases(+base: String, +binDir: String, +inner: Fetch.Fetch(Unit)) -> IO(Unit):
+def cases(+base: String, +failureBase: String, +binDir: String, +inner: Fetch.Fetch(Unit)) -> IO(Unit):
   do IO<Unit>:
     pair : Fetch.Fetch(Unit) & Loop.Log() <- Loop.redirecting(inner, "https://github.com", base)
-    run(binDir, pair)
+    failed : Fetch.Fetch(Unit) & Loop.Log() <- Loop.redirecting(inner, "https://github.com", failureBase)
+    run(binDir, pair, failed)
 
 def started(args: List<String>) -> IO(Unit):
   match args:
-    case base <> binDir <> Nil{}: Loop.withNetwork(inner => cases(base, binDir, inner))
-    case _: IO.die(Unit, 2, "usage: tools-manager-latest <server base> <bin dir>")
+    case base <> failureBase <> binDir <> Nil{}: Loop.withNetwork(inner => cases(base, failureBase, binDir, inner))
+    case _: IO.die(Unit, 2, "usage: tools-manager-latest <server base> <failure base> <bin dir>")
 
 def main() -> IO(Unit):
   do IO<Unit>:

@@ -182,6 +182,22 @@ def errnoName(code: U32) -> String:
     case 24: "EMFILE"
     case 36: "ENAMETOOLONG"
     case 40: "ELOOP"
+    case 98: "EADDRINUSE"
+    case 99: "EADDRNOTAVAIL"
+    case 100: "ENETDOWN"
+    case 101: "ENETUNREACH"
+    case 102: "ENETRESET"
+    case 103: "ECONNABORTED"
+    case 104: "ECONNRESET"
+    case 105: "ENOBUFS"
+    case 106: "EISCONN"
+    case 107: "ENOTCONN"
+    case 110: "ETIMEDOUT"
+    case 111: "ECONNREFUSED"
+    case 112: "EHOSTDOWN"
+    case 113: "EHOSTUNREACH"
+    case 114: "EALREADY"
+    case 115: "EINPROGRESS"
     case code: "Unknown system error -" ++ U32.show(code)
 
 def errnoDescription(code: U32) -> String:

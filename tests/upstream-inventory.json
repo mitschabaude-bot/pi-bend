@@ -5140,7 +5140,7 @@
     },
     {
       "source": "packages/coding-agent/test/tools-manager.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/tools-manager-latest.bend",
         "tests/tools_manager_latest_check.py",
@@ -5149,7 +5149,7 @@
         "tests/tools-manager.md"
       ],
       "sha256": "09e7bdfba469506725a8df17f87bc461ce7dd4eeba7ad04ec3140c0b39e1e2d5",
-      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" \u2014 the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
+      "notes": "All eight cases pass on native one/four threads. The six getLatestVersion cases use a logging redirect fetch and local server (release redirects with and without the v prefix, a relative Location, a discarded redirect body, 404 and /login); each makes one manual-redirect request with the pi-coding-agent user agent. ensureTool reports offline status through its callback, and a real refused connection retains ECONNREFUSED and its OS message in the download warning. Upstream observes Response.bodyUsed and a mocked ETIMEDOUT cause; natively the owned redirect body is released unread and the actual typed socket failure is reported. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
     },
     {
       "source": "packages/coding-agent/test/tools.test.ts",
@@ -5253,14 +5253,14 @@
     },
     {
       "source": "packages/coding-agent/test/version-check.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/version-check.bend",
         "tests/version_check_check.py",
         "tests/loopback-fetch.bend"
       ],
       "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7",
-      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" \u2014 the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
+      "notes": "All ten cases pass on native one/four threads. Instead of stubbing global fetch, requests to https://pi.dev go through a logging fetch and local server that answers, drops connections or fails per case; URL, User-Agent, accept headers and request counts (3 with retry, 1 automatic, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. formatVersionCheckError projects ordered unique errno names from the native fetch failure tree and matches the original nested ETIMEDOUT/ENETUNREACH result. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers)."
     },
     {
       "source": "packages/durable/test/memory-storage.test.ts",

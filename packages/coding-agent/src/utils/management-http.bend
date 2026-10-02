@@ -8,6 +8,8 @@ import ../../../runtime/src/http-exchange.bend as Exchange
 import ../../../runtime/src/http-message.bend as Message
 import ../../../runtime/src/url.bend as URL
 import ../../../runtime/src/clock.bend as Clock
+import ../../../runtime/src/filesystem.bend as FS
+import ../../../runtime/src/record.bend as R
 
 # Management requests (version checks, catalogs, downloads) with a bounded
 # immediate retry, as upstream's fetchWithRetry. Model requests are retried by
@@ -35,14 +37,63 @@ type Error is Data:
   TimedOut{}
   RedirectLimit{}
   InvalidRedirect{location: String}
-  FetchFailed{cause: Fetch.Error<Unit>}
+  FetchFailed{failures: List<&2, Fetch.NetworkFailure>}
 
-def errorMessage(error: Error) -> String:
+def codeNames(entries: List<&2, R.Property<Unit>>) -> List<&2, String>:
+  match entries:
+    case Nil{}: Nil{}
+    case R.Property{name, _} <> rest: name <> codeNames(rest)
+
+type NetworkSummary is Data:
+  NetworkSummary{names: R.Record<Unit>, cause: Maybe<&2, String>}
+
+type Description is Data:
+  Description{message: String, codes: List<&2, String>, cause: Maybe<&2, String>}
+
+def firstCause(current: Maybe<&2, String>, message: String) -> Maybe<&2, String>:
+  match current:
+    case Some{value}: Some{value}
+    case None{}: Some{message}
+
+def withFailure(failure: Fetch.NetworkFailure, summary: NetworkSummary) -> NetworkSummary:
+  match failure summary:
+    case Fetch.NetworkFailure{None{}, message} NetworkSummary{names, cause}: NetworkSummary{names, firstCause(cause, message)}
+    case Fetch.NetworkFailure{Some{code}, message} NetworkSummary{names, cause}:
+      +name = FS.errnoName(code)
+      NetworkSummary{R.set(Unit, names, name, Unit{}), firstCause(cause, name ++ ": " ++ message)}
+
+def summarize(failures: List<&2, Fetch.NetworkFailure>, summary: NetworkSummary) -> NetworkSummary:
+  match failures:
+    case Nil{}: summary
+    case failure <> rest: summarize(rest, withFailure(failure, summary))
+
+def fetchDescription(summary: NetworkSummary) -> Description:
+  match summary:
+    case NetworkSummary{names, cause}: Description{"fetch failed", codeNames(R.entries(Unit, names)), cause}
+
+def describe(error: Error) -> Description:
   match error:
-    case TimedOut{}: "The operation was aborted due to timeout"
-    case RedirectLimit{}: "fetch failed: redirect count exceeded"
-    case InvalidRedirect{location}: "fetch failed: invalid redirect location " ++ location
-    case FetchFailed{_}: "fetch failed"
+    case TimedOut{}: Description{"The operation was aborted due to timeout", Nil{}, None{}}
+    case RedirectLimit{}: Description{"fetch failed: redirect count exceeded", Nil{}, None{}}
+    case InvalidRedirect{location}: Description{"fetch failed: invalid redirect location " ++ location, Nil{}, None{}}
+    case FetchFailed{failures}: fetchDescription(summarize(failures, NetworkSummary{R.new(Unit), None{}}))
+
+def descriptionMessage(description: Description) -> String:
+  match description:
+    case Description{message, _, _}: message
+
+def errorMessage(error: Error) -> String: descriptionMessage(describe(error))
+
+def messageWithCause(+message: String, cause: Maybe<&2, String>) -> String:
+  match cause:
+    case None{}: message
+    case Some{cause}: message ++ ": " ++ cause
+
+def describedMessageWithCause(description: Description) -> String:
+  match description:
+    case Description{message, _, cause}: messageWithCause(message, cause)
+
+def errorMessageWithCause(error: Error) -> String: describedMessageWithCause(describe(error))
 
 def Outcome() -> Type: Result<&2,&1,Error,Response.Response<Transport()>>
 
@@ -84,7 +135,7 @@ def discard(response: Response.Response<Transport()>) -> IO(Unit):
 
 def fetched(result: Fetch.Result_(Unit)) -> Outcome():
   match result:
-    case Fail{cause}: Fail{FetchFailed{cause}}
+    case Fail{cause}: Fail{FetchFailed{Fetch.networkFailures(Unit, cause)}}
     case Done{response}: Done{response}
 
 def dispatch(fetch: Fetch.Fetch(Unit),signal: Fetch.Signal(Unit),url: URL.URL,headers: Message.Headers) -> IO(Outcome()):

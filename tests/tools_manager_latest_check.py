@@ -6,7 +6,7 @@ ensureTool case runs offline with an empty bin directory and PATH, so fd is
 missing as upstream's mocked existsSync/spawnSync make it.
 Usage: python3 tests/tools_manager_latest_check.py [build/tools-manager-latest.js] [build/tools-manager-latest]
 """
-import http.server, os, pathlib, socketserver, subprocess, sys, tempfile, threading
+import http.server, os, pathlib, socket, socketserver, subprocess, sys, tempfile, threading
 
 root = pathlib.Path(__file__).resolve().parents[1]
 js = sys.argv[1] if len(sys.argv) > 1 else 'build/tools-manager-latest.js'
@@ -52,19 +52,22 @@ if os.path.exists(root / js):
 if os.path.exists(root / native):
     lanes += [('native-1', [native, '--threads', '1', '--']), ('native-4', [native, '--threads', '4', '--'])]
 assert lanes, 'build tests/tools-manager-latest.bend first'
-for name, command in lanes:
-    served.clear()
-    server = Server(('127.0.0.1', 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    with tempfile.TemporaryDirectory(prefix='pi-tools-') as directory:
-        env = {k: v for k, v in os.environ.items() if k != 'PI_OFFLINE'}
-        env['PATH'] = directory
-        exe = command[0] if command[0] != 'bun' else subprocess.check_output(['which', 'bun'], text=True).strip()
-        try:
-            result = subprocess.run([exe] + command[1:] + [f'http://127.0.0.1:{server.server_address[1]}', directory], cwd=root, capture_output=True, text=True, timeout=120, env=env)
-        finally:
-            server.shutdown()
-    lines = result.stdout.splitlines()
-    assert result.returncode == 0 and len(lines) == 7 and all(line.startswith('ok ') for line in lines), (name, result.stdout, result.stderr)
-    assert all(agent == 'pi-coding-agent' for _, agent in served) and len(served) == 6, served
-    print(f'{name}: {len(lines)} tools-manager cases pass')
+with socket.socket() as refused:
+    refused.bind(('127.0.0.1', 0))
+    failure_base = f'http://127.0.0.1:{refused.getsockname()[1]}'
+    for name, command in lanes:
+        served.clear()
+        server = Server(('127.0.0.1', 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        with tempfile.TemporaryDirectory(prefix='pi-tools-') as directory:
+            env = {k: v for k, v in os.environ.items() if k != 'PI_OFFLINE'}
+            env['PATH'] = directory
+            exe = command[0] if command[0] != 'bun' else subprocess.check_output(['which', 'bun'], text=True).strip()
+            try:
+                result = subprocess.run([exe] + command[1:] + [f'http://127.0.0.1:{server.server_address[1]}', failure_base, directory], cwd=root, capture_output=True, text=True, timeout=120, env=env)
+            finally:
+                server.shutdown()
+        lines = result.stdout.splitlines()
+        assert result.returncode == 0 and len(lines) == 8 and all(line.startswith('ok ') for line in lines), (name, result.stdout, result.stderr)
+        assert all(agent == 'pi-coding-agent' for _, agent in served) and len(served) == 6, served
+        print(f'{name}: {len(lines)} tools-manager cases pass')

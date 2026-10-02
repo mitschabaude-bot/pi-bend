@@ -57,6 +57,109 @@ type Error<-Reason: Data> is Data:
   ReusedExchangeFailure{cause: HTTP.ResolvedExchangeError<Deadline.Cause<Reason>>}
   ReusedHeaderFailure{cause: Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>}
 
+# Actionable operating-system failures retained by a request. A fetch may try
+# several addresses, so callers that present diagnostics receive the complete
+# ordered list rather than an opaque top-level "fetch failed".
+type NetworkFailure is Data:
+  NetworkFailure{code: Maybe<&2, U32>, message: String}
+
+def socketFailures(-Reason: Data, error: Socket.Error<Reason>) -> List<&2, NetworkFailure>:
+  match error:
+    case Socket.SocketError{code, message}: [NetworkFailure{Some{code}, message}]
+    case Socket.Aborted{_}: Nil{}
+
+def interruptFailures(error: Socket.InterruptError) -> List<&2, NetworkFailure>:
+  match error:
+    case Socket.InterruptError{code, message}: [NetworkFailure{Some{code}, message}]
+
+def optionalInterruptFailures(error: Maybe<&2, Socket.InterruptError>) -> List<&2, NetworkFailure>:
+  match error:
+    case None{}: Nil{}
+    case Some{value}: interruptFailures(value)
+
+def uploadFailures(-Reason: Data, error: Upload.UploadError<Reason>) -> List<&2, NetworkFailure>:
+  match error:
+    case Upload.WriteFailure{cause, cleanup}: List.append(&2, NetworkFailure, socketFailures(Reason, cause), optionalInterruptFailures(cleanup))
+    case Upload.InterruptFailure{cause}: interruptFailures(cause)
+
+def tlsFailures(-Reason: Data, error: TLS.Error<Reason>) -> List<&2, NetworkFailure>:
+  match error:
+    case TLS.Network{cause}: socketFailures(Reason, cause)
+    case TLS.ShutdownFailure{cause}: interruptFailures(cause)
+    case _: Nil{}
+
+def sourceFailures(-Reason: Data, error: Source.SocketSourceError<Reason>) -> List<&2, NetworkFailure>:
+  match error:
+    case Source.SocketSourceSocketFailure{cause}: socketFailures(Reason, cause)
+    case Source.CleanupFailure{cause}: interruptFailures(cause)
+    case Source.UploadFailure{cause}: uploadFailures(Reason, cause)
+    case Source.UploadWithCleanup{cause, cleanup}: List.append(&2, NetworkFailure, uploadFailures(Reason, cause), interruptFailures(cleanup))
+    case Source.TLSSourceFailure{cause}: tlsFailures(Reason, cause)
+    case Source.TLSWithCleanup{cause, cleanup}: List.append(&2, NetworkFailure, tlsFailures(Reason, cause), tlsFailures(Reason, cleanup))
+    case _: Nil{}
+
+def readerPrimaryFailures(-Reason: Data, error: Reader.ResponseReaderPrimaryError<Source.SocketSourceError<Reason>>) -> List<&2, NetworkFailure>:
+  match error:
+    case Reader.SourceError{cause}: sourceFailures(Reason, cause)
+    case Reader.DecodeError{_}: Nil{}
+
+def readerFailures(-Reason: Data, error: Reader.ReadError<Source.SocketSourceError<Reason>>) -> List<&2, NetworkFailure>:
+  match error:
+    case Reader.ResponseReaderPrimaryFailure{cause}: readerPrimaryFailures(Reason, cause)
+    case Reader.ReleaseFailure{cause}: sourceFailures(Reason, cause)
+    case Reader.FailureWithRelease{primary, release}: List.append(&2, NetworkFailure, readerPrimaryFailures(Reason, primary), sourceFailures(Reason, release))
+
+def exchangeReadFailures(-Reason: Data, error: Exchange.ReadError<Reason>) -> List<&2, NetworkFailure>:
+  match error:
+    case Exchange.ResponseFailure{cause}: readerFailures(Reason, cause)
+    case Exchange.DisposalFailure{cause}: sourceFailures(Reason, cause)
+    case Exchange.ResponseWithDisposal{cause, disposal}: List.append(&2, NetworkFailure, readerFailures(Reason, cause), sourceFailures(Reason, disposal))
+
+def progressPrimaryFailures(-Reason: Data, error: Progress.ResponseProgressPrimaryError<Exchange.ReadError<Reason>>) -> List<&2, NetworkFailure>:
+  match error:
+    case Progress.TransportFailure{cause}: exchangeReadFailures(Reason, cause)
+    case _: Nil{}
+
+def progressFailures(-Reason: Data, error: Progress.ResponseProgressError<Exchange.ReadError<Reason>>) -> List<&2, NetworkFailure>:
+  match error:
+    case Progress.ResponseProgressPrimaryFailure{cause}: progressPrimaryFailures(Reason, cause)
+    case Progress.ResponseProgressCleanupFailure{cause}: exchangeReadFailures(Reason, cause)
+    case Progress.ResponseProgressFailureWithCleanup{primary, cleanup}: List.append(&2, NetworkFailure, progressPrimaryFailures(Reason, primary), exchangeReadFailures(Reason, cleanup))
+
+def tunnelFailures(-Reason: Data, error: Proxy.TunnelError<Reason>) -> List<&2, NetworkFailure>:
+  match error:
+    case Proxy.TunnelSocket{cause}: socketFailures(Reason, cause)
+    case _: Nil{}
+
+def startFailures(-Reason: Data, error: Exchange.StartError<Reason>) -> List<&2, NetworkFailure>:
+  match error:
+    case Exchange.TLSStartFailure{cause}: tlsFailures(Reason, cause)
+    case Exchange.SocketFailure{cause}: socketFailures(Reason, cause)
+    case Exchange.WriteFailure{cause, cleanup}: List.append(&2, NetworkFailure, socketFailures(Reason, cause), optionalInterruptFailures(cleanup))
+    case Exchange.SourceFailure{cause}: sourceFailures(Reason, cause)
+    case Exchange.TunnelFailure{cause}: tunnelFailures(Reason, cause)
+    case _: Nil{}
+
+def resolvedFailures(-Reason: Data, error: HTTP.ResolvedExchangeError<Reason>) -> List<&2, NetworkFailure>:
+  match error:
+    case HTTP.ResolvedExchangeConnectionFailure{_}: Nil{}
+    case HTTP.ResolvedExchangeFailure{cause}: startFailures(Reason, cause)
+
+def attemptFailures(-Reason: Data, attempts: List<&2, Driver.Entry<Reason>>) -> List<&2, NetworkFailure>:
+  match attempts:
+    case Nil{}: Nil{}
+    case Driver.Entry{_, _, Fail{Driver.SocketFailure{code, message}}, _} <> rest: NetworkFailure{Some{code}, message} <> attemptFailures(Reason, rest)
+    case Driver.Entry{_, _, Fail{Driver.TimedOut{}}, _} <> rest: NetworkFailure{None{}, "connect timed out"} <> attemptFailures(Reason, rest)
+    case _ <> rest: attemptFailures(Reason, rest)
+
+def networkFailures(-Reason: Data, error: Error<Reason>) -> List<&2, NetworkFailure>:
+  match error:
+    case ExchangeFailure{_, attempts, cause}: List.append(&2, NetworkFailure, attemptFailures(Deadline.Cause<Reason>, attempts), resolvedFailures(Deadline.Cause<Reason>, cause))
+    case HeaderFailure{_, attempts, cause}: List.append(&2, NetworkFailure, attemptFailures(Deadline.Cause<Reason>, attempts), progressFailures(Deadline.Cause<Reason>, cause))
+    case ReusedExchangeFailure{cause}: resolvedFailures(Deadline.Cause<Reason>, cause)
+    case ReusedHeaderFailure{cause}: progressFailures(Deadline.Cause<Reason>, cause)
+    case _: Nil{}
+
 def Result_(-Reason: Data) -> Type: Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>
 def Fetch(-Reason: Data) -> Data: C.Callback<Input<Reason>, Result_(Reason)>
 

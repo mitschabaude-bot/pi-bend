@@ -181,7 +181,7 @@ def redirectLocation(+code: U32, metadata: Response.Metadata) -> Maybe<&2,String
 # Only the status and headers matter; the body is released at once.
 def latestResponse(context: URL.Context, repo: String, result: Http.ScopedOutcome()) -> IO(Outcome(String)):
   match result:
-    case Fail{error}: IO.pure(Outcome(String),Fail{Http.errorMessage(error)})
+    case Fail{error}: IO.pure(Outcome(String),Fail{Http.errorMessageWithCause(error)})
     case Done{Response.Response{+metadata,body}}:
       +code = Response.metadataStatus(metadata)
       do IO<Outcome(String)>:
@@ -264,7 +264,7 @@ def saveBody(ok: Bool, +code: U32, dest: String, url: String, body: Response.Bod
 
 def save(dest: String, url: String, result: Http.ScopedOutcome()) -> IO(Outcome(Unit)):
   match result:
-    case Fail{error}: IO.pure(Outcome(Unit),Fail{Http.errorMessage(error)})
+    case Fail{error}: IO.pure(Outcome(Unit),Fail{Http.errorMessageWithCause(error)})
     case Done{Response.Response{+metadata,body}}: saveBody(Response.ok(metadata),Response.metadataStatus(metadata),dest,url,body)
 
 def downloadTo(fetch: Fetch.Fetch(Unit), +context: URL.Context, +url: String, +dest: String, target: Outcome(URL.URL)) -> IO(Outcome(Unit)):
