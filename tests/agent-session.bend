@@ -724,6 +724,8 @@ def contextAroundCompaction(+session: Session.AgentSession) -> IO(Unit):
     reportContext(session)
     promptAll(session, "three" <> Nil{})
     reportContext(session)
+    promptAll(session, "continue" <> Nil{})
+    reportContext(session)
 
 def compactAction(+session: Session.AgentSession, action: String) -> IO(Unit):
   match action:
@@ -777,10 +779,19 @@ def released(session: Session.AgentSession, listener: Maybe<&2, Session.Listener
 def promptsOf(+prompts: String) -> List<&2, String>:
   Bool.pick(List<&2, String>, String.eq(prompts, "-"), Nil{}, String.split(prompts, ';'))
 
-def compactScenario(+dir: String, +agentDir: String, prompts: String, responses: String, action: String) -> IO(Unit):
-  do IO<Unit>:
+def compactStoredWith(uuids: Uuid.Generator, +dir: String, +agentDir: String, memory: Bool) -> IO(Sessions.Outcome(Session.Session())):
+  match memory:
+    case True{}: Session.memorySession(uuids, dir, Sessions.noOptions())
+    case False{}: Session.createSession(uuids, dir, Some{dir}, agentDir, Sessions.noOptions())
+
+def compactStored(+dir: String, +agentDir: String, memory: Bool) -> IO(Sessions.Outcome(Session.Session())):
+  do IO<Sessions.Outcome(Session.Session())>:
     uuids : Uuid.Generator <- Uuid.generator()
-    created : Sessions.Outcome(Session.Session()) <- Session.createSession(uuids, dir, Some{dir}, agentDir, Sessions.noOptions())
+    compactStoredWith(uuids, dir, agentDir, memory)
+
+def compactScenario(+dir: String, +agentDir: String, prompts: String, responses: String, action: String, memory: Bool) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- compactStored(dir, agentDir, memory)
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, String.split(responses, ';'), Nil{})
     +chosen : String = action
@@ -1052,7 +1063,8 @@ def run(args: List<String>) -> IO(Unit):
     case "tool_images" <> dir <> agentDir <> mode <> image <> Nil{}: toolImagesScenario(dir, agentDir, mode, image)
     case "retry" <> dir <> agentDir <> responses <> "abort_second_error" <> Nil{}: abortedRetryScenario(dir, agentDir, responses)
     case "retry" <> dir <> agentDir <> responses <> cancel <> Nil{}: retryScenario(dir, agentDir, responses, cancel)
-    case "compact" <> dir <> agentDir <> prompts <> responses <> action <> Nil{}: compactScenario(dir, agentDir, prompts, responses, action)
+    case "compact" <> dir <> agentDir <> prompts <> responses <> action <> Nil{}: compactScenario(dir, agentDir, prompts, responses, action, False{})
+    case "compact_memory" <> dir <> agentDir <> prompts <> responses <> action <> Nil{}: compactScenario(dir, agentDir, prompts, responses, action, True{})
     case "navigate" <> dir <> agentDir <> Nil{}: navigationScenario(dir, agentDir)
     case "bash" <> dir <> agentDir <> Nil{}: bashScenario(dir, agentDir)
     case "bash_deferred" <> dir <> agentDir <> Nil{}: bashDeferredScenario(dir, agentDir)

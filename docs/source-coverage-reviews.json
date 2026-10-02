@@ -1363,6 +1363,17 @@
         "packages/coding-agent/src/core/runtime-credentials.bend": "77f613968b0e59481ceef3b5c478943f451987986df98e5ce793bd435b5ff0b2"
       }
     },
+    "packages/coding-agent/src/core/usage-totals.ts": {
+      "state": "ported",
+      "note": "The immutable UsageTotals transformations preserve create/add behavior and getUsageCostBreakdown: assistant and standalone usage are attributed by provider/model, tool-result and summary usage share Tools/summaries, empty buckets are omitted, and results use stable descending-cost order. All upstream entry categories and grouping totals run in agent-session-stats.bend.",
+      "ports": [
+        "packages/coding-agent/src/core/usage-totals.bend"
+      ],
+      "source_sha256": "4f5e027dc03d3db8c4b702bd622b65b251b42c069a5be0534cfab9da4cebdfb9",
+      "port_sha256": {
+        "packages/coding-agent/src/core/usage-totals.bend": "a3bfb6ca1bc8a1eef577187e388f22272c3cb886764608888f89acd7cb1e2604"
+      }
+    },
     "packages/coding-agent/src/core/tools/edit-diff.ts": {
       "state": "partial",
       "ports": [

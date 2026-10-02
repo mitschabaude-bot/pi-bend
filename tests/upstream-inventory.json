@@ -2377,7 +2377,7 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-compaction.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/coding-agent/src/core/agent-session.bend",
         "packages/coding-agent/src/core/compaction/compaction.bend",
@@ -2387,7 +2387,7 @@
         "tests/agent-session.md"
       ],
       "sha256": "13520564c4a3b70d0f6bd125d1fab07ae7ca148fbecd12cecc5c0e8651a0a146",
-      "notes": "Manual compact(), valid session state, persisted compaction entry and compaction events run over the faux provider instead of a live model; the --no-session in-memory case is not ported."
+      "notes": "All five cases run over the faux provider on native one/four threads: manual compact(), continued use after compaction, persisted compaction entries, exact start/end event order and the same flow through an in-memory --no-session store. The in-memory case asserts the summary/tokens, the appended compaction entry and absence of a session file."
     },
     {
       "source": "packages/coding-agent/test/agent-session-concurrent.test.ts",
@@ -2456,12 +2456,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-stats.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
-        "tests/agent-session-stats.bend"
+        "tests/agent-session-stats.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
       ],
       "sha256": "dc40827bab481ef671a0ca76eb0fe7d79458e12974b90ca12472262248943afe",
-      "notes": "Only 'includes cache-warming usage exactly once without adding messages' is ported: AgentSession.getSessionStats aggregates stored entries through session-stats, so the port checks that aggregation, the empty session context and getUsageCostBreakdown over a session holding one usage entry; a native supplement reads and re-encodes the documented usage JSONL line. The other cases remain pending."
+      "notes": "All nine cases pass on native one/four threads. The focused fixture checks whole-session totals for assistant, tool-result, branch-summary, compaction and cache-warm usage plus the separate model and Tools/summaries cost buckets. The public AgentSession regression checks exact current-context usage before compaction, unknown usage immediately after compaction, the first post-compaction assistant usage and a later zero-usage assistant that must not replace the last valid context measurement."
     },
     {
       "source": "packages/coding-agent/test/agent-session-tree-navigation.test.ts",
