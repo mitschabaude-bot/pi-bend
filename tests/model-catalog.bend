@@ -1,4 +1,5 @@
 import Base
+import ../packages/ai/test/env-api-keys.bend as EnvTests
 import ../packages/ai/src/types.bend as T
 import ../packages/ai/src/utils/model-json.bend as MJ
 import ../packages/ai/src/models.bend as Models
@@ -68,4 +69,13 @@ def each(groups: List<&2, List<&2, T.Model<T.JsonValue>>>) -> String:
   match groups:
     case Nil{}: ""
     case g <> rest: lines(g) ++ each(rest)
-def main() -> IO(Unit): IO.print(each(catalogs()))
+def selected(args: List<String>) -> IO(Unit):
+  match args:
+    case Nil{}: IO.print(each(catalogs()))
+    case "env" <> rest: EnvTests.selected(rest)
+    case _: IO.die(Unit, 2, "usage: [env <provider|environment>...]")
+
+def main() -> IO(Unit):
+  do IO<Unit>:
+    args : List<String> <- IO.args()
+    selected(args)

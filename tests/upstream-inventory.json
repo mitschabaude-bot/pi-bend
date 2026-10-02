@@ -1412,12 +1412,13 @@
     },
     {
       "source": "packages/ai/test/model-catalog-types.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/model-catalog.bend",
         "tests/model_catalog.test.ts"
       ],
-      "sha256": "c47f1953bc68f6af093ead5618100f2cb6e20feda121f891c3fbfd3c303ecdb5"
+      "sha256": "c47f1953bc68f6af093ead5618100f2cb6e20feda121f891c3fbfd3c303ecdb5",
+      "notes": "All three named contracts pass against the native catalog on one/four threads: xAI model/API/provider facts, Copilot Grok routing and all Copilot GPT routing/metadata. Bend has typed ModelApi constructors and value-level catalog IDs/providers; TypeScript string-literal indexed type assertions are adapted to checks of the same catalog values, with no emulation of TypeScript literal types."
     },
     {
       "source": "packages/ai/test/model-data-validation.test.ts",
@@ -1980,12 +1981,13 @@
     },
     {
       "source": "packages/ai/test/supports-xhigh.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/model-catalog.bend",
         "tests/model_catalog.test.ts"
       ],
-      "sha256": "d684347596f6b2af364e85163860616e1faa1d4ae3cc35139782cb49a1ad8c83"
+      "sha256": "d684347596f6b2af364e85163860616e1faa1d4ae3cc35139782cb49a1ad8c83",
+      "notes": "All named catalog/effort cases, including both Amazon Bedrock cases, pass against the native model-catalog harness on one/four threads. Generic thinking-level laws cover non-reasoning, explicit mapping/null support, unmapped defaults and nearest-level resolution; catalog-specific metadata assertions use the original upstream inputs."
     },
     {
       "source": "packages/ai/test/system-message-replay.test.ts",
@@ -2015,12 +2017,14 @@
     },
     {
       "source": "packages/ai/test/together-models.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/model-catalog.bend",
-        "tests/model_catalog.test.ts"
+        "tests/model_catalog.test.ts",
+        "packages/ai/test/env-api-keys.bend"
       ],
-      "sha256": "49a7b4bdce46b0d0a6c338900cae2ba5cd41c92d7c02971a9086d71460291190"
+      "sha256": "49a7b4bdce46b0d0a6c338900cae2ba5cd41c92d7c02971a9086d71460291190",
+      "notes": "All three named cases pass on native one/four: Kimi metadata, Together reasoning controls and TOGETHER_API_KEY discovery/resolution. The host test supplies the process environment; the existing native env-api-keys fixture performs both calls. No host code supplies production auth behavior."
     },
     {
       "source": "packages/ai/test/tokens.test.ts",

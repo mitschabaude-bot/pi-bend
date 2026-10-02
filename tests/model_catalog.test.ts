@@ -4,8 +4,8 @@
 // upstream's models.generated.ts, and the test bodies are upstream's.
 // Test-only: no production behavior comes from here.
 //
-// Usage: bun test tests/model_catalog.test.ts                  (Bun lane)
-//        MODEL_CATALOG_RUNNER=build/model-catalog bun test tests/model_catalog.test.ts
+// Usage: bun test ./tests/model_catalog.test.ts                  (Bun lane)
+//        MODEL_CATALOG_RUNNER=build/model-catalog bun test ./tests/model_catalog.test.ts
 import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -13,13 +13,17 @@ import path from "node:path";
 const ROOT = path.resolve(import.meta.dir, "..");
 type Model = Record<string, any> & { id: string; provider: string; api: string };
 
-function dump(): { model: Model; levels: string[] }[] {
+function native(args: string[] = [], env = process.env): string {
 	const command = process.env.MODEL_CATALOG_RUNNER
 		? [path.resolve(ROOT, process.env.MODEL_CATALOG_RUNNER)]
 		: [path.join(ROOT, "build/bend-native-toolchain/bend2/main.ts"), path.join(ROOT, "tests/model-catalog.bend")];
-	const result = spawnSync(command[0], command.slice(1), { encoding: "utf8", maxBuffer: 1 << 28 });
-	if (result.status !== 0) throw new Error(`catalog dump failed: ${result.stderr}`);
-	return result.stdout.split("\n").filter((line) => line.length > 0).map((line) => JSON.parse(line));
+	const result = spawnSync(command[0], [...command.slice(1), ...args], { encoding: "utf8", maxBuffer: 1 << 28, env });
+	if (result.status !== 0) throw new Error(`catalog fixture failed: ${result.stderr}`);
+	return result.stdout;
+}
+
+function dump(): { model: Model; levels: string[] }[] {
+	return native().split("\n").filter((line) => line.length > 0).map((line) => JSON.parse(line));
 }
 
 // Native getSupportedThinkingLevels per model, keyed by the model object.
@@ -176,8 +180,7 @@ it("keeps zero costs for Coding Plan models without a matching API price", () =>
 	});
 }
 
-// together-models.test.ts (catalog cases; the environment API-key case is
-// covered by the provider environment tests)
+// together-models.test.ts catalog and process-environment auth cases.
 describe("Together models", () => {
 	it("registers the default Kimi K2.6 model via OpenAI-compatible Chat Completions API", () => {
 		const model = getModel("together", "moonshotai/Kimi-K2.6");
@@ -244,8 +247,19 @@ describe("Together models", () => {
 	});
 });
 
-// model-catalog-types.test.ts: its compile-time expectTypeOf assertions have
-// no runtime counterpart; the runtime ones are upstream's.
+it("resolves TOGETHER_API_KEY from the environment", () => {
+	expect(native(["env", "together|"], { ...process.env, TOGETHER_API_KEY: "test-together-key" }).trim())
+		.toBe("D together|[TOGETHER_API_KEY]|test-together-key");
+});
+
+// Bend uses a typed ModelApi enum and value-level catalog IDs/providers instead
+// of TypeScript string-literal indexed types. Check the same catalog facts.
+it("derives model API, ID, and provider literals from grouped model data", () => {
+	for (const id of ["grok-4.5", "grok-4.6", "grok-4.7"]) {
+		expect(getModel("xai", id)).toMatchObject({ api: "openai-responses", id, provider: "xai" });
+	}
+	expect(getModel("xai", "grok-4.3").api).toBe("openai-responses");
+});
 it("routes GitHub Copilot Grok 4.5 through the Responses API", () => {
 	expect(getModel("github-copilot", "grok-4.5").api).toBe("openai-responses");
 });
@@ -268,7 +282,7 @@ it("routes all GitHub Copilot GPT models through the Responses API", () => {
 
 
 // supports-xhigh.test.ts (upstream body; getSupportedThinkingLevels is the native
-// one). Its two Amazon Bedrock cases wait for the Bedrock provider, not ported yet.
+// one), including the Amazon Bedrock catalog cases.
 
 describe("getSupportedThinkingLevels", () => {
 	it("includes max but not xhigh for Anthropic Opus 4.6 on anthropic-messages API", () => {
@@ -481,6 +495,21 @@ describe("getSupportedThinkingLevels", () => {
 		expect(getSupportedThinkingLevels(model!)).toEqual(["low", "medium", "high", "xhigh"]);
 	});
 
+});
+
+it("includes xhigh and max for Bedrock Claude Opus 5", () => {
+	const model = getModel("amazon-bedrock", "global.anthropic.claude-opus-5");
+	expect(model).toBeDefined();
+	expect(getSupportedThinkingLevels(model)).toContain("xhigh");
+	expect(getSupportedThinkingLevels(model)).toContain("max");
+});
+
+it("includes xhigh and max but not off for Bedrock Claude Fable 5", () => {
+	const model = getModel("amazon-bedrock", "global.anthropic.claude-fable-5");
+	expect(model).toBeDefined();
+	expect(getSupportedThinkingLevels(model)).toContain("xhigh");
+	expect(getSupportedThinkingLevels(model)).toContain("max");
+	expect(getSupportedThinkingLevels(model)).not.toContain("off");
 });
 
 // max-thinking.test.ts catalog case (upstream body; getSupportedThinkingLevels
