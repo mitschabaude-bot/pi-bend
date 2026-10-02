@@ -8,6 +8,8 @@ import fs from "node:fs";
 
 const [piMono] = process.argv.slice(2);
 const { AuthStorage } = await import(`${piMono}/packages/coding-agent/src/core/auth-storage.ts`);
+const { ModelRegistry } = await import(`${piMono}/packages/coding-agent/src/core/model-registry.ts`);
+const { complete } = await import(`${piMono}/packages/ai/src/compat.ts`);
 const { ModelRuntime } = await import(`${piMono}/packages/coding-agent/src/core/model-runtime.ts`);
 const cases = JSON.parse(fs.readFileSync(0, "utf8"));
 
@@ -27,12 +29,19 @@ for (const c of cases) {
 		throw new Error("captured");
 	};
 	let error;
+	let auth;
 	try {
-		const message = await runtime.completeSimple(model, { messages: [{ role: "user", content: "hi", timestamp: 1 }], tools: [tool] }, { fetch, maxRetries: 0, sessionId: "session-1" });
+		const context = { messages: [{ role: "user", content: "hi", timestamp: 1 }], tools: [tool] };
+        const options = { fetch, maxRetries: 0, sessionId: "session-1" };
+        if (c.kind === "resolved") {
+            auth = await new ModelRegistry(runtime).getApiKeyAndHeaders(model);
+            if (!auth.ok) throw new Error(auth.error);
+        }
+        const message = c.kind === "resolved" ? await complete(model, context, { ...options, ...auth }) : await runtime.completeSimple(model, context, options);
 		error = message.errorMessage;
 	} catch (cause) {
 		error = String(cause?.message ?? cause);
 	}
-	results.push(captured ?? { error });
+	results.push({ ...(captured ?? { error }), ...(auth ? { resolvedAuth: auth } : {}) });
 }
 console.log(JSON.stringify(results));

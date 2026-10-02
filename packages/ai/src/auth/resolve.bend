@@ -23,17 +23,29 @@ type ModelsErrorCode is Data:
 
 type ModelsError is Data:
   ModelsError{code: ModelsErrorCode, message: String}
+  CausedModelsError{code: ModelsErrorCode, message: String, cause: String}
 
-# Callers surface the message only, so the underlying reason stays in it.
+# Preserve the displayed context and the underlying reason independently.
 def withCauseDetail(+message: String, +cause: String) -> String:
   Bool.pick(String, String.is_empty(cause) || String.contains(message, cause), message, message ++ ": " ++ cause)
 
-def failure(code: ModelsErrorCode, message: String, cause: String) -> ModelsError:
-  ModelsError{code, withCauseDetail(message, String.trim(cause))}
+def failure(code: ModelsErrorCode, message: String, +cause: String) -> ModelsError:
+  CausedModelsError{code, withCauseDetail(message, String.trim(cause)), cause}
 
 def errorMessage(error: ModelsError) -> String:
   match error:
     case ModelsError{_, message}: message
+    case CausedModelsError{_, message, _}: message
+
+def errorCode(error: ModelsError) -> ModelsErrorCode:
+  match error:
+    case ModelsError{code, _}: code
+    case CausedModelsError{code, _, _}: code
+
+def causeMessage(error: ModelsError) -> String:
+  match error:
+    case ModelsError{_, message}: message
+    case CausedModelsError{_, _, cause}: cause
 
 # The `{id, auth}` part of a Provider that resolution needs.
 type ProviderRef is Data:

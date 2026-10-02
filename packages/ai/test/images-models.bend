@@ -291,10 +291,14 @@ def dynamicProvider(+id: String, fetch: Images.RefreshImagesModels()) -> IO(Prov
     api : Images.ProviderImages(Error()) <- okApi()
     Images.createImagesProvider(Error(), Images.CreateImagesProviderOptions{id, None{}, auth, Nil{}, Some{fetch}, api})
 
+def errorPrefix(code: Resolve.ModelsErrorCode) -> String:
+  match code:
+    case Resolve.ModelSource{}: "model_source:"
+    case _: "other:"
+
 def errorCode(result: Result<&2, &2, Resolve.ModelsError, Unit>) -> String:
   match result:
-    case Fail{Resolve.ModelsError{Resolve.ModelSource{}, message}}: "model_source:" ++ message
-    case Fail{Resolve.ModelsError{_, message}}: "other:" ++ message
+    case Fail{+error}: errorPrefix(Resolve.errorCode(error)) ++ Resolve.errorMessage(error)
     case Done{_}: "resolved"
 
 def refreshes() -> IO(Unit):

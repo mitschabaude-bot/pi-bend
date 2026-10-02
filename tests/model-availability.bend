@@ -911,6 +911,45 @@ def cancellationAfterCommit() -> IO(Unit):
     wasSettled : Bool <- Ref.dispose(Bool, settled)
     return Unit{}
 
+# Resolved request-auth contracts from model-registry.test.ts.
+def absentAuth(_: Unit, _: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
+  IO.pure(Auth.AuthOutcome(), Done{None{}})
+
+def failedRequestAuth(_: Unit, _: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
+  IO.pure(Auth.AuthOutcome(), Fail{"Failed to resolve API key for provider \"failed-request\""})
+
+def requestFailed(result: Models.RequestAuthResult(), expected: String) -> Bool:
+  match result:
+    case Fail{reason}: String.eq(reason, expected)
+    case Done{_}: False{}
+
+def requestHeaders(result: Models.RequestAuthResult(), expected: Ai.ProviderHeaders()) -> Bool:
+  match result:
+    case Done{Models.ResolvedRequestAuth{None{}, headers, None{}, None{}}}: headersEqual(headers, expected)
+    case _: False{}
+
+def requestAuthContracts() -> IO(Unit):
+  do IO<Unit>:
+    +credentials : Auth.CredentialStore <- MemoryCredentials.inMemoryCredentialStore()
+    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+    absent : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~absentAuth, Unit{})
+    failed : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~failedRequestAuth, Unit{})
+    +runtime : Models.ModelRuntime <- Models.fromProviders([AiModels.Provider{"missing-request", "Missing request", "https://example.test/v1", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"API key", None{}, absent, None{}}}, None{}}, [model("missing-request")], AiModels.ApiStreams{}, None{}, None{}}, AiModels.Provider{"failed-request", "Failed request", "https://example.test/v1", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"API key", None{}, failed, None{}}}, None{}}, [model("failed-request")], AiModels.ApiStreams{}, None{}, None{}}], credentials, context)
+    noKey : Result<&2, &2, String, Unit> <- Models.registerProvider(runtime, "missing-request", configProvider("Missing request", None{}, Some{R.Record{[R.Property{"x-configured", "yes"}]}}, False{}, None{}, None{}, None{}))
+    registered(noKey)
+    found : Maybe<&2, AiModels.Model()> <- Models.getModel(runtime, "missing-request", "extension-model")
+    +selected : AiModels.Model() <- requiredModel(found)
+    fallback : Models.RequestAuthResult() <- Models.getApiKeyAndHeaders(runtime, selected)
+    checked(requestHeaders(fallback, R.Record{[R.Property{"x-configured", Ai.PresentValue{"yes"}}]}), "preserves configured headers without a resolved API key")
+    requiringKey : Result<&2, &2, String, Unit> <- Models.registerProvider(runtime, "missing-request", Composer.ProviderConfigInput{None{}, None{}, None{}, None{}, None{}, None{}, Some{True{}}, None{}, None{}, None{}})
+    registered(requiringKey)
+    missing : Models.RequestAuthResult() <- Models.getApiKeyAndHeaders(runtime, selected)
+    checked(requestFailed(missing, "No API key found for \"missing-request\""), "getApiKeyAndHeaders preserves the legacy missing-key authHeader error")
+    rejected : Models.RequestAuthResult() <- Models.getApiKeyAndHeaders(runtime, model("failed-request"))
+    checked(requestFailed(rejected, "Failed to resolve API key for provider \"failed-request\""), "getApiKeyAndHeaders returns an error for failed authHeader resolution")
+    Models.dispose(runtime)
+    Auth.disposeStore(credentials)
+
 # Provider model-lifecycle contracts from model-runtime-modify-models-compat.
 def liveModels(_: Unit, _: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, List<&2, Composer.ProviderModelConfig>>):
   IO.pure(Result<&2, &2, String, List<&2, Composer.ProviderModelConfig>>, Done{[configModel("live", None{})]})
@@ -1127,6 +1166,7 @@ def checks() -> IO(Unit):
     cancellationAfterCommit()
     providerMetadata()
     configAuthOptions()
+    requestAuthContracts()
     configModelLifecycle()
     nativeRegistration()
     IO.print("model availability: scoped reads, credential synchronization, snapshots, stream ownership, and auth gating pass")

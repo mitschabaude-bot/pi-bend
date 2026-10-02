@@ -3350,10 +3350,11 @@
       "ports": [
         "tests/models-json.bend",
         "tests/models_json_check.py",
-        "tests/models_json_reference.ts"
+        "tests/models_json_reference.ts",
+        "tests/model-availability.bend"
       ],
       "sha256": "2b8c24d61e5684264c087c7fd064e3fbe1d93369943cd9936833f474276963fd",
-      "notes": "models.json loading, schema errors and provider composition (built-in overrides, custom providers, model overrides, configured auth) are compared against the pinned model-config/provider-composer source: 23 runnable fixtures on Bun (the !command key fixture runs natively). The named registry test cases, including request-time header precedence assertions, remain unported."
+      "notes": "models.json loading, schema errors and provider composition (built-in overrides, custom providers, model overrides, configured auth) are compared against the pinned model-config/provider-composer source: 23 runnable fixtures on Bun (the !command key fixture runs natively). Native one/four availability fixtures now cover getApiKeyAndHeaders configured-header fallback without a key, legacy missing-key authHeader errors and underlying auth-resolution causes. Remaining named registry cases, including complete request-time header precedence characterization, remain unported."
     },
     {
       "source": "packages/coding-agent/test/model-resolver.test.ts",
@@ -3375,14 +3376,14 @@
     },
     {
       "source": "packages/coding-agent/test/model-runtime-cloudflare-compat.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/cloudflare-request.bend",
         "tests/cloudflare_request_check.py",
         "tests/cloudflare_request_reference.ts"
       ],
       "sha256": "0d8d70cc2c4b19be55ad102f0d9a98c5a3f1f5a215538de777e439d696fc3559",
-      "notes": "'materializes the Cloudflare endpoint through ModelRuntime streaming' is covered by the first case of the Cloudflare request differential (same stored credential and model): the upstream ModelRuntime with the real OpenAI SDK and a capturing fetch versus the Bend model runtime, provider streams and native Completions provider, comparing URL, auth/session/protocol headers and JSON body. 'materializes the Cloudflare endpoint after extension-style auth resolution' is pending: ModelRegistry.getApiKeyAndHeaders and the compat complete() entry point are not ported. The differential's 12 cases pass on the JavaScript lane (three gateway APIs, Workers AI, stored/ambient/merged credentials, unconfigured gateway); native lane not run."
+      "notes": "Both named contracts are covered through actual ModelRuntime.completeSimple and native getApiKeyAndHeaders followed by raw provider completion. The differential uses upstream ModelRuntime/ModelRegistry and the real SDK with a capturing fetch: 24 cases compare URL, auth/session/protocol headers, JSON body and resolved nullable auth headers across three gateway APIs, Workers AI, stored/ambient/merged credentials and unconfigured gateways. Native one/four threads pass."
     },
     {
       "source": "packages/coding-agent/test/model-runtime-credential-sync.test.ts",

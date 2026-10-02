@@ -830,6 +830,44 @@ def getModelAuth(+runtime: ModelRuntime, +model: Model(), +overrides: Resolve.Au
     config : Config.ModelConfig <- getModelConfig(runtime)
     withModelHeaders(model, Config.getProvider(config, Ai.modelProvider(model)), entryConfig(findEntry(extensionEntries(state), Ai.modelProvider(model))), resolution, overrideEnv(overrides))
 
+# Native counterpart of ModelRegistry's resolved request auth. Result replaces
+# its ok discriminator; endpoint and environment remain part of the request.
+type ResolvedRequestAuth is Data:
+  ResolvedRequestAuth{apiKey: Maybe<&2, String>, headers: Maybe<&2, Ai.ProviderHeaders()>, baseUrl: Maybe<&2, String>, env: Maybe<&2, Ai.ProviderEnv()>}
+
+def RequestAuthResult() -> Data: Result<&2, &2, String, ResolvedRequestAuth>
+
+def getCompatibilityRequestConfig(+runtime: ModelRuntime, +model: Model()) -> IO(Result<&2, &2, String, Composer.CompatibilityRequestConfig>):
+  do IO<Result<&2, &2, String, Composer.CompatibilityRequestConfig>>:
+    state : ExtensionState <- Ref.read(ExtensionState, extensionsRef(runtime))
+    config : Config.ModelConfig <- getModelConfig(runtime)
+    Composer.resolveCompatibilityRequestConfig(model, Composer.Layers{Config.getProvider(config, Ai.modelProvider(model)), entryConfig(findEntry(extensionEntries(state), Ai.modelProvider(model)))})
+
+def missingRequestKey(provider: String) -> String: "No API key found for \"" ++ provider ++ "\""
+
+def requestAuthError(provider: String, +reason: String) -> String:
+  Bool.pick(String, String.eq(reason, "authHeader requires a resolved API key"), missingRequestKey(provider), reason)
+
+def requestAuthFallback(provider: String, result: Result<&2, &2, String, Composer.CompatibilityRequestConfig>) -> RequestAuthResult():
+  match result:
+    case Fail{reason}: Fail{requestAuthError(provider, reason)}
+    case Done{Composer.CompatibilityRequestConfig{_, True{}}}: Fail{missingRequestKey(provider)}
+    case Done{Composer.CompatibilityRequestConfig{headers, False{}}}: Done{ResolvedRequestAuth{None{}, headers, None{}, None{}}}
+
+def resolvedRequestAuth(runtime: ModelRuntime, +model: Model(), resolution: Resolve.Resolution()) -> IO(RequestAuthResult()):
+  match resolution:
+    case Fail{error}: IO.pure(RequestAuthResult(), Fail{requestAuthError(Ai.modelProvider(model), Resolve.causeMessage(error))})
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{key, headers, baseUrl}, env, _}}}: IO.pure(RequestAuthResult(), Done{ResolvedRequestAuth{key, headers, baseUrl, env}})
+    case Done{None{}}:
+      do IO<RequestAuthResult()>:
+        config : Result<&2, &2, String, Composer.CompatibilityRequestConfig> <- getCompatibilityRequestConfig(runtime, model)
+        return requestAuthFallback(Ai.modelProvider(model), config)
+
+def getApiKeyAndHeaders(+runtime: ModelRuntime, +model: Model()) -> IO(RequestAuthResult()):
+  do IO<RequestAuthResult()>:
+    resolution : Resolve.Resolution() <- getModelAuth(runtime, model, Resolve.noOverrides())
+    resolvedRequestAuth(runtime, model, resolution)
+
 def withoutId(ids: List<&2, String>, +id: String) -> List<&2, String>:
   match ids:
     case Nil{}: Nil{}

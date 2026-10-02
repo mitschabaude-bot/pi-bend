@@ -609,7 +609,7 @@ def passesCallerSignalsToProviderAuthCallbacks() -> IO(Unit):
 
 def authText(resolution: Resolve.Resolution()) -> String:
   match resolution:
-    case Fail{Resolve.ModelsError{_, message}}: "error " ++ message
+    case Fail{error}: "error " ++ Resolve.errorMessage(error)
     case Done{None{}}: "undefined"
     case Done{Some{Auth.AuthResult{Auth.ModelAuth{key, _, _}, _, source}}}: Maybe.default(&2, String, key, "undefined") ++ " " ++ Maybe.default(&2, String, source, "undefined")
 
@@ -624,7 +624,7 @@ def codeText(code: Resolve.ModelsErrorCode) -> String:
 
 def errorCode(resolution: Resolve.Resolution()) -> String:
   match resolution:
-    case Fail{Resolve.ModelsError{code, _}}: codeText(code)
+    case Fail{error}: codeText(Resolve.errorCode(error))
     case Done{_}: "resolved"
 
 def minutes(n: U32) -> F64: U32.to_f64(U32.mul(n, 60000))
@@ -650,7 +650,7 @@ def resolvesAuthStoredCredentialOwnsTheProvider() -> IO(Unit):
 
 def checkText(result: Models.CheckResult()) -> String:
   match result:
-    case Fail{Resolve.ModelsError{_, message}}: "error " ++ message
+    case Fail{error}: "error " ++ Resolve.errorMessage(error)
     case Done{None{}}: "undefined"
     case Done{Some{Auth.AuthCheck{source, kind}}}: Maybe.default(&2, String, source, "undefined") ++ " " ++ Auth.typeName(kind)
 
@@ -661,7 +661,7 @@ def providersOf(models: List<&2, Models.Model()>) -> List<&2, String>:
 
 def availableText(result: Models.AvailableResult()) -> String:
   match result:
-    case Fail{Resolve.ModelsError{_, message}}: "error " ++ message
+    case Fail{error}: "error " ++ Resolve.errorMessage(error)
     case Done{models}: String.join(providersOf(models), ",")
 
 def checksProviderAuthWithoutRefreshingOAuth() -> IO(Unit):
@@ -909,7 +909,7 @@ def onlyFirst(unit: Unit, input: Models.FilterModelsInput) -> IO(List<&2, Models
 
 def availableModels(result: Models.AvailableResult()) -> String:
   match result:
-    case Fail{Resolve.ModelsError{_, message}}: "error " ++ message
+    case Fail{error}: "error " ++ Resolve.errorMessage(error)
     case Done{models}: modelIds(models)
 
 def appliesFilterModelsToAvailableModels() -> IO(Unit):

@@ -1571,3 +1571,21 @@ def createdLayerRefresh(enabled: Bool, +id: String, base: Maybe<&2, Base>, callb
 
 def layeredRefresh(id: String, base: Maybe<&2, Base>, +callback: Maybe<&2, AiModels.RefreshModels()>, +layers: Layers) -> IO(Maybe<&2, AiModels.RefreshModels()> & List<&2, Retained>):
   createdLayerRefresh(Maybe.is_some(&2, AiModels.RefreshModels(), callback) || Maybe.is_some(&2, ModelRefresh(), extensionField(ModelRefresh(), extensionOf(layers), refreshField)) || Maybe.is_some(&2, C.Callback<OAuthModelsInput, Result<&2, &2, String, List<&2, Model()>>>, extensionField(C.Callback<OAuthModelsInput, Result<&2, &2, String, List<&2, Model()>>>, extensionOf(layers), modifyModelsField)), id, base, callback, layers)
+
+# Unauthenticated requests still retain explicitly configured headers.
+type CompatibilityRequestConfig is Data:
+  CompatibilityRequestConfig{headers: Maybe<&2, T.ProviderHeaders()>, authHeader: Bool}
+
+def ownModelHeaders(model: Model()) -> Maybe<&2, R.Record<String>>:
+  match model:
+    case T.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, _, headers, _}: headers
+
+def compatibilityConfig(model: Model(), layers: Layers, result: Result<&2, &2, String, Maybe<&2, R.Record<String>>>) -> Result<&2, &2, String, CompatibilityRequestConfig>:
+  match result:
+    case Fail{reason}: Fail{reason}
+    case Done{headers}: Done{CompatibilityRequestConfig{mergedHeaders(mergedHeaders(None{}, ownModelHeaders(model)), headers), layeredAuthHeader(layers)}}
+
+def resolveCompatibilityRequestConfig(+model: Model(), +layers: Layers) -> IO(Result<&2, &2, String, CompatibilityRequestConfig>):
+  do IO<Result<&2, &2, String, CompatibilityRequestConfig>>:
+    configured : Result<&2, &2, String, Maybe<&2, R.Record<String>>> <- resolveHeadersOrThrow(nonemptyRecord(String, spread(String, recordOr(String, layeredHeaders(layers)), R.entries(String, recordOr(String, rawModelHeaders(modelId(model), entryOf(layers), extensionOf(layers)))))), "model \"" ++ T.modelProvider(model) ++ "/" ++ modelId(model) ++ "\"", None{})
+    return compatibilityConfig(model, layers, configured)
